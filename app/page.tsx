@@ -1,4 +1,9 @@
-import { createInterviewNote, getDashboardData, School } from "@/lib/supabase";
+import {
+  CeoMetric,
+  createInterviewNote,
+  getDashboardData,
+  School
+} from "@/lib/supabase";
 
 const statusStyles: Record<School["status"], string> = {
   Prospect: "bg-slate-100 text-slate-700 ring-slate-200",
@@ -8,7 +13,8 @@ const statusStyles: Record<School["status"], string> = {
 };
 
 export default async function Dashboard() {
-  const { schools, contacts, pipeline, source } = await getDashboardData();
+  const { schools, contacts, pipeline, ceoMetrics, source } =
+    await getDashboardData();
   const activeSchools = schools.filter((school) => school.status !== "Partner");
   const totalPipeline = pipeline.reduce((total, stage) => total + stage.count, 0);
 
@@ -43,6 +49,8 @@ export default async function Dashboard() {
           <MetricCard label="Active opportunities" value={activeSchools.length} />
           <MetricCard label="Known contacts" value={contacts.length} />
         </section>
+
+        <CeoDashboard metrics={ceoMetrics} />
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -95,6 +103,40 @@ function MetricCard({ label, value }: { label: string; value: number }) {
       <p className="text-sm font-medium text-slate-500">{label}</p>
       <p className="mt-3 text-4xl font-semibold text-slate-950">{value}</p>
     </div>
+  );
+}
+
+function CeoDashboard({ metrics }: { metrics: CeoMetric[] }) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+            CEO dashboard
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-950">
+            Growth funnel snapshot
+          </h2>
+        </div>
+        <p className="text-sm text-slate-500">
+          Schools to paid-pilot conversion
+        </p>
+      </div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {metrics.map((metric) => (
+          <div
+            key={metric.label}
+            className="rounded-2xl border border-slate-100 bg-slate-50 p-5"
+          >
+            <p className="text-sm font-medium text-slate-500">{metric.label}</p>
+            <p className="mt-3 text-4xl font-semibold text-slate-950">
+              {metric.value.toLocaleString()}
+            </p>
+            <p className="mt-2 text-sm text-slate-500">{metric.detail}</p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -3,6 +3,10 @@
 First-version school partnership CRM built with Next.js, Tailwind, and
 Supabase.
 
+The dashboard includes CEO funnel metrics for schools added, emails sent,
+replies, interviews booked, interviews completed, pilot interest, LOIs, and
+paid pilots.
+
 ## Getting started
 
 Install dependencies and run the development server:
