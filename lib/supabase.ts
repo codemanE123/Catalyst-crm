@@ -33,6 +33,12 @@ export type DashboardData = {
   source: "supabase" | "sample";
 };
 
+type ContactRow = Omit<Contact, "school"> & {
+  schools: {
+    name: string;
+  } | null;
+};
+
 const sampleSchools: School[] = [
   {
     id: "school-1",
@@ -152,12 +158,22 @@ export async function getDashboardData(): Promise<DashboardData> {
       .order("name"),
     supabase
       .from("contacts")
-      .select("id,name,role,school,email,last_touch,relationship")
+      .select("id,name,role,email,last_touch,relationship,schools(name)")
       .order("last_touch", { ascending: false })
   ]);
 
   const schools = (schoolsResponse.data ?? sampleSchools) as School[];
-  const contacts = (contactsResponse.data ?? sampleContacts) as Contact[];
+  const contacts = contactsResponse.data
+    ? ((contactsResponse.data as ContactRow[]).map((contact) => ({
+        id: contact.id,
+        name: contact.name,
+        role: contact.role,
+        school: contact.schools?.name ?? "Unassigned school",
+        email: contact.email,
+        last_touch: contact.last_touch,
+        relationship: contact.relationship
+      })) satisfies Contact[])
+    : sampleContacts;
 
   return {
     schools,
@@ -177,8 +193,8 @@ export async function createInterviewNote(formData: FormData) {
     return;
   }
 
-  await supabase.from("interview_notes").insert({
-    school_name: formData.get("school_name"),
+  await supabase.from("interviews").insert({
+    school_id: formData.get("school_id"),
     interviewer: formData.get("interviewer"),
     interview_date: formData.get("interview_date"),
     sentiment: formData.get("sentiment"),

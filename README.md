@@ -25,11 +25,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-Expected tables:
+Apply the CRM schema from `supabase/migrations` to create these tables:
 
-- `schools`: `id`, `name`, `district`, `location`, `status`, `owner`,
-  `next_step`
-- `contacts`: `id`, `name`, `role`, `school`, `email`, `last_touch`,
-  `relationship`
-- `interview_notes`: `school_name`, `interviewer`, `interview_date`,
-  `sentiment`, `notes`, `follow_up`
+- `schools`: target school accounts and pipeline status.
+- `contacts`: people tied to schools through `school_id`.
+- `outreach`: email, call, meeting, event, and other outreach history.
+- `interviews`: school interview notes submitted from the dashboard form.
+- `follow_ups`: next actions tied to schools, contacts, outreach, or interviews.

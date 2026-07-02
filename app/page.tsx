@@ -159,7 +159,7 @@ function InterviewNotesForm({ schools }: { schools: School[] }) {
         <label className="block">
           <span className="text-sm font-medium text-slate-700">School</span>
           <select
-            name="school_name"
+            name="school_id"
             required
             className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
             defaultValue=""
@@ -168,7 +168,7 @@ function InterviewNotesForm({ schools }: { schools: School[] }) {
               Select school
             </option>
             {schools.map((school) => (
-              <option key={school.id} value={school.name}>
+              <option key={school.id} value={school.id}>
                 {school.name}
               </option>
             ))}
