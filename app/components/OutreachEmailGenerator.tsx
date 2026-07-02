@@ -76,36 +76,36 @@ export default function OutreachEmailGenerator() {
 
       <form onSubmit={generateEmail} className="mt-6 space-y-4">
         <div className="grid gap-4 md:grid-cols-3">
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700">School name</span>
-          <input
-            value={schoolName}
-            onChange={(event) => setSchoolName(event.target.value)}
-            required
-            className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
-            placeholder="Roosevelt High School"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700">Contact role</span>
-          <input
-            value={contactRole}
-            onChange={(event) => setContactRole(event.target.value)}
-            required
-            className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
-            placeholder="college counselor"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700">Pain point</span>
-          <input
-            value={painPoint}
-            onChange={(event) => setPainPoint(event.target.value)}
-            required
-            className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
-            placeholder="summer melt"
-          />
-        </label>
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">School name</span>
+            <input
+              value={schoolName}
+              onChange={(event) => setSchoolName(event.target.value)}
+              required
+              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
+              placeholder="Roosevelt High School"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">Contact role</span>
+            <input
+              value={contactRole}
+              onChange={(event) => setContactRole(event.target.value)}
+              required
+              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
+              placeholder="college counselor"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">Pain point</span>
+            <input
+              value={painPoint}
+              onChange={(event) => setPainPoint(event.target.value)}
+              required
+              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
+              placeholder="summer melt"
+            />
+          </label>
         </div>
         <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">
           Generate email
