@@ -44,6 +44,26 @@ function findSentence(sentences: string[], terms: string[]) {
   );
 }
 
+function cleanFragment(value: string) {
+  return value
+    .replace(/^(the|a|an|they|we|us)\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\.$/, "");
+}
+
+function extractMatch(notes: string, patterns: RegExp[]) {
+  for (const pattern of patterns) {
+    const match = notes.match(pattern);
+
+    if (match?.[1]) {
+      return cleanFragment(match[1]);
+    }
+  }
+
+  return "";
+}
+
 function inferPilotInterest(notes: string): Summary["pilotInterest"] {
   const lowerNotes = notes.toLowerCase();
 
@@ -64,7 +84,7 @@ function inferPilotInterest(notes: string): Summary["pilotInterest"] {
 
 function summarizeNotes(rawNotes: string): Summary {
   const sentences = splitSentences(rawNotes);
-  const painPoints =
+  const painSentence =
     findSentence(sentences, [
       "pain",
       "challenge",
@@ -75,23 +95,47 @@ function summarizeNotes(rawNotes: string): Summary {
       "capacity",
       "risk"
     ]) || sentences[0] || "";
-  const buyer = findSentence(sentences, [
-    "buyer",
-    "principal",
-    "director",
-    "superintendent",
-    "decision",
-    "approver"
-  ]);
-  const budget =
+  const painPoints = cleanFragment(painSentence.split(/\band\b.*\busing\b/i)[0]);
+  const buyer =
+    extractMatch(rawNotes, [
+      /(?:^|[.!?]\s+)(?:the\s+)?([^.!?]+?)\s+is\s+the\s+buyer/i,
+      /buyer\s+(?:is|:)\s+([^.]+)/i,
+      /decision[-\s]?maker\s+(?:is|:)\s+([^.]+)/i
+    ]) ||
     findSentence(sentences, [
-      "budget",
-      "funding",
-      "grant",
-      "cost",
-      "procurement",
-      "pay"
-    ]) || buyer;
+      "buyer",
+      "principal",
+      "director",
+      "superintendent",
+      "decision",
+      "approver"
+    ]);
+  const budget =
+    extractMatch(rawNotes, [
+      /budget\s+(?:from|comes from|is from)\s+([^.]+)/i,
+      /owns\s+the\s+budget\s+from\s+([^.]+)/i,
+      /fund(?:ed|ing)?\s+(?:from|by)\s+([^.]+)/i,
+      /budget\s+(?:is|:)\s+([^.]+)/i
+    ]) ||
+    findSentence(sentences, ["budget", "funding", "grant", "cost", "procurement"]);
+  const currentTools =
+    extractMatch(rawNotes, [
+      /(?:using|uses|use|stuck using)\s+([^.]+)/i,
+      /current tools\s*(?:are|:)\s*([^.]+)/i
+    ]) ||
+    findSentence(sentences, ["spreadsheet", "email", "tool", "crm", "sis", "manual"]);
+  const nextStep =
+    extractMatch(rawNotes, [
+      /(?:asked us to|next step is to|next action is to)\s+([^.]+)/i,
+      /(?:send|schedule|book|follow up)\s+([^.]+)/i
+    ]) || findSentence(sentences, ["next", "follow up", "send", "schedule", "book"]);
+  const referrals =
+    extractMatch(rawNotes, [
+      /referred us to\s+([^.]+)/i,
+      /referral(?:s)?\s*(?:are|:)\s*([^.]+)/i,
+      /(?:speak with|talk to|connect with)\s+([^.]+)/i
+    ]) ||
+    findSentence(sentences, ["referral", "introduced", "speak with", "talk to", "connect"]);
   const objections = findSentence(sentences, [
     "objection",
     "concern",
@@ -100,28 +144,6 @@ function summarizeNotes(rawNotes: string): Summary {
     "blocked",
     "staff lift",
     "procurement"
-  ]);
-  const currentTools = findSentence(sentences, [
-    "spreadsheet",
-    "email",
-    "tool",
-    "crm",
-    "sis",
-    "manual"
-  ]);
-  const referrals = findSentence(sentences, [
-    "referral",
-    "introduced",
-    "speak with",
-    "talk to",
-    "connect"
-  ]);
-  const nextStep = findSentence(sentences, [
-    "next",
-    "follow up",
-    "send",
-    "schedule",
-    "book"
   ]);
 
   return {
