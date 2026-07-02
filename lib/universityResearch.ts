@@ -127,6 +127,54 @@ function pageUrls(baseUrl: string) {
   ];
 }
 
+async function discoverTopicPages(schoolName: string, website: string) {
+  const hostname = new URL(website).hostname.replace(/^www\./, "");
+  const topics = [
+    "artificial intelligence program",
+    "cybersecurity program",
+    "healthcare programs",
+    "innovation center",
+    "entrepreneurship center",
+    "career services",
+    "workforce development"
+  ];
+  const discovered = await Promise.all(
+    topics.map(async (topic) => {
+      const query = encodeURIComponent(`${schoolName} ${topic} site:${hostname}`);
+
+      try {
+        const response = await fetch(`https://duckduckgo.com/html/?q=${query}`, {
+          headers: {
+            "user-agent": "CatalystCRMResearchAgent/1.0"
+          },
+          signal: AbortSignal.timeout(5000)
+        });
+
+        if (!response.ok) {
+          return "";
+        }
+
+        const html = await response.text();
+        const match = [...html.matchAll(/uddg=([^"&]+)/g)]
+          .map((result) => decodeURIComponent(result[1]))
+          .find((url) => {
+            try {
+              return new URL(url).hostname.includes(hostname);
+            } catch {
+              return false;
+            }
+          });
+
+        return match ?? "";
+      } catch {
+        return "";
+      }
+    })
+  );
+
+  return [...new Set(discovered.filter(Boolean))];
+}
+
 function stripHtml(html: string) {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -205,11 +253,17 @@ function findSnippet(text: string, terms: string[]) {
 }
 
 function findEnrollment(text: string) {
-  const enrollmentMatch = text.match(
-    /(?:enrollment|students?|student body)[^\d]{0,40}([\d,]{3,})/i
-  );
+  const matches = [
+    ...text.matchAll(
+      /(?:enrollment|student body|students? enrolled|total students?)[^\d]{0,80}([\d,]{4,})/gi
+    )
+  ];
+  const numbers = matches
+    .map((match) => Number(match[1].replace(/,/g, "")))
+    .filter((value) => Number.isFinite(value));
+  const largest = Math.max(0, ...numbers);
 
-  return enrollmentMatch?.[1] ?? "";
+  return largest ? largest.toLocaleString("en-US") : "";
 }
 
 function findState(text: string) {
@@ -243,6 +297,12 @@ function buildProfile(
   pages: { url: string; text: string }[]
 ): UniversityResearchProfile {
   const combinedText = pages.map((page) => page.text).join(" ");
+  const lowerName = schoolName.toLowerCase();
+  const lowerText = combinedText.toLowerCase();
+  const isCommunityCollege =
+    lowerName.includes("community college") ||
+    /(?:^|\s)is (?:a )?(?:public )?community college\b/.test(lowerText) ||
+    /two-year (?:public )?college/.test(lowerText);
 
   return {
     name: schoolName,
@@ -254,7 +314,7 @@ function buildProfile(
       "historically black university",
       "hbcu"
     ]),
-    community_college: hasAny(combinedText, ["community college", "two-year college"]),
+    community_college: isCommunityCollege,
     state: findState(combinedText) || "Not found",
     ai_programs:
       findSnippet(combinedText, [
@@ -352,8 +412,11 @@ export async function researchUniversityProfile(
     };
   }
 
+  const targetUrls = [
+    ...new Set([...pageUrls(website), ...(await discoverTopicPages(schoolName, website))])
+  ];
   const pages = (
-    await Promise.all(pageUrls(website).map((url) => fetchPage(url)))
+    await Promise.all(targetUrls.map((url) => fetchPage(url)))
   ).filter((page): page is { url: string; text: string } => Boolean(page));
   const fallbackPages = pages.length
     ? pages
