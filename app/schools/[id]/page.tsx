@@ -72,6 +72,7 @@ export default async function SchoolProfile({
 
         <section className="grid gap-8 xl:grid-cols-[1fr_0.75fr]">
           <div className="flex flex-col gap-8">
+            <UniversityProfilePanel school={school} />
             <SchoolNotes school={school} />
             <ContactsPanel contacts={contacts} />
             <OutreachHistory outreach={outreach} />
@@ -102,6 +103,103 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
       <p className="mt-3 text-2xl font-semibold text-slate-950">{value}</p>
     </div>
   );
+}
+
+function UniversityProfilePanel({ school }: { school: School }) {
+  const hasResearchProfile = Boolean(
+    school.website ||
+      school.enrollment ||
+      school.ai_programs ||
+      school.cyber_programs ||
+      school.healthcare_programs
+  );
+
+  if (!hasResearchProfile) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+        University research profile
+      </p>
+      <h2 className="mt-1 text-2xl font-semibold text-slate-950">
+        Public website intelligence
+      </h2>
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <ResearchField label="Website" value={school.website} />
+        <ResearchField label="Enrollment" value={school.enrollment} />
+        <ResearchField label="Public/Private" value={school.public_private} />
+        <ResearchField label="HBCU?" value={yesNo(school.hbcu)} />
+        <ResearchField
+          label="Community College?"
+          value={yesNo(school.community_college)}
+        />
+        <ResearchField label="State" value={school.state} />
+        <ResearchField label="AI Programs" value={school.ai_programs} />
+        <ResearchField label="Cyber Programs" value={school.cyber_programs} />
+        <ResearchField
+          label="Healthcare Programs"
+          value={school.healthcare_programs}
+        />
+        <ResearchField
+          label="Innovation Center"
+          value={school.innovation_center}
+        />
+        <ResearchField
+          label="Entrepreneurship Center"
+          value={school.entrepreneurship_center}
+        />
+        <ResearchField
+          label="Career Services Office"
+          value={school.career_services_office}
+        />
+        <ResearchField
+          label="Workforce Development Office"
+          value={school.workforce_development_office}
+        />
+      </div>
+      {school.profile_sources?.length ? (
+        <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Sources
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-slate-600">
+            {school.profile_sources.map((source) => (
+              <li key={source}>{source}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ResearchField({
+  label,
+  value
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
+  return (
+    <div className="rounded-2xl bg-slate-50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-slate-700">
+        {value || "Not found"}
+      </p>
+    </div>
+  );
+}
+
+function yesNo(value: boolean | null | undefined) {
+  if (value === null || value === undefined) {
+    return "Unknown";
+  }
+
+  return value ? "Yes" : "No";
 }
 
 function SchoolNotes({ school }: { school: School }) {

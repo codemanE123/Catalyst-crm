@@ -9,6 +9,20 @@ export type School = {
   owner: string;
   next_step: string;
   notes?: string | null;
+  website?: string | null;
+  enrollment?: string | null;
+  public_private?: "Public" | "Private" | "Unknown" | null;
+  hbcu?: boolean | null;
+  community_college?: boolean | null;
+  state?: string | null;
+  ai_programs?: string | null;
+  cyber_programs?: string | null;
+  healthcare_programs?: string | null;
+  innovation_center?: string | null;
+  entrepreneurship_center?: string | null;
+  career_services_office?: string | null;
+  workforce_development_office?: string | null;
+  profile_sources?: string[] | null;
 };
 
 export type Contact = {
@@ -122,6 +136,7 @@ const sampleSchools: School[] = [
     status: "Interviewing",
     owner: "Maya Chen",
     next_step: "Principal interview on Friday",
+    website: "https://www.roosevelths.example.edu",
     notes:
       "Best near-term fit because the leadership team has urgent senior advising needs."
   },
@@ -133,6 +148,7 @@ const sampleSchools: School[] = [
     status: "Contacted",
     owner: "Jon Bell",
     next_step: "Send program overview",
+    website: "https://www.northstar.example.edu",
     notes: "Needs district approval before a pilot can be scoped."
   },
   {
@@ -143,6 +159,7 @@ const sampleSchools: School[] = [
     status: "Prospect",
     owner: "Priya Shah",
     next_step: "Find counseling lead",
+    website: "https://www.lakeview.example.edu",
     notes: "Early research account with no confirmed buyer yet."
   },
   {
@@ -153,6 +170,7 @@ const sampleSchools: School[] = [
     status: "Partner",
     owner: "Maya Chen",
     next_step: "Quarterly success review",
+    website: "https://www.cedarridge.example.edu",
     notes: "Existing partner ready for expansion discussion."
   }
 ];
@@ -499,7 +517,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   const [schoolsResponse, contactsResponse] = await Promise.all([
     supabase
       .from("schools")
-      .select("id,name,district,location,status,owner,next_step")
+      .select("id,name,district,location,status,owner,next_step,website")
       .order("name"),
     supabase
       .from("contacts")
@@ -541,7 +559,7 @@ export async function getSchoolProfileData(
 
   const schoolResponse = await supabase
     .from("schools")
-    .select("id,name,district,location,status,owner,next_step,notes")
+    .select("id,name,district,location,status,owner,next_step,notes,website,enrollment,public_private,hbcu,community_college,state,ai_programs,cyber_programs,healthcare_programs,innovation_center,entrepreneurship_center,career_services_office,workforce_development_office,profile_sources")
     .eq("id", schoolId)
     .maybeSingle();
 

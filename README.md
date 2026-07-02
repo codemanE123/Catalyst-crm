@@ -19,6 +19,10 @@ objections, pilot interest, referrals, and next step.
 An AI summary helper turns raw interview notes into structured pain points,
 buyer, budget, objections, pilot readiness, and next action fields.
 
+The AI university research agent searches public school websites and populates
+CRM profile fields for enrollment, sector, HBCU/community-college status,
+state, programs, centers, offices, and sources.
+
 ## Getting started
 
 Install dependencies and run the development server:
