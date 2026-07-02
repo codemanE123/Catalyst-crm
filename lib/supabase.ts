@@ -8,6 +8,7 @@ export type School = {
   status: "Prospect" | "Contacted" | "Interviewing" | "Partner";
   owner: string;
   next_step: string;
+  notes?: string | null;
 };
 
 export type Contact = {
@@ -18,6 +19,40 @@ export type Contact = {
   email: string;
   last_touch: string;
   relationship: "New" | "Warm" | "Champion" | "Needs follow-up";
+};
+
+export type SchoolContact = Contact & {
+  phone: string | null;
+  notes: string | null;
+};
+
+export type OutreachActivity = {
+  id: string;
+  channel: "Email" | "Call" | "Meeting" | "LinkedIn" | "Event" | "Other";
+  subject: string | null;
+  message: string | null;
+  outcome: string | null;
+  outreach_date: string;
+  owner: string | null;
+  next_step: string | null;
+};
+
+export type InterviewSummary = {
+  id: string;
+  interviewer: string;
+  interview_date: string;
+  sentiment: "Strong fit" | "Warm" | "Needs nurturing" | "Not a fit";
+  notes: string;
+  follow_up: string | null;
+};
+
+export type FollowUp = {
+  id: string;
+  title: string;
+  due_date: string | null;
+  status: "Open" | "Scheduled" | "Done" | "Blocked";
+  owner: string | null;
+  notes: string | null;
 };
 
 export type PipelineStage = {
@@ -37,6 +72,15 @@ export type DashboardData = {
   contacts: Contact[];
   pipeline: PipelineStage[];
   ceoMetrics: CeoMetric[];
+  source: "supabase" | "sample";
+};
+
+export type SchoolProfileData = {
+  school: School;
+  contacts: SchoolContact[];
+  outreach: OutreachActivity[];
+  interviews: InterviewSummary[];
+  nextFollowUp: FollowUp | null;
   source: "supabase" | "sample";
 };
 
@@ -67,7 +111,9 @@ const sampleSchools: School[] = [
     location: "Oak Valley, CA",
     status: "Interviewing",
     owner: "Maya Chen",
-    next_step: "Principal interview on Friday"
+    next_step: "Principal interview on Friday",
+    notes:
+      "Best near-term fit because the leadership team has urgent senior advising needs."
   },
   {
     id: "school-2",
@@ -76,7 +122,8 @@ const sampleSchools: School[] = [
     location: "Denver, CO",
     status: "Contacted",
     owner: "Jon Bell",
-    next_step: "Send program overview"
+    next_step: "Send program overview",
+    notes: "Needs district approval before a pilot can be scoped."
   },
   {
     id: "school-3",
@@ -85,7 +132,8 @@ const sampleSchools: School[] = [
     location: "Madison, WI",
     status: "Prospect",
     owner: "Priya Shah",
-    next_step: "Find counseling lead"
+    next_step: "Find counseling lead",
+    notes: "Early research account with no confirmed buyer yet."
   },
   {
     id: "school-4",
@@ -94,7 +142,8 @@ const sampleSchools: School[] = [
     location: "Austin, TX",
     status: "Partner",
     owner: "Maya Chen",
-    next_step: "Quarterly success review"
+    next_step: "Quarterly success review",
+    notes: "Existing partner ready for expansion discussion."
   }
 ];
 
@@ -125,6 +174,115 @@ const sampleContacts: Contact[] = [
     email: "ana.morales@example.edu",
     last_touch: "2026-06-20",
     relationship: "Needs follow-up"
+  }
+];
+
+const sampleSchoolContacts: SchoolContact[] = [
+  {
+    ...sampleContacts[0],
+    phone: "(555) 014-0188",
+    notes: "Champion for a small senior pilot and wants counselor workflow details."
+  },
+  {
+    id: "contact-4",
+    name: "Renee Jackson",
+    role: "Dean of Students",
+    school: "Roosevelt High School",
+    email: "renee.jackson@example.edu",
+    last_touch: "2026-06-26",
+    relationship: "Warm",
+    phone: "(555) 014-0192",
+    notes: "Asked for parent communication examples and implementation timeline."
+  },
+  {
+    ...sampleContacts[1],
+    phone: "(555) 014-0104",
+    notes: "Interested in college counseling outcomes and student onboarding."
+  },
+  {
+    ...sampleContacts[2],
+    phone: "(555) 014-0127",
+    notes: "Needs follow-up after summer planning cycle."
+  }
+];
+
+const sampleOutreach: (OutreachActivity & { school_id: string })[] = [
+  {
+    id: "outreach-1",
+    school_id: "school-1",
+    channel: "Email",
+    subject: "Pilot overview for Roosevelt",
+    message: "Shared the first cohort overview and implementation checklist.",
+    outcome: "Reply received from principal",
+    outreach_date: "2026-06-24",
+    owner: "Maya Chen",
+    next_step: "Book counselor discovery call"
+  },
+  {
+    id: "outreach-2",
+    school_id: "school-1",
+    channel: "Meeting",
+    subject: "Principal discovery",
+    message: "Discussed senior advising gaps and staff capacity.",
+    outcome: "Strong interest in pilot",
+    outreach_date: "2026-07-01",
+    owner: "Maya Chen",
+    next_step: "Send pilot plan"
+  },
+  {
+    id: "outreach-3",
+    school_id: "school-2",
+    channel: "Email",
+    subject: "Program overview",
+    message: "Sent deck and outcomes summary.",
+    outcome: "Awaiting reply",
+    outreach_date: "2026-06-28",
+    owner: "Jon Bell",
+    next_step: "Follow up next week"
+  }
+];
+
+const sampleInterviews: (InterviewSummary & { school_id: string })[] = [
+  {
+    id: "interview-1",
+    school_id: "school-1",
+    interviewer: "Maya Chen",
+    interview_date: "2026-07-01",
+    sentiment: "Strong fit",
+    notes:
+      "Roosevelt needs lightweight support for first-generation college planning and wants a pilot that does not add counselor admin load.",
+    follow_up: "Send pilot plan with counselor workflow"
+  },
+  {
+    id: "interview-2",
+    school_id: "school-2",
+    interviewer: "Jon Bell",
+    interview_date: "2026-06-30",
+    sentiment: "Warm",
+    notes:
+      "North Star is interested but needs district approval before committing to a pilot.",
+    follow_up: "Share procurement language"
+  }
+];
+
+const sampleFollowUps: (FollowUp & { school_id: string })[] = [
+  {
+    id: "follow-up-1",
+    school_id: "school-1",
+    title: "Send Roosevelt pilot plan",
+    due_date: "2026-07-05",
+    status: "Open",
+    owner: "Maya Chen",
+    notes: "Include scope, timeline, staff lift, and success measures."
+  },
+  {
+    id: "follow-up-2",
+    school_id: "school-2",
+    title: "Follow up on program overview",
+    due_date: "2026-07-08",
+    status: "Scheduled",
+    owner: "Jon Bell",
+    notes: "Ask whether district approval path is clear."
   }
 ];
 
@@ -260,6 +418,38 @@ async function buildCeoMetrics(
   ];
 }
 
+function getSampleSchoolProfileData(schoolId: string): SchoolProfileData | null {
+  const school = sampleSchools.find((sampleSchool) => sampleSchool.id === schoolId);
+
+  if (!school) {
+    return null;
+  }
+
+  const contacts = sampleSchoolContacts.filter(
+    (contact) => contact.school === school.name
+  );
+  const outreach = sampleOutreach.filter((activity) => activity.school_id === schoolId);
+  const interviews = sampleInterviews.filter(
+    (interview) => interview.school_id === schoolId
+  );
+  const nextFollowUp =
+    sampleFollowUps
+      .filter((followUp) => followUp.school_id === schoolId)
+      .filter((followUp) => followUp.status !== "Done")
+      .sort((left, right) =>
+        (left.due_date ?? "").localeCompare(right.due_date ?? "")
+      )[0] ?? null;
+
+  return {
+    school,
+    contacts,
+    outreach,
+    interviews,
+    nextFollowUp,
+    source: "sample"
+  };
+}
+
 export async function getDashboardData(): Promise<DashboardData> {
   const supabase = getSupabaseClient();
 
@@ -304,6 +494,77 @@ export async function getDashboardData(): Promise<DashboardData> {
     ceoMetrics: await buildCeoMetrics(supabase, schools.length),
     source:
       schoolsResponse.error || contactsResponse.error ? "sample" : "supabase"
+  };
+}
+
+export async function getSchoolProfileData(
+  schoolId: string
+): Promise<SchoolProfileData | null> {
+  const supabase = getSupabaseClient();
+
+  if (!supabase) {
+    return getSampleSchoolProfileData(schoolId);
+  }
+
+  const schoolResponse = await supabase
+    .from("schools")
+    .select("id,name,district,location,status,owner,next_step,notes")
+    .eq("id", schoolId)
+    .maybeSingle();
+
+  if (!schoolResponse.data) {
+    return getSampleSchoolProfileData(schoolId);
+  }
+
+  const [contactsResponse, outreachResponse, interviewsResponse, followUpsResponse] =
+    await Promise.all([
+      supabase
+        .from("contacts")
+        .select("id,name,role,email,phone,relationship,last_touch,notes")
+        .eq("school_id", schoolId)
+        .order("last_touch", { ascending: false }),
+      supabase
+        .from("outreach")
+        .select("id,channel,subject,message,outcome,outreach_date,owner,next_step")
+        .eq("school_id", schoolId)
+        .order("outreach_date", { ascending: false }),
+      supabase
+        .from("interviews")
+        .select("id,interviewer,interview_date,sentiment,notes,follow_up")
+        .eq("school_id", schoolId)
+        .order("interview_date", { ascending: false }),
+      supabase
+        .from("follow_ups")
+        .select("id,title,due_date,status,owner,notes")
+        .eq("school_id", schoolId)
+        .neq("status", "Done")
+        .order("due_date", { ascending: true })
+        .limit(1)
+    ]);
+
+  const school = schoolResponse.data as School;
+  const contacts = ((contactsResponse.data ?? []) as Omit<
+    SchoolContact,
+    "school"
+  >[]).map((contact) => ({
+    ...contact,
+    school: school.name
+  }));
+
+  return {
+    school,
+    contacts,
+    outreach: (outreachResponse.data ?? []) as OutreachActivity[],
+    interviews: (interviewsResponse.data ?? []) as InterviewSummary[],
+    nextFollowUp: ((followUpsResponse.data ?? []) as FollowUp[])[0] ?? null,
+    source:
+      schoolResponse.error ||
+      contactsResponse.error ||
+      outreachResponse.error ||
+      interviewsResponse.error ||
+      followUpsResponse.error
+        ? "sample"
+        : "supabase"
   };
 }
 

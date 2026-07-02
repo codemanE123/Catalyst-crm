@@ -4,6 +4,7 @@ import {
   getDashboardData,
   School
 } from "@/lib/supabase";
+import Link from "next/link";
 
 const statusStyles: Record<School["status"], string> = {
   Prospect: "bg-slate-100 text-slate-700 ring-slate-200",
@@ -171,7 +172,12 @@ function SchoolsTable({ schools }: { schools: School[] }) {
             {schools.map((school) => (
               <tr key={school.id} className="align-top">
                 <td className="px-6 py-5">
-                  <p className="font-semibold text-slate-950">{school.name}</p>
+                  <Link
+                    href={`/schools/${school.id}`}
+                    className="font-semibold text-slate-950 transition hover:text-cyan-700"
+                  >
+                    {school.name}
+                  </Link>
                   <p className="mt-1 text-slate-500">{school.location}</p>
                 </td>
                 <td className="px-6 py-5 text-slate-600">{school.district}</td>
@@ -183,7 +189,15 @@ function SchoolsTable({ schools }: { schools: School[] }) {
                   </span>
                 </td>
                 <td className="px-6 py-5 text-slate-600">{school.owner}</td>
-                <td className="px-6 py-5 text-slate-600">{school.next_step}</td>
+                <td className="px-6 py-5">
+                  <p className="text-slate-600">{school.next_step}</p>
+                  <Link
+                    href={`/schools/${school.id}`}
+                    className="mt-2 inline-flex text-xs font-semibold text-cyan-700 hover:text-cyan-900"
+                  >
+                    View profile
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>

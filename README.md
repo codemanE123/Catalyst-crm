@@ -7,6 +7,9 @@ The dashboard includes CEO funnel metrics for schools added, emails sent,
 replies, interviews booked, interviews completed, pilot interest, LOIs, and
 paid pilots.
 
+Each school links to a profile page with contacts, notes, outreach history,
+interview summaries, current status, and the next follow-up.
+
 ## Getting started
 
 Install dependencies and run the development server:
