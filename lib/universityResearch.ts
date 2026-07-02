@@ -240,16 +240,25 @@ async function discoverWebsite(schoolName: string) {
 }
 
 function findSnippet(text: string, terms: string[]) {
-  const sentences = text
-    .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
+  const lowerText = text.toLowerCase();
 
-  return (
-    sentences.find((sentence) =>
-      terms.some((term) => sentence.toLowerCase().includes(term))
-    ) ?? ""
-  ).slice(0, 240);
+  for (const term of terms) {
+    const index = lowerText.indexOf(term);
+
+    if (index >= 0) {
+      const snippet = text
+        .slice(Math.max(0, index - 80), index + 220)
+        .replace(/your browser does not support the video tag/gi, " ")
+        .replace(/maps and locations jobs directory contact [^.!?]*/gi, " ")
+        .replace(/skip to main content/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      return snippet.length > 240 ? `${snippet.slice(0, 237)}...` : snippet;
+    }
+  }
+
+  return "";
 }
 
 function findEnrollment(text: string) {
@@ -260,7 +269,12 @@ function findEnrollment(text: string) {
   ];
   const numbers = matches
     .map((match) => Number(match[1].replace(/,/g, "")))
-    .filter((value) => Number.isFinite(value));
+    .filter(
+      (value) =>
+        Number.isFinite(value) &&
+        value >= 1000 &&
+        !(value >= 1900 && value <= 2099)
+    );
   const largest = Math.max(0, ...numbers);
 
   return largest ? largest.toLocaleString("en-US") : "";
