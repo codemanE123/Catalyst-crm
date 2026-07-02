@@ -173,7 +173,7 @@ export default function UniversityResearchAgent({
               Sources
             </p>
             <ul className="mt-2 space-y-1 text-sm text-slate-600">
-              {profile.profile_sources.map((source) => (
+              {(profile.profile_sources ?? []).map((source) => (
                 <li key={source}>{source}</li>
               ))}
             </ul>
