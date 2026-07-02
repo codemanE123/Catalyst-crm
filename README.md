@@ -10,6 +10,9 @@ paid pilots.
 Each school links to a profile page with contacts, notes, outreach history,
 interview summaries, current status, and the next follow-up.
 
+The dashboard also includes an outreach email generator for short discovery
+emails based on school name, contact role, and pain point.
+
 ## Getting started
 
 Install dependencies and run the development server:

@@ -5,6 +5,7 @@ import {
   School
 } from "@/lib/supabase";
 import Link from "next/link";
+import OutreachEmailGenerator from "./components/OutreachEmailGenerator";
 
 const statusStyles: Record<School["status"], string> = {
   Prospect: "bg-slate-100 text-slate-700 ring-slate-200",
@@ -96,6 +97,8 @@ export default async function Dashboard() {
           <SchoolsTable schools={schools} />
           <InterviewNotesForm schools={schools} />
         </section>
+
+        <OutreachEmailGenerator />
 
         <ContactsTable contacts={contacts} />
       </div>
