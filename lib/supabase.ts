@@ -34,10 +34,23 @@ export type DashboardData = {
 };
 
 type ContactRow = Omit<Contact, "school"> & {
-  schools: {
-    name: string;
-  } | null;
+  schools:
+    | {
+        name: string;
+      }
+    | {
+        name: string;
+      }[]
+    | null;
 };
+
+function getRelatedSchoolName(schools: ContactRow["schools"]) {
+  if (Array.isArray(schools)) {
+    return schools[0]?.name ?? "Unassigned school";
+  }
+
+  return schools?.name ?? "Unassigned school";
+}
 
 const sampleSchools: School[] = [
   {
@@ -168,7 +181,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         id: contact.id,
         name: contact.name,
         role: contact.role,
-        school: contact.schools?.name ?? "Unassigned school",
+        school: getRelatedSchoolName(contact.schools),
         email: contact.email,
         last_touch: contact.last_touch,
         relationship: contact.relationship
