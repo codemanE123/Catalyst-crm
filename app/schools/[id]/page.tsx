@@ -277,8 +277,28 @@ function InterviewSummaries({
               <p className="mt-4 text-sm leading-6 text-slate-600">
                 {interview.notes}
               </p>
+              <dl className="mt-4 grid gap-3 text-sm">
+                <DiscoveryDetail label="Pain points" value={interview.pain_points} />
+                <DiscoveryDetail
+                  label="Current tools"
+                  value={interview.current_tools}
+                />
+                <DiscoveryDetail
+                  label="Budget owner"
+                  value={interview.budget_owner}
+                />
+                <DiscoveryDetail label="Objections" value={interview.objections} />
+                <DiscoveryDetail
+                  label="Pilot interest"
+                  value={interview.pilot_interest}
+                />
+                <DiscoveryDetail label="Referrals" value={interview.referrals} />
+              </dl>
               <p className="mt-3 text-sm font-medium text-slate-700">
-                Follow-up: {interview.follow_up ?? "No follow-up logged"}
+                Next step:{" "}
+                {interview.next_step ??
+                  interview.follow_up ??
+                  "No next step logged"}
               </p>
             </article>
           ))
@@ -287,6 +307,25 @@ function InterviewSummaries({
         )}
       </div>
     </section>
+  );
+}
+
+function DiscoveryDetail({
+  label,
+  value
+}: {
+  label: string;
+  value: string | null;
+}) {
+  if (!value) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+      <dt className="font-medium text-slate-500">{label}</dt>
+      <dd className="mt-1 text-slate-700">{value}</dd>
+    </div>
   );
 }
 

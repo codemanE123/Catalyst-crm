@@ -44,6 +44,13 @@ export type InterviewSummary = {
   sentiment: "Strong fit" | "Warm" | "Needs nurturing" | "Not a fit";
   notes: string;
   follow_up: string | null;
+  pain_points: string | null;
+  current_tools: string | null;
+  budget_owner: string | null;
+  objections: string | null;
+  pilot_interest: "High" | "Medium" | "Low" | "None" | null;
+  referrals: string | null;
+  next_step: string | null;
 };
 
 export type FollowUp = {
@@ -251,7 +258,15 @@ const sampleInterviews: (InterviewSummary & { school_id: string })[] = [
     sentiment: "Strong fit",
     notes:
       "Roosevelt needs lightweight support for first-generation college planning and wants a pilot that does not add counselor admin load.",
-    follow_up: "Send pilot plan with counselor workflow"
+    follow_up: "Send pilot plan with counselor workflow",
+    pain_points:
+      "Counselors are stretched thin and need better support for first-generation college planning.",
+    current_tools: "Shared spreadsheets, email reminders, and one-off counselor meetings.",
+    budget_owner: "Principal and college counseling director",
+    objections: "Needs proof that the pilot will not increase counselor admin work.",
+    pilot_interest: "High",
+    referrals: "Suggested speaking with the senior seminar teacher.",
+    next_step: "Send pilot plan with counselor workflow"
   },
   {
     id: "interview-2",
@@ -261,7 +276,14 @@ const sampleInterviews: (InterviewSummary & { school_id: string })[] = [
     sentiment: "Warm",
     notes:
       "North Star is interested but needs district approval before committing to a pilot.",
-    follow_up: "Share procurement language"
+    follow_up: "Share procurement language",
+    pain_points: "Approval path and student onboarding capacity are unclear.",
+    current_tools: "Counseling CRM and district email campaigns.",
+    budget_owner: "Charter network operations lead",
+    objections: "Needs district procurement guidance.",
+    pilot_interest: "Medium",
+    referrals: "Operations lead at the charter network.",
+    next_step: "Share procurement language"
   }
 ];
 
@@ -530,7 +552,9 @@ export async function getSchoolProfileData(
         .order("outreach_date", { ascending: false }),
       supabase
         .from("interviews")
-        .select("id,interviewer,interview_date,sentiment,notes,follow_up")
+        .select(
+          "id,interviewer,interview_date,sentiment,notes,follow_up,pain_points,current_tools,budget_owner,objections,pilot_interest,referrals,next_step"
+        )
         .eq("school_id", schoolId)
         .order("interview_date", { ascending: false }),
       supabase
@@ -582,7 +606,14 @@ export async function createInterviewNote(formData: FormData) {
     interviewer: formData.get("interviewer"),
     interview_date: formData.get("interview_date"),
     sentiment: formData.get("sentiment"),
-    notes: formData.get("notes"),
-    follow_up: formData.get("follow_up")
+    notes: formData.get("notes") || formData.get("pain_points"),
+    follow_up: formData.get("next_step"),
+    pain_points: formData.get("pain_points"),
+    current_tools: formData.get("current_tools"),
+    budget_owner: formData.get("budget_owner"),
+    objections: formData.get("objections"),
+    pilot_interest: formData.get("pilot_interest"),
+    referrals: formData.get("referrals"),
+    next_step: formData.get("next_step")
   });
 }

@@ -214,10 +214,10 @@ function InterviewNotesForm({ schools }: { schools: School[] }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-        Interview notes
+        Discovery interview
       </p>
       <h2 className="mt-1 text-2xl font-semibold text-slate-950">
-        Capture a school interview
+        Capture discovery details
       </h2>
       <form action={createInterviewNote} className="mt-6 space-y-4">
         <label className="block">
@@ -273,25 +273,85 @@ function InterviewNotesForm({ schools }: { schools: School[] }) {
           </select>
         </label>
         <label className="block">
-          <span className="text-sm font-medium text-slate-700">Notes</span>
+          <span className="text-sm font-medium text-slate-700">Pain points</span>
           <textarea
-            name="notes"
+            name="pain_points"
             required
-            rows={5}
+            rows={4}
             className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
-            placeholder="Key needs, objections, buying committee, and program fit"
+            placeholder="What problems are they trying to solve?"
           />
         </label>
         <label className="block">
-          <span className="text-sm font-medium text-slate-700">Follow-up</span>
+          <span className="text-sm font-medium text-slate-700">Current tools</span>
+          <textarea
+            name="current_tools"
+            rows={3}
+            className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
+            placeholder="Spreadsheets, SIS, CRM, email campaigns, manual workflows"
+          />
+        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">Budget owner</span>
+            <input
+              name="budget_owner"
+              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
+              placeholder="Principal, district lead, counseling director"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">Pilot interest</span>
+            <select
+              name="pilot_interest"
+              required
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
+              defaultValue="Medium"
+            >
+              <option>High</option>
+              <option>Medium</option>
+              <option>Low</option>
+              <option>None</option>
+            </select>
+          </label>
+        </div>
+        <label className="block">
+          <span className="text-sm font-medium text-slate-700">Objections</span>
+          <textarea
+            name="objections"
+            rows={3}
+            className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
+            placeholder="Concerns about timing, budget, staff lift, procurement, or fit"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-slate-700">Referrals</span>
           <input
-            name="follow_up"
+            name="referrals"
+            className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
+            placeholder="Other contacts or schools they suggested"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-slate-700">Interview summary</span>
+          <textarea
+            name="notes"
+            rows={4}
+            className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
+            placeholder="Short summary of fit, buying process, and decision criteria"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-slate-700">Next step</span>
+          <input
+            name="next_step"
+            required
             className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
             placeholder="Next action"
           />
         </label>
         <button className="w-full rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400">
-          Save interview note
+          Save discovery interview
         </button>
       </form>
     </section>

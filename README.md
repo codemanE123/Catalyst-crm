@@ -13,6 +13,9 @@ interview summaries, current status, and the next follow-up.
 The dashboard also includes an outreach email generator for short discovery
 emails based on school name, contact role, and pain point.
 
+Discovery interview capture tracks pain points, current tools, budget owner,
+objections, pilot interest, referrals, and next step.
+
 ## Getting started
 
 Install dependencies and run the development server:
