@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 
 function buildEmail(schoolName: string, contactRole: string, painPoint: string) {
   const school = schoolName.trim() || "[School name]";
@@ -23,22 +23,28 @@ export default function OutreachEmailGenerator() {
   const [schoolName, setSchoolName] = useState("");
   const [contactRole, setContactRole] = useState("");
   const [painPoint, setPainPoint] = useState("");
+  const [generatedEmail, setGeneratedEmail] = useState("");
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">(
     "idle"
   );
 
-  const email = useMemo(
-    () => buildEmail(schoolName, contactRole, painPoint),
-    [schoolName, contactRole, painPoint]
-  );
+  function generateEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setGeneratedEmail(buildEmail(schoolName, contactRole, painPoint));
+    setCopyStatus("idle");
+  }
 
   async function copyEmail() {
+    if (!generatedEmail) {
+      return;
+    }
+
     try {
       if (navigator.clipboard) {
-        await navigator.clipboard.writeText(email);
+        await navigator.clipboard.writeText(generatedEmail);
       } else {
         const textarea = document.createElement("textarea");
-        textarea.value = email;
+        textarea.value = generatedEmail;
         textarea.style.position = "fixed";
         textarea.style.opacity = "0";
         document.body.appendChild(textarea);
@@ -68,12 +74,14 @@ export default function OutreachEmailGenerator() {
         asking for a 20-minute discovery conversation.
       </p>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
+      <form onSubmit={generateEmail} className="mt-6 space-y-4">
+        <div className="grid gap-4 md:grid-cols-3">
         <label className="block">
           <span className="text-sm font-medium text-slate-700">School name</span>
           <input
             value={schoolName}
             onChange={(event) => setSchoolName(event.target.value)}
+            required
             className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
             placeholder="Roosevelt High School"
           />
@@ -83,6 +91,7 @@ export default function OutreachEmailGenerator() {
           <input
             value={contactRole}
             onChange={(event) => setContactRole(event.target.value)}
+            required
             className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
             placeholder="college counselor"
           />
@@ -92,18 +101,26 @@ export default function OutreachEmailGenerator() {
           <input
             value={painPoint}
             onChange={(event) => setPainPoint(event.target.value)}
+            required
             className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
             placeholder="summer melt"
           />
         </label>
-      </div>
+        </div>
+        <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">
+          Generate email
+        </button>
+      </form>
 
       <label className="mt-6 block">
         <span className="text-sm font-medium text-slate-700">
           Generated email
         </span>
         <textarea
-          value={email}
+          value={
+            generatedEmail ||
+            "Fill out the fields and click Generate email to create a draft."
+          }
           readOnly
           rows={9}
           className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700 outline-none"
@@ -112,7 +129,8 @@ export default function OutreachEmailGenerator() {
       <button
         type="button"
         onClick={copyEmail}
-        className="mt-4 rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+        disabled={!generatedEmail}
+        className="mt-4 rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
       >
         {copyStatus === "copied" ? "Copied email" : "Copy email"}
       </button>
