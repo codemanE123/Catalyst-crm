@@ -124,12 +124,12 @@ export default function UniversityResearchAgent({
                 {profile.name}
               </h3>
               <a
-                href={profile.website}
+                href={profile.website ?? "#"}
                 target="_blank"
                 rel="noreferrer"
                 className="text-sm font-medium text-cyan-700 hover:text-cyan-900"
               >
-                {profile.website}
+                {profile.website || "Website not found"}
               </a>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
