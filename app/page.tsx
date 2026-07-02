@@ -44,13 +44,18 @@ export default async function Dashboard() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <MetricCard label="Schools tracked" value={schools.length} />
-          <MetricCard label="Active opportunities" value={activeSchools.length} />
-          <MetricCard label="Known contacts" value={contacts.length} />
-        </section>
-
         <CeoDashboard metrics={ceoMetrics} />
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Operations snapshot
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <MetricCard label="Schools tracked" value={schools.length} />
+            <MetricCard label="Active opportunities" value={activeSchools.length} />
+            <MetricCard label="Known contacts" value={contacts.length} />
+          </div>
+        </section>
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
