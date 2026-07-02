@@ -23,7 +23,9 @@ export default function OutreachEmailGenerator() {
   const [schoolName, setSchoolName] = useState("");
   const [contactRole, setContactRole] = useState("");
   const [painPoint, setPainPoint] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">(
+    "idle"
+  );
 
   const email = useMemo(
     () => buildEmail(schoolName, contactRole, painPoint),
@@ -31,9 +33,26 @@ export default function OutreachEmailGenerator() {
   );
 
   async function copyEmail() {
-    await navigator.clipboard.writeText(email);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(email);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = email;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+
+    window.setTimeout(() => setCopyStatus("idle"), 2500);
   }
 
   return (
@@ -95,8 +114,12 @@ export default function OutreachEmailGenerator() {
         onClick={copyEmail}
         className="mt-4 rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
       >
-        {copied ? "Copied email" : "Copy email"}
+        {copyStatus === "copied" ? "Copied email" : "Copy email"}
       </button>
+      <p className="mt-3 text-sm text-slate-500" aria-live="polite">
+        {copyStatus === "copied" && "Copied to clipboard."}
+        {copyStatus === "failed" && "Copy failed. Select the email text manually."}
+      </p>
     </section>
   );
 }
