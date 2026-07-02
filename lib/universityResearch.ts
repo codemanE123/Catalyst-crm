@@ -239,26 +239,21 @@ async function discoverWebsite(schoolName: string) {
   }
 }
 
-function findSnippet(text: string, terms: string[]) {
-  const lowerText = text.toLowerCase();
+function findEvidence(
+  pages: { url: string; text: string }[],
+  label: string,
+  terms: string[]
+) {
+  for (const page of pages) {
+    const lowerText = page.text.toLowerCase();
+    const matchedTerm = terms.find((term) => lowerText.includes(term));
 
-  for (const term of terms) {
-    const index = lowerText.indexOf(term);
-
-    if (index >= 0) {
-      const snippet = text
-        .slice(Math.max(0, index - 80), index + 220)
-        .replace(/your browser does not support the video tag/gi, " ")
-        .replace(/maps and locations jobs directory contact [^.!?]*/gi, " ")
-        .replace(/skip to main content/gi, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-
-      return snippet.length > 240 ? `${snippet.slice(0, 237)}...` : snippet;
+    if (matchedTerm) {
+      return `Found ${label} evidence via "${matchedTerm}" on ${page.url}`;
     }
   }
 
-  return "";
+  return "Not found";
 }
 
 function findEnrollment(text: string) {
@@ -330,33 +325,41 @@ function buildProfile(
     ]),
     community_college: isCommunityCollege,
     state: findState(combinedText) || "Not found",
-    ai_programs:
-      findSnippet(combinedText, [
+    ai_programs: findEvidence(pages, "AI program", [
         "artificial intelligence",
         "machine learning",
         "data science"
-      ]) || "Not found",
-    cyber_programs:
-      findSnippet(combinedText, ["cybersecurity", "cyber security", "information security"]) ||
-      "Not found",
-    healthcare_programs:
-      findSnippet(combinedText, ["healthcare", "health care", "nursing", "public health"]) ||
-      "Not found",
-    innovation_center:
-      findSnippet(combinedText, ["innovation center", "innovation hub", "innovation lab"]) ||
-      "Not found",
-    entrepreneurship_center:
-      findSnippet(combinedText, [
+      ]),
+    cyber_programs: findEvidence(pages, "cyber program", [
+      "cybersecurity",
+      "cyber security",
+      "information security"
+    ]),
+    healthcare_programs: findEvidence(pages, "healthcare program", [
+      "healthcare",
+      "health care",
+      "nursing",
+      "public health"
+    ]),
+    innovation_center: findEvidence(pages, "innovation center", [
+      "innovation center",
+      "innovation hub",
+      "innovation lab"
+    ]),
+    entrepreneurship_center: findEvidence(pages, "entrepreneurship center", [
         "entrepreneurship center",
         "entrepreneurship",
         "venture"
-      ]) || "Not found",
-    career_services_office:
-      findSnippet(combinedText, ["career services", "career center", "career development"]) ||
-      "Not found",
-    workforce_development_office:
-      findSnippet(combinedText, ["workforce development", "continuing education"]) ||
-      "Not found",
+      ]),
+    career_services_office: findEvidence(pages, "career services office", [
+      "career services",
+      "career center",
+      "career development"
+    ]),
+    workforce_development_office: findEvidence(pages, "workforce development office", [
+      "workforce development",
+      "continuing education"
+    ]),
     profile_sources: pages.map((page) => page.url)
   };
 }
