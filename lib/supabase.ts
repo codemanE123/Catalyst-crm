@@ -44,8 +44,11 @@ export type InterviewSummary = {
   sentiment: "Strong fit" | "Warm" | "Needs nurturing" | "Not a fit";
   notes: string;
   follow_up: string | null;
+  raw_notes: string | null;
   pain_points: string | null;
   current_tools: string | null;
+  buyer: string | null;
+  budget: string | null;
   budget_owner: string | null;
   objections: string | null;
   pilot_interest: "High" | "Medium" | "Low" | "None" | null;
@@ -259,9 +262,13 @@ const sampleInterviews: (InterviewSummary & { school_id: string })[] = [
     notes:
       "Roosevelt needs lightweight support for first-generation college planning and wants a pilot that does not add counselor admin load.",
     follow_up: "Send pilot plan with counselor workflow",
+    raw_notes:
+      "Counselors are stretched thin and need better support for first-generation college planning. Principal and counseling director approve pilot spend. Budget can come from college readiness funds. Concern is counselor admin lift. Strong fit for a fall pilot. Next step is sending the pilot plan.",
     pain_points:
       "Counselors are stretched thin and need better support for first-generation college planning.",
     current_tools: "Shared spreadsheets, email reminders, and one-off counselor meetings.",
+    buyer: "Principal and college counseling director",
+    budget: "College readiness funds",
     budget_owner: "Principal and college counseling director",
     objections: "Needs proof that the pilot will not increase counselor admin work.",
     pilot_interest: "High",
@@ -277,8 +284,12 @@ const sampleInterviews: (InterviewSummary & { school_id: string })[] = [
     notes:
       "North Star is interested but needs district approval before committing to a pilot.",
     follow_up: "Share procurement language",
+    raw_notes:
+      "North Star is interested but district approval is unclear. The charter network operations lead is the buyer and budget owner. They use a counseling CRM and district email campaigns. Procurement is the main objection. Next step is sharing procurement language.",
     pain_points: "Approval path and student onboarding capacity are unclear.",
     current_tools: "Counseling CRM and district email campaigns.",
+    buyer: "Charter network operations lead",
+    budget: "Network operations budget",
     budget_owner: "Charter network operations lead",
     objections: "Needs district procurement guidance.",
     pilot_interest: "Medium",
@@ -553,7 +564,7 @@ export async function getSchoolProfileData(
       supabase
         .from("interviews")
         .select(
-          "id,interviewer,interview_date,sentiment,notes,follow_up,pain_points,current_tools,budget_owner,objections,pilot_interest,referrals,next_step"
+          "id,interviewer,interview_date,sentiment,notes,follow_up,raw_notes,pain_points,current_tools,buyer,budget,budget_owner,objections,pilot_interest,referrals,next_step"
         )
         .eq("school_id", schoolId)
         .order("interview_date", { ascending: false }),
@@ -608,8 +619,11 @@ export async function createInterviewNote(formData: FormData) {
     sentiment: formData.get("sentiment"),
     notes: formData.get("notes") || formData.get("pain_points"),
     follow_up: formData.get("next_step"),
+    raw_notes: formData.get("raw_notes"),
     pain_points: formData.get("pain_points"),
     current_tools: formData.get("current_tools"),
+    buyer: formData.get("buyer"),
+    budget: formData.get("budget"),
     budget_owner: formData.get("budget_owner"),
     objections: formData.get("objections"),
     pilot_interest: formData.get("pilot_interest"),

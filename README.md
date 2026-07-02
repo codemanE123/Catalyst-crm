@@ -16,6 +16,9 @@ emails based on school name, contact role, and pain point.
 Discovery interview capture tracks pain points, current tools, budget owner,
 objections, pilot interest, referrals, and next step.
 
+An AI summary helper turns raw interview notes into structured pain points,
+buyer, budget, objections, pilot readiness, and next action fields.
+
 ## Getting started
 
 Install dependencies and run the development server:

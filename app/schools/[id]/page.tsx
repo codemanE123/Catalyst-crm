@@ -278,11 +278,14 @@ function InterviewSummaries({
                 {interview.notes}
               </p>
               <dl className="mt-4 grid gap-3 text-sm">
+                <DiscoveryDetail label="Raw notes" value={interview.raw_notes} />
                 <DiscoveryDetail label="Pain points" value={interview.pain_points} />
                 <DiscoveryDetail
                   label="Current tools"
                   value={interview.current_tools}
                 />
+                <DiscoveryDetail label="Buyer" value={interview.buyer} />
+                <DiscoveryDetail label="Budget" value={interview.budget} />
                 <DiscoveryDetail
                   label="Budget owner"
                   value={interview.budget_owner}
