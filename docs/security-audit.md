@@ -1,14 +1,53 @@
 # Catalyst CRM Security Audit
 
-Scope: Full repository security audit of the current Next.js, Supabase, and Tailwind codebase.
+> **Document status:** Original repository security audit (pre–Phase 1). Findings
+> below describe the **prototype baseline**. For the **current security posture**,
+> see `docs/pilot-it-security-packet.md`, `docs/security-reports/phase-1-security-completion-report.md`,
+> and `docs/phase-2-roadmap.md`. Sections marked **Historical** are retained for
+> context and must not be read as open vulnerabilities unless no remediation status
+> is listed.
 
-Constraint: Documentation-only audit. No application code was modified.
+Scope: Full repository security audit of the Next.js, Supabase, and Tailwind codebase at prototype stage.
 
-## Executive summary
+Constraint: Documentation-only audit. No application code was modified in this original pass.
 
-The codebase is a prototype CRM with no committed secrets found and no obvious direct XSS sinks such as `dangerouslySetInnerHTML`. The highest risks are production-readiness gaps: no application authentication, no server-action authorization, broad Supabase RLS policies, service-role key use in request-path code, and server-side fetching of user-supplied URLs in the university research agent.
+## Current security posture (summary)
 
-## Priority order
+Phase 1 (Tasks 1–15) and Phase 2 Tasks 2.1–2.2 implemented the critical and high
+remediations from this audit. The application now has:
+
+- Session authentication and middleware protection for `/` and `/schools/*`
+- Organization-scoped RLS and role-based server-action guards
+- Session-scoped Supabase client (no service-role in user request paths)
+- Zod validation, SSRF-hardened research fetches, rate limits, audit events
+- Read-only field privacy: database views (2.1) + app-layer backup redaction
+- Security unit tests in CI (2.2): authz, SSRF, validation
+
+**Pilot IT review packet:** `docs/pilot-it-security-packet.md`
+
+## Remediation status (Phase 1 & Phase 2)
+
+| Original finding | Status |
+| --- | --- |
+| 1. Missing application authentication | **Resolved** — Phase 1 Tasks 2–3 (`middleware.ts`, `/login`) |
+| 2. Missing authorization on server actions | **Resolved** — Phase 1 Tasks 8–9 (`lib/authz.ts`, role guards) |
+| 3. Unsafe service-role usage | **Resolved** — Phase 1 Task 7 (session client only in user paths) |
+| 4. Broad Supabase RLS | **Resolved** — Phase 1 Task 6 (org-scoped policies) |
+| 5. SSRF in research agent | **Mitigated** — Phase 1 Task 10 (`lib/safeFetch.ts`); DNS rebinding gap remains low priority |
+| 6. Missing rate limits | **Resolved** — Phase 1 Task 11 (`lib/rateLimit.ts`) |
+| 7. Missing input validation | **Resolved** — Phase 1 Task 9 (`lib/validation.ts`) |
+| 8. CSRF on server actions | **Accepted** — Supabase SSR cookie model + session guards; explicit origin checks deferred |
+| 9. Sensitive data via unauthenticated UI | **Resolved** — Phase 1 Task 3 + Task 13 redaction; Phase 2 Task 2.1 DB views |
+| 10. Weak error handling | **Partially improved** — typed action errors; monitoring planned Task 2.32 |
+| 11–16. Lower severity items | **Unchanged or improved** — see individual findings |
+
+## Executive summary (historical baseline)
+
+The codebase was a prototype CRM with no committed secrets found and no obvious direct XSS sinks such as `dangerouslySetInnerHTML`. The highest risks at audit time were production-readiness gaps: no application authentication, no server-action authorization, broad Supabase RLS policies, service-role key use in request-path code, and server-side fetching of user-supplied URLs in the university research agent.
+
+**These gaps are addressed for pilot scope** as summarized in [Remediation status](#remediation-status-phase-1--phase-2).
+
+## Priority order (historical remediation plan)
 
 1. Add application authentication and protect all dashboard/profile/server-action paths.
 2. Add authorization and tenant/organization ownership checks.
@@ -20,15 +59,18 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
 8. Add structured error handling and audit logging without private data leakage.
 9. Add tests for auth, RLS assumptions, input validation, and research-agent URL safety.
 
-## Findings
+Steps 1–8 and item 9 (unit tests for authz/SSRF/validation) are **complete** (Phase 1 + Phase 2 Task 2.2). Automated RLS matrix tests are **Phase 2 Task 2.3** (Scale Track).
+
+## Findings (historical baseline with remediation status)
 
 ### 1. Missing application authentication
 
+- **Remediation:** Resolved — Phase 1 Tasks 2–3
 - Severity: Critical
-- File/location:
+- File/location (at audit time):
   - `app/page.tsx`
   - `app/schools/[id]/page.tsx`
-  - No auth middleware or login route exists.
+  - No auth middleware or login route existed.
 - Risk: Any deployed user can access CRM dashboard and school profile pages.
 - Why it matters: The app displays CRM data, contact details, discovery notes, outreach history, and researched school intelligence. Without authentication, a deployed environment exposes this data to anyone who can reach the URL.
 - Recommended fix:
@@ -40,6 +82,7 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
 
 ### 2. Missing authorization checks on server actions
 
+- **Remediation:** Resolved — Phase 1 Tasks 8–9
 - Severity: Critical
 - File/location:
   - `lib/supabase.ts` -> `createInterviewNote`
@@ -55,6 +98,7 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
 
 ### 3. Unsafe service-role environment variable usage
 
+- **Remediation:** Resolved — Phase 1 Task 7 (`lib/supabaseServer.ts`; user paths use anon session client)
 - Severity: Critical
 - File/location:
   - `lib/supabase.ts` uses `SUPABASE_SERVICE_ROLE_KEY` before anon key.
@@ -70,6 +114,7 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
 
 ### 4. Supabase RLS policies are overly broad
 
+- **Remediation:** Resolved — Phase 1 Task 6; read-only views Phase 2 Task 2.1
 - Severity: High
 - File/location:
   - `supabase/migrations/20260702200600_initial_crm_schema.sql`
@@ -100,11 +145,12 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
   - User-influenced page fetches use `safeFetchText()`; fixed DuckDuckGo search requests remain separate trusted outbound calls.
 - Remaining gaps:
   - No DNS-resolution IP verification before fetch.
-  - No per-user rate limits on research fetches (Task 11).
+  - ~~No per-user rate limits on research fetches (Task 11).~~ **Resolved** — Phase 1 Task 11
 - Priority: 5
 
 ### 6. Missing rate limits
 
+- **Remediation:** Resolved — Phase 1 Task 11
 - Severity: High
 - File/location:
   - `lib/universityResearch.ts` server action and public fetch loop.
@@ -120,6 +166,7 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
 
 ### 7. Missing server-side input validation and length limits
 
+- **Remediation:** Resolved — Phase 1 Task 9; covered by `tests/validation/schemas.test.ts` (Task 2.2)
 - Severity: High
 - File/location:
   - `lib/supabase.ts` -> `createInterviewNote`
@@ -136,6 +183,7 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
 
 ### 8. CSRF exposure on mutation server actions
 
+- **Remediation:** Accepted risk for pilot — session required on mutations; Supabase SSR cookies; full origin-check strategy deferred
 - Severity: Medium
 - File/location:
   - `createInterviewNote`
@@ -151,6 +199,7 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
 
 ### 9. Sensitive data exposure through unauthenticated UI
 
+- **Remediation:** Resolved — Phase 1 Tasks 3, 13; Phase 2 Task 2.1 database views
 - Severity: High
 - File/location:
   - `app/page.tsx`
@@ -167,6 +216,7 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
 
 ### 10. Weak error handling and silent failures
 
+- **Remediation:** Partially improved — explicit server-action errors; error monitoring planned Phase 2 Task 2.32
 - Severity: Medium
 - File/location:
   - `lib/supabase.ts` returns sample/no-op behavior on missing Supabase and does not surface insert errors.
@@ -260,25 +310,27 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
   - Rotate keys immediately if ever committed.
 - Priority: 16
 
-## Additional observations by checklist item
+## Additional observations by checklist item (historical snapshot)
+
+At audit time:
 
 - Exposed API keys or secrets: No concrete secret values found.
-- Unsafe environment variable usage: Service-role fallback in request-path helpers is unsafe.
-- Missing authentication checks: Present and critical.
-- Missing authorization checks: Present and critical.
-- Insecure API routes: No API routes; server actions are the effective API surface and lack auth/rate limits.
-- Supabase RLS issues: Broad authenticated read/manage policies.
+- Unsafe environment variable usage: Service-role fallback in request-path helpers was unsafe — **resolved** Task 7.
+- Missing authentication checks: Present and critical — **resolved** Tasks 2–3.
+- Missing authorization checks: Present and critical — **resolved** Tasks 8–9.
+- Insecure API routes: No API routes; server actions lacked auth — **resolved**.
+- Supabase RLS issues: Broad authenticated read/manage policies — **resolved** Task 6.
 - SQL injection risks: Low currently; no raw SQL found.
 - XSS risks: Low currently due to React escaping, but scraped content must remain escaped.
-- CSRF risks: Medium future/current server-action mutation concern once auth is cookie-based.
+- CSRF risks: Medium future/current server-action mutation concern once auth is cookie-based — **mitigated** by session + role guards.
 - Unsafe file uploads: None found.
 - Overly permissive CORS: None found.
-- Sensitive data exposure: High due to unauthenticated UI and profile pages.
-- Weak error handling: Medium; failures are often silent or preview/no-op.
+- Sensitive data exposure: High due to unauthenticated UI — **resolved** Tasks 3, 13, 2.1.
+- Weak error handling: Medium — **partially improved**.
 - Logging of private data: Not observed.
-- Missing rate limits: High for server actions and research fetches.
+- Missing rate limits: High — **resolved** Task 11.
 
-## Recommended remediation sequence
+## Recommended remediation sequence (historical — largely complete)
 
 1. Implement authentication middleware and route protection.
 2. Replace service-role runtime access with user-scoped Supabase clients.
@@ -287,6 +339,16 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
 5. Add validation schemas and max lengths for every server action.
 6. Add SSRF protection and rate limits for university research.
 7. Add structured error handling and audit logging.
-8. Add security tests for auth, RLS, validation, and URL blocking.
-9. Add CI secret scanning and dependency audit gates.
-10. Re-review before deploying with real CRM data.
+8. Add security tests for auth, RLS, validation, and URL blocking. ✅ Unit tests (2.2); RLS matrix (2.3 ST)
+9. Add CI secret scanning and dependency audit gates. ✅ CI lint/test/build; audit step with documented PostCSS exception (2.38 pending)
+10. Re-review before deploying with real CRM data. ⏳ Pilot Launch Gate — `docs/phase-2-roadmap.md`
+
+## References
+
+- `docs/phase-2-roadmap.md` — implementation source of truth
+- `docs/pilot-it-security-packet.md` — university IT/security review
+- `docs/pilot-onboarding-checklist.md` — onboarding and smoke verification
+- `docs/supabase-rls-audit.md` — RLS and read-only views
+- `docs/security-reports/phase-1-security-completion-report.md` — Phase 1 closure
+- `docs/verification/readonly-view-verification.md` — manual view verification
+- `tests/authz/redaction.test.ts`, `tests/safeFetch/ssrf.test.ts`, `tests/validation/schemas.test.ts` — CI security unit tests

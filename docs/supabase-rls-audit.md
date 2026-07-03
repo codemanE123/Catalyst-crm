@@ -16,7 +16,30 @@ Phase 2 Task 2.1 adds **database-enforced read-only views** that omit
 restricted columns before data reaches the application. App-layer redaction
 remains as **backup defense in depth** if a query path ever bypasses the views.
 
+Phase 2 Task 2.2 adds **security unit tests** (Vitest) for `shouldRedactRestrictedFields`,
+`assertSafeHttpsUrl`, and validation schemas; CI runs `npm run test`.
+
 See [Phase 2 Task 2.1 — Read-only safe views](#phase-2-task-21--read-only-safe-views).
+
+**Implementation roadmap:** `docs/phase-2-roadmap.md`  
+**Pilot IT packet:** `docs/pilot-it-security-packet.md`  
+**Verification runbook:** `docs/verification/readonly-view-verification.md`
+
+## Current assessment (post–Phase 1 Task 6, Phase 2 Tasks 2.1–2.2)
+
+The five core CRM tables use organization-scoped RLS with role-aware write and
+delete policies. `read_only` school profile loads use safe views that omit
+restricted interview and follow-up columns. Automated unit tests guard authz,
+SSRF, and validation logic in CI.
+
+**Remaining database-layer note:** RLS still grants `read_only` users `SELECT`
+on full base tables; column privacy for the supported app path is enforced by
+views plus backup app redaction. Ad-hoc PostgREST access to base tables is a
+known hardening gap (see verification doc known limitations).
+
+**Pilot operations still pending (Phase 2 PLT):** admin membership UI (2.6),
+production fail-closed without sample data (2.4), staging/production deploys
+(2.9–2.10), and related items in `docs/phase-2-roadmap.md`.
 
 ## Implemented policy model (Phase 1 Task 6)
 
@@ -168,14 +191,17 @@ remain gated by server-action role checks and RLS `can_write_org()` policies.
 
 ## Historical audit notes
 
-The sections below describe the pre-Task-6 prototype state and original
-recommendations. They are kept for context.
+The sections below describe the **pre–Phase 1 Task 6 prototype state** and
+original recommendations. They are **not** the current security posture. For the
+live model, see [Executive summary](#executive-summary), [Implemented policy model](#implemented-policy-model-phase-1-task-6), and [Phase 2 Task 2.1](#phase-2-task-21--read-only-safe-views).
 
 ### Prior executive summary (pre-Task 6)
 
 The current schema has a solid prototype foundation: five core CRM tables, foreign keys, indexes, timestamps, and RLS enabled. The critical gap is ownership. There are no `user_id`, `organization_id`, team membership, or role columns, and every current RLS policy grants all authenticated users global read/write access. In a production CRM, this would allow one authenticated user to see and change every other user's schools, contacts, outreach, interviews, and follow-ups.
 
-## Current tables
+**Status:** Resolved in Phase 1 Tasks 4–6 (`organizations`, ownership columns, scoped RLS).
+
+### Prototype table inventory (pre-Task 6)
 
 ### `schools`
 
@@ -184,7 +210,7 @@ The current schema has a solid prototype foundation: five core CRM tables, forei
 - Added research fields: `enrollment`, `public_private`, `hbcu`, `community_college`, `state`, program/center/office fields, `profile_sources`.
 - Current uniqueness: `(name, district)`.
 - RLS: Enabled.
-- Current policy problem: any authenticated user can read/manage all rows.
+- **Historical policy problem (resolved Task 6):** any authenticated user could read/manage all rows.
 
 ### `contacts`
 
@@ -192,7 +218,7 @@ The current schema has a solid prototype foundation: five core CRM tables, forei
 - Key relationship: `school_id references schools(id) on delete cascade`.
 - Optional fields: role, email, phone, relationship, last touch, notes.
 - RLS: Enabled.
-- Current policy problem: any authenticated user can read/manage all rows.
+- **Historical policy problem (resolved Task 6):** any authenticated user could read/manage all rows.
 
 ### `outreach`
 
@@ -201,7 +227,7 @@ The current schema has a solid prototype foundation: five core CRM tables, forei
   - `school_id references schools(id) on delete cascade`
   - `contact_id references contacts(id) on delete set null`
 - RLS: Enabled.
-- Current policy problem: any authenticated user can read/manage all rows.
+- **Historical policy problem (resolved Task 6):** any authenticated user could read/manage all rows.
 
 ### `interviews`
 
@@ -210,7 +236,7 @@ The current schema has a solid prototype foundation: five core CRM tables, forei
   - `school_id references schools(id) on delete cascade`
   - `contact_id references contacts(id) on delete set null`
 - RLS: Enabled.
-- Current policy problem: any authenticated user can read/manage all rows.
+- **Historical policy problem (resolved Task 6):** any authenticated user could read/manage all rows.
 
 ### `follow_ups`
 
@@ -221,7 +247,7 @@ The current schema has a solid prototype foundation: five core CRM tables, forei
   - `outreach_id references outreach(id) on delete set null`
   - `interview_id references interviews(id) on delete set null`
 - RLS: Enabled.
-- Current policy problem: any authenticated user can read/manage all rows.
+- **Historical policy problem (resolved Task 6):** any authenticated user could read/manage all rows.
 
 ## Relationships and foreign keys
 
@@ -252,12 +278,12 @@ Strengths:
 - Optional references use `on delete set null`, which preserves historical records when contacts/outreach/interviews are removed.
 - Indexes exist on high-use foreign keys and timeline fields.
 
-Concerns:
+Concerns (historical — largely addressed Phase 1 Tasks 4–6):
 
-- No ownership columns exist on parent or child tables.
-- No team/organization table exists.
-- No role table exists.
-- `owner` fields are free-form text, not foreign keys to users.
+- ~~No ownership columns exist on parent or child tables.~~ **Added** (`organization_id`, `created_by`, `updated_by`, `assigned_to`).
+- ~~No team/organization table exists.~~ **Added** (`organizations`, `organization_members`).
+- ~~No role table exists.~~ **Roles** stored on `organization_members.role`.
+- `owner` fields remain free-form text, not foreign keys to users.
 - Research/profile source data is embedded on `schools`, not normalized.
 
 ## Index review
@@ -277,7 +303,7 @@ Current indexes:
 - `follow_ups(due_date)`
 - `follow_ups(status)`
 
-Recommended additional indexes after ownership is added:
+Recommended additional indexes after ownership is added (historical recommendation — **implemented** in `20260703143300_add_crm_ownership_fields.sql` and Task 6 policies):
 
 ```sql
 create index schools_organization_id_idx on public.schools(organization_id);
@@ -292,15 +318,15 @@ create index follow_ups_school_org_idx on public.follow_ups(school_id);
 
 If high-volume filtering by organization is common, child tables should also include denormalized `organization_id` with FK consistency triggers or app-enforced consistency.
 
-## User ownership fields
+## User ownership fields (historical — implemented Phase 1 Task 5)
 
-Current state:
+Prior state:
 
 - Missing.
-- No table has `created_by`, `updated_by`, `assigned_to`, or `user_id`.
-- Current `owner` is plain text and cannot enforce access.
+- No table had `created_by`, `updated_by`, `assigned_to`, or `user_id`.
+- `owner` was plain text and could not enforce access.
 
-Recommended fields:
+Implemented in migration `20260703143300_add_crm_ownership_fields.sql`. Original recommended fields (for reference):
 
 ```sql
 alter table public.schools
@@ -909,19 +935,35 @@ $$;
 
 Apply equivalent triggers to `outreach`, `interviews`, and `follow_ups` if denormalized organization IDs are used.
 
-## Migration strategy
+## Migration strategy (historical original plan)
 
-1. Create `organizations`, `organization_members`, and optional `platform_admins`.
-2. Backfill a default organization for existing rows.
-3. Add nullable `organization_id`, `created_by`, `updated_by`, and `assigned_to` fields.
-4. Backfill ownership fields.
-5. Add indexes.
-6. Deploy application code that writes ownership fields.
-7. Replace broad RLS policies with scoped policies.
-8. Make ownership columns `not null` after backfill.
-9. Remove service-role usage from normal user request paths.
-10. Add tests for cross-organization access denial.
+The steps below were the pre–Phase 1 rollout plan. **Steps 1–9 are complete.**
+Step 10 is partially addressed by Phase 2 Task 2.2 unit tests; full RLS matrix
+automation is Phase 2 Task 2.3 (Scale Track).
+
+1. Create `organizations`, `organization_members`, and optional `platform_admins`. ✅
+2. Backfill a default organization for existing rows. ✅
+3. Add nullable `organization_id`, `created_by`, `updated_by`, and `assigned_to` fields. ✅
+4. Backfill ownership fields. ✅
+5. Add indexes. ✅
+6. Deploy application code that writes ownership fields. ✅
+7. Replace broad RLS policies with scoped policies. ✅
+8. Make ownership columns `not null` after backfill. ✅
+9. Remove service-role usage from normal user request paths. ✅
+10. Add tests for cross-organization access denial. ⏳ Partial (2.2 unit tests; 2.3 RLS matrix)
 
 ## Final assessment
 
-The database design is acceptable for a prototype but not safe for production multi-user CRM use. The immediate blocker is not table coverage; it is the lack of ownership and role boundaries. Before production, add organization membership, user ownership fields, scoped RLS policies, and a strict admin/service-role pattern.
+### Current (post–Phase 1 Task 6, Phase 2 Tasks 2.1–2.2)
+
+Organization-scoped RLS, ownership columns, read-only safe views, and security
+unit tests in CI address the prototype's original ownership and policy gaps.
+The schema is suitable for **controlled pilot** use with documented operational
+tasks remaining (admin UI, production env hardening, staging deploy — see
+`docs/phase-2-roadmap.md` Pilot Launch Gate).
+
+### Historical (pre–Phase 1 Task 6)
+
+The database design was acceptable for a prototype but not safe for production
+multi-user CRM use. The immediate blocker was not table coverage; it was the
+lack of ownership and role boundaries. That gap was closed in Phase 1 Tasks 4–6.

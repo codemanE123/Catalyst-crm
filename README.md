@@ -24,6 +24,31 @@ The university research agent fetches public school websites and search result
 pages, then populates CRM profile fields for enrollment, sector,
 HBCU/community-college status, state, programs, centers, offices, and sources.
 
+## Security and access (pilot)
+
+Catalyst CRM requires authentication for the dashboard and school profiles.
+Data is scoped by **organization** with role-based access:
+
+| Role | Summary |
+| --- | --- |
+| `read_only` | Read own organization; sensitive interview/follow-up fields omitted at the database layer (Phase 2 Task 2.1) |
+| `sales` | Read and write own organization |
+| `admin` | Read, write, and delete within own organization |
+| `super_admin` | Cross-organization platform access (Catalyst operators only) |
+
+**Pilot documentation for university IT review:**
+
+- `docs/pilot-it-security-packet.md` — share with institutional IT/legal
+- `docs/pilot-onboarding-checklist.md` — internal onboarding steps
+- `docs/supabase-rls-audit.md` — database RLS and read-only view model
+- `docs/verification/readonly-view-verification.md` — manual verification procedures
+- `docs/phase-2-roadmap.md` — implementation source of truth
+
+Phase 1 completed authentication, organization-scoped RLS, server-action
+authorization, validation, SSRF protection, rate limiting, audit logging, and
+app-layer field redaction. Phase 2 adds database read-only views and security
+unit tests in CI.
+
 ## Privacy and data handling
 
 When using discovery interview capture, the outreach email generator, or the
@@ -44,7 +69,8 @@ university research agent:
 
 ## Getting started
 
-Install dependencies and run the development server:
+Install dependencies and run the development server (`npm run dev`). See
+[Development commands](#development-commands) for lint, test, and build.
 
 ```bash
 npm install
@@ -58,8 +84,9 @@ Open `http://localhost:3000`.
 Sign in at `/login` with a Supabase Auth email/password user. Sign out at
 `/logout`. OAuth and magic-link flows redirect through `/auth/callback`.
 
-Dashboard routes are not protected yet. Any visitor can still open `/` without
-signing in until route middleware is added in a later phase.
+**Route protection (Phase 1 Task 3):** Middleware requires a valid session for
+`/` and `/schools/*`. Unauthenticated visitors are redirected to `/login`.
+Login, logout, and auth callback routes remain public.
 
 ### Supabase Auth redirect URLs
 
@@ -71,8 +98,21 @@ Authentication → URL Configuration:
 
 Set the site URL to your app origin, for example `http://localhost:3000`.
 
-Create test users in Supabase under Authentication → Users before signing in
-locally.
+Create test users in Supabase under Authentication → Users, then add
+`organization_members` rows with the appropriate role before signing in locally.
+See `docs/pilot-onboarding-checklist.md` for membership SQL examples.
+
+## Development commands
+
+```bash
+npm install
+npm run dev      # local app at http://localhost:3000
+npm run lint
+npm run test     # security unit tests (authz, SSRF, validation)
+npm run build
+```
+
+CI runs lint, test, and build on every push and pull request.
 
 ## Supabase configuration
 
@@ -93,10 +133,29 @@ scripts only. Do not set it in `.env.local` for routine local testing.
 
 See `.env.example` for a starter template.
 
-Apply the CRM schema from `supabase/migrations` to create these tables:
+Apply migrations from `supabase/migrations` in timestamp order. Minimum set for
+security and pilot onboarding:
+
+1. `20260702200600_initial_crm_schema.sql`
+2. `20260702210800_add_discovery_interview_fields.sql`
+3. `20260702212500_add_ai_summary_interview_fields.sql`
+4. `20260702221300_add_university_research_profile_fields.sql`
+5. `20260703142600_add_organizations_and_roles.sql`
+6. `20260703143300_add_crm_ownership_fields.sql`
+7. `20260703144000_replace_broad_rls_policies.sql`
+8. `20260703152200_add_rate_limit_events.sql`
+9. `20260703152700_add_audit_events.sql`
+10. `20260703160000_add_readonly_safe_views.sql`
+
+Core tables:
 
 - `schools`: target school accounts and pipeline status.
 - `contacts`: people tied to schools through `school_id`.
 - `outreach`: email, call, meeting, event, and other outreach history.
 - `interviews`: school interview notes submitted from the dashboard form.
 - `follow_ups`: next actions tied to schools, contacts, outreach, or interviews.
+- `organizations`, `organization_members`: tenant and role membership.
+- `interviews_readonly`, `follow_ups_readonly`: safe projections for `read_only` users (omit restricted columns).
+
+Read-only users loading school profiles receive interview and follow-up data from
+the safe views; writers use base tables. See `docs/supabase-rls-audit.md`.
