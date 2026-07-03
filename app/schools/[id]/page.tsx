@@ -6,8 +6,9 @@ import {
   School,
   SchoolContact
 } from "@/lib/supabase";
+import { requireUser } from "@/lib/supabaseServer";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 const statusStyles: Record<School["status"], string> = {
   Prospect: "bg-slate-100 text-slate-700 ring-slate-200",
@@ -21,6 +22,12 @@ export default async function SchoolProfile({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
   const { id } = await params;
   const profile = await getSchoolProfileData(id);
 
