@@ -2,6 +2,25 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getServerSupabaseClient } from "./supabaseServer";
 
+export type AppRole = "super_admin" | "admin" | "sales" | "read_only";
+
+export type Organization = {
+  id: string;
+  name: string;
+  slug: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrganizationMember = {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  role: AppRole;
+  created_at: string;
+  updated_at: string;
+};
+
 export type School = {
   id: string;
   name: string;
