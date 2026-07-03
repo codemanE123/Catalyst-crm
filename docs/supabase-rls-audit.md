@@ -1,8 +1,82 @@
 # Supabase Database Design and RLS Audit
 
-Scope: Documentation-only audit of the current Supabase schema and Row Level Security strategy.
+Scope: Documentation of the Supabase schema and Row Level Security strategy.
 
 ## Executive summary
+
+The CRM schema now includes organization membership, ownership columns, and
+organization-scoped RLS on the five core CRM tables. Broad `using (true)`
+policies were replaced in migration
+`20260703144000_replace_broad_rls_policies.sql`.
+
+Remaining gaps for later phases:
+
+- Service-role usage in some server paths (Task 7).
+- App-layer role guards and validation (Tasks 8–9).
+- Field-level privacy redaction for `read_only` users (Task 13).
+
+## Implemented policy model (Phase 1 Task 6)
+
+Migration: `supabase/migrations/20260703144000_replace_broad_rls_policies.sql`
+
+### Helper functions
+
+| Function | Purpose |
+| --- | --- |
+| `is_super_admin()` | True when `auth.uid()` has `super_admin` in any org |
+| `has_org_access(org_id)` | Read access for org members and `super_admin` |
+| `can_write_org(org_id)` | Insert/update for `admin`, `sales`, and `super_admin` |
+| `can_manage_org(org_id)` | Delete for `admin` and `super_admin` |
+
+All helpers are `security definer` with a fixed `search_path = public`.
+
+### Role behavior
+
+| Role | SELECT | INSERT / UPDATE | DELETE |
+| --- | --- | --- | --- |
+| `read_only` | Own org | Denied | Denied |
+| `sales` | Own org | Own org | Denied |
+| `admin` | Own org | Own org | Own org |
+| `super_admin` | All orgs | All orgs | All orgs |
+
+### CRM table policies
+
+Each of `schools`, `contacts`, `outreach`, `interviews`, and `follow_ups` has
+four policies:
+
+1. **Org members can read** — `SELECT` when `has_org_access(organization_id)`
+2. **Writers can insert** — `INSERT` when `can_write_org(organization_id)`
+3. **Writers can update** — `UPDATE` when `can_write_org(organization_id)`
+4. **Admins can delete** — `DELETE` when `can_manage_org(organization_id)`
+
+Access is keyed on each row's `organization_id` (added in Task 5).
+
+### Dropped policies
+
+The following broad policies were removed:
+
+- `Authenticated users can read schools`
+- `Authenticated users can manage schools`
+- `Authenticated users can read contacts`
+- `Authenticated users can manage contacts`
+- `Authenticated users can read outreach`
+- `Authenticated users can manage outreach`
+- `Authenticated users can read interviews`
+- `Authenticated users can manage interviews`
+- `Authenticated users can read follow ups`
+- `Authenticated users can manage follow ups`
+
+### Organization tables (unchanged in Task 6)
+
+`organizations` and `organization_members` still use the read policies added in
+Task 4. Task 6 scoped only the five CRM tables.
+
+## Historical audit notes
+
+The sections below describe the pre-Task-6 prototype state and original
+recommendations. They are kept for context.
+
+### Prior executive summary (pre-Task 6)
 
 The current schema has a solid prototype foundation: five core CRM tables, foreign keys, indexes, timestamps, and RLS enabled. The critical gap is ownership. There are no `user_id`, `organization_id`, team membership, or role columns, and every current RLS policy grants all authenticated users global read/write access. In a production CRM, this would allow one authenticated user to see and change every other user's schools, contacts, outreach, interviews, and follow-ups.
 
