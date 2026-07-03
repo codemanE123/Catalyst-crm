@@ -1,0 +1,41 @@
+# Catalyst CRM CI
+#
+# Known audit finding (non-blocking):
+# npm audit reports a moderate PostCSS advisory (GHSA-qx2v-qp2m-jg93) pulled in
+# transitively by Next.js (next/node_modules/postcss). There is no safe fix without
+# downgrading Next to an incompatible major version. The audit step uses
+# continue-on-error until Next ships an updated PostCSS dependency.
+# Lint and build remain blocking.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Dependency audit
+        continue-on-error: true
+        run: npm audit --audit-level=moderate
