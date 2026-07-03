@@ -348,6 +348,7 @@ function buildProfile(
 }
 
 async function saveProfile(profile: UniversityResearchProfile) {
+  // User-triggered saves use the authenticated session client so RLS applies.
   const supabase = await getServerSupabaseClient();
 
   if (!supabase) {

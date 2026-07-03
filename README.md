@@ -57,14 +57,22 @@ locally.
 
 ## Supabase configuration
 
-The dashboard renders sample data when Supabase variables are not set. To use
-live data, add:
+The dashboard renders sample data when Supabase variables are not set. For
+normal signed-in app use, set only:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
 ```
+
+`SUPABASE_SERVICE_ROLE_KEY` is **not required** for dashboard, school profiles,
+interview submission, or the university research agent. User actions run through
+the authenticated session client and are enforced by Supabase RLS.
+
+Reserve `SUPABASE_SERVICE_ROLE_KEY` for future background jobs or maintenance
+scripts only. Do not set it in `.env.local` for routine local testing.
+
+See `.env.example` for a starter template.
 
 Apply the CRM schema from `supabase/migrations` to create these tables:
 

@@ -3,6 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireMembership } from "./authz";
 import { getServerSupabaseClient, requireUser } from "./supabaseServer";
 
+// User request paths use the session-scoped client only. Do not use
+// SUPABASE_SERVICE_ROLE_KEY in this module.
+
 export type AppRole = "super_admin" | "admin" | "sales" | "read_only";
 
 export type Organization = {
@@ -370,10 +373,6 @@ const sampleCeoMetrics: CeoMetric[] = [
   { label: "Paid pilots", value: 2, detail: "Converted pilot partners" }
 ];
 
-async function getSupabaseClient(): Promise<SupabaseClient | null> {
-  return getServerSupabaseClient();
-}
-
 export type RecordOwnershipFields = {
   organization_id: string;
   created_by: string;
@@ -539,7 +538,7 @@ function getSampleSchoolProfileData(schoolId: string): SchoolProfileData | null 
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const supabase = await getSupabaseClient();
+  const supabase = await getServerSupabaseClient();
 
   if (!supabase) {
     return {
@@ -588,7 +587,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 export async function getSchoolProfileData(
   schoolId: string
 ): Promise<SchoolProfileData | null> {
-  const supabase = await getSupabaseClient();
+  const supabase = await getServerSupabaseClient();
 
   if (!supabase) {
     return getSampleSchoolProfileData(schoolId);
@@ -661,7 +660,7 @@ export async function getSchoolProfileData(
 export async function createInterviewNote(formData: FormData) {
   "use server";
 
-  const supabase = await getSupabaseClient();
+  const supabase = await getServerSupabaseClient();
 
   if (!supabase) {
     return;
