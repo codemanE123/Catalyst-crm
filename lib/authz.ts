@@ -5,6 +5,23 @@ import { getServerSupabaseClient } from "./supabaseServer";
 
 export const MUTATION_ROLES: AppRole[] = ["sales", "admin", "super_admin"];
 
+export const RESTRICTED_FIELD_PLACEHOLDER = "Restricted";
+
+export function shouldRedactRestrictedFields(
+  membership: OrganizationMember | null,
+  allMemberships: OrganizationMember[]
+): boolean {
+  if (allMemberships.some((item) => item.role === "super_admin")) {
+    return false;
+  }
+
+  if (membership && hasRole(membership, MUTATION_ROLES)) {
+    return false;
+  }
+
+  return membership?.role === "read_only";
+}
+
 export async function getMembershipsForUser(
   supabase: SupabaseClient,
   userId: string

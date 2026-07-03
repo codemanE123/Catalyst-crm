@@ -1,6 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getSchoolOrganizationId, MUTATION_ROLES, requireMembership, requireRole } from "./authz";
+import {
+  getMembershipForUser,
+  getMembershipsForUser,
+  getSchoolOrganizationId,
+  MUTATION_ROLES,
+  requireMembership,
+  requireRole,
+  RESTRICTED_FIELD_PLACEHOLDER,
+  shouldRedactRestrictedFields
+} from "./authz";
 import { AUDIT_ACTIONS, recordAuditEvent } from "./auditLog";
 import { getServerSupabaseClient, requireUser } from "./supabaseServer";
 import {
@@ -141,6 +150,7 @@ export type SchoolProfileData = {
   interviews: InterviewSummary[];
   nextFollowUp: FollowUp | null;
   source: "supabase" | "sample";
+  restrictedFieldsRedacted?: boolean;
 };
 
 type ContactRow = Omit<Contact, "school"> & {
@@ -594,13 +604,80 @@ export async function getDashboardData(): Promise<DashboardData> {
   };
 }
 
+function redactRestrictedValue(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  return RESTRICTED_FIELD_PLACEHOLDER;
+}
+
+function applyRestrictedFieldRedaction(
+  profile: SchoolProfileData
+): SchoolProfileData {
+  return {
+    ...profile,
+    restrictedFieldsRedacted: true,
+    interviews: profile.interviews.map((interview) => ({
+      ...interview,
+      raw_notes: redactRestrictedValue(interview.raw_notes),
+      budget: redactRestrictedValue(interview.budget),
+      budget_owner: redactRestrictedValue(interview.budget_owner),
+      objections: redactRestrictedValue(interview.objections)
+    })),
+    nextFollowUp: profile.nextFollowUp
+      ? {
+          ...profile.nextFollowUp,
+          notes: redactRestrictedValue(profile.nextFollowUp.notes)
+        }
+      : null
+  };
+}
+
+async function applyRedactionForCurrentUser(
+  schoolId: string,
+  profile: SchoolProfileData
+): Promise<SchoolProfileData> {
+  const user = await requireUser();
+
+  if (!user) {
+    return profile;
+  }
+
+  const supabase = await getServerSupabaseClient();
+
+  if (!supabase) {
+    return profile;
+  }
+
+  const [allMemberships, schoolOrgId] = await Promise.all([
+    getMembershipsForUser(supabase, user.id),
+    getSchoolOrganizationId(supabase, schoolId)
+  ]);
+  const membership = schoolOrgId
+    ? await getMembershipForUser(supabase, user.id, schoolOrgId)
+    : null;
+
+  if (!shouldRedactRestrictedFields(membership, allMemberships)) {
+    return profile;
+  }
+
+  return applyRestrictedFieldRedaction(profile);
+}
+
 export async function getSchoolProfileData(
   schoolId: string
 ): Promise<SchoolProfileData | null> {
   const supabase = await getServerSupabaseClient();
 
   if (!supabase) {
-    return getSampleSchoolProfileData(schoolId);
+    const sampleProfile = getSampleSchoolProfileData(schoolId);
+
+    if (!sampleProfile) {
+      return null;
+    }
+
+    return applyRedactionForCurrentUser(schoolId, sampleProfile);
   }
 
   const schoolResponse = await supabase
@@ -610,7 +687,13 @@ export async function getSchoolProfileData(
     .maybeSingle();
 
   if (!schoolResponse.data) {
-    return getSampleSchoolProfileData(schoolId);
+    const sampleProfile = getSampleSchoolProfileData(schoolId);
+
+    if (!sampleProfile) {
+      return null;
+    }
+
+    return applyRedactionForCurrentUser(schoolId, sampleProfile);
   }
 
   const [contactsResponse, outreachResponse, interviewsResponse, followUpsResponse] =
@@ -650,7 +733,7 @@ export async function getSchoolProfileData(
     school: school.name
   }));
 
-  return {
+  return applyRedactionForCurrentUser(schoolId, {
     school,
     contacts,
     outreach: (outreachResponse.data ?? []) as OutreachActivity[],
@@ -664,7 +747,7 @@ export async function getSchoolProfileData(
       followUpsResponse.error
         ? "sample"
         : "supabase"
-  };
+  });
 }
 
 export async function createInterviewNote(

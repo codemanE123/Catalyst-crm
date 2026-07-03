@@ -6,6 +6,7 @@ import {
   School,
   SchoolContact
 } from "@/lib/supabase";
+import { RESTRICTED_FIELD_PLACEHOLDER } from "@/lib/authz";
 import { requireUser } from "@/lib/supabaseServer";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -35,7 +36,7 @@ export default async function SchoolProfile({
     notFound();
   }
 
-  const { school, contacts, outreach, interviews, nextFollowUp, source } =
+  const { school, contacts, outreach, interviews, nextFollowUp, source, restrictedFieldsRedacted } =
     profile;
 
   return (
@@ -76,6 +77,14 @@ export default async function SchoolProfile({
           <SummaryCard label="Contacts" value={contacts.length.toString()} />
           <SummaryCard label="Interviews" value={interviews.length.toString()} />
         </section>
+
+        {restrictedFieldsRedacted ? (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+            Some sensitive fields are hidden for your role. Budget, objections,
+            raw interview notes, and follow-up notes appear as &quot;
+            {RESTRICTED_FIELD_PLACEHOLDER}&quot;.
+          </section>
+        ) : null}
 
         <section className="grid gap-8 xl:grid-cols-[1fr_0.75fr]">
           <div className="flex flex-col gap-8">
@@ -254,7 +263,7 @@ function StatusPanel({
               {formatDate(nextFollowUp.due_date)} · {nextFollowUp.status}
             </p>
             <p className="mt-2 text-sm text-slate-600">
-              {nextFollowUp.notes ?? "No follow-up notes."}
+              <RedactedText value={nextFollowUp.notes ?? "No follow-up notes."} />
             </p>
           </div>
         ) : (
@@ -429,11 +438,39 @@ function DiscoveryDetail({
     return null;
   }
 
+  const isRedacted = value === RESTRICTED_FIELD_PLACEHOLDER;
+
   return (
-    <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+    <div
+      className={`rounded-xl p-3 ring-1 ${
+        isRedacted
+          ? "bg-amber-50 ring-amber-200"
+          : "bg-white ring-slate-200"
+      }`}
+    >
       <dt className="font-medium text-slate-500">{label}</dt>
-      <dd className="mt-1 text-slate-700">{value}</dd>
+      <dd
+        className={`mt-1 ${
+          isRedacted
+            ? "font-medium italic text-amber-800"
+            : "text-slate-700"
+        }`}
+      >
+        {value}
+      </dd>
     </div>
+  );
+}
+
+function RedactedText({ value }: { value: string }) {
+  if (value !== RESTRICTED_FIELD_PLACEHOLDER) {
+    return <>{value}</>;
+  }
+
+  return (
+    <span className="font-medium italic text-amber-800">
+      {RESTRICTED_FIELD_PLACEHOLDER}
+    </span>
   );
 }
 
