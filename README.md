@@ -34,6 +34,27 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Authentication
+
+Sign in at `/login` with a Supabase Auth email/password user. Sign out at
+`/logout`. OAuth and magic-link flows redirect through `/auth/callback`.
+
+Dashboard routes are not protected yet. Any visitor can still open `/` without
+signing in until route middleware is added in a later phase.
+
+### Supabase Auth redirect URLs
+
+In the Supabase project dashboard, add these redirect URLs under
+Authentication → URL Configuration:
+
+- `http://localhost:3000/auth/callback`
+- Your production URL, for example `https://your-domain.com/auth/callback`
+
+Set the site URL to your app origin, for example `http://localhost:3000`.
+
+Create test users in Supabase under Authentication → Users before signing in
+locally.
+
 ## Supabase configuration
 
 The dashboard renders sample data when Supabase variables are not set. To use
