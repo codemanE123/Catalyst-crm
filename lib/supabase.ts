@@ -665,6 +665,37 @@ async function applyRedactionForCurrentUser(
   return applyRestrictedFieldRedaction(profile);
 }
 
+const INTERVIEW_SELECT_FULL =
+  "id,interviewer,interview_date,sentiment,notes,follow_up,raw_notes,pain_points,current_tools,buyer,budget,budget_owner,objections,pilot_interest,referrals,next_step";
+
+const INTERVIEW_SELECT_READONLY =
+  "id,interviewer,interview_date,sentiment,notes,follow_up,pain_points,current_tools,buyer,pilot_interest,referrals,next_step";
+
+const FOLLOW_UP_SELECT_FULL = "id,title,due_date,status,owner,notes";
+
+const FOLLOW_UP_SELECT_READONLY = "id,title,due_date,status,owner";
+
+async function shouldUseReadonlyProfileSources(
+  supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>,
+  schoolId: string
+): Promise<boolean> {
+  const user = await requireUser();
+
+  if (!user) {
+    return false;
+  }
+
+  const [allMemberships, schoolOrgId] = await Promise.all([
+    getMembershipsForUser(supabase, user.id),
+    getSchoolOrganizationId(supabase, schoolId)
+  ]);
+  const membership = schoolOrgId
+    ? await getMembershipForUser(supabase, user.id, schoolOrgId)
+    : null;
+
+  return shouldRedactRestrictedFields(membership, allMemberships);
+}
+
 export async function getSchoolProfileData(
   schoolId: string
 ): Promise<SchoolProfileData | null> {
@@ -696,32 +727,54 @@ export async function getSchoolProfileData(
     return applyRedactionForCurrentUser(schoolId, sampleProfile);
   }
 
-  const [contactsResponse, outreachResponse, interviewsResponse, followUpsResponse] =
-    await Promise.all([
-      supabase
-        .from("contacts")
-        .select("id,name,role,email,phone,relationship,last_touch,notes")
+  const useReadonlySources = await shouldUseReadonlyProfileSources(supabase, schoolId);
+
+  const contactsPromise = supabase
+    .from("contacts")
+    .select("id,name,role,email,phone,relationship,last_touch,notes")
+    .eq("school_id", schoolId)
+    .order("last_touch", { ascending: false });
+
+  const outreachPromise = supabase
+    .from("outreach")
+    .select("id,channel,subject,message,outcome,outreach_date,owner,next_step")
+    .eq("school_id", schoolId)
+    .order("outreach_date", { ascending: false });
+
+  const interviewsPromise = useReadonlySources
+    ? supabase
+        .from("interviews_readonly" as "interviews")
+        .select(INTERVIEW_SELECT_READONLY)
         .eq("school_id", schoolId)
-        .order("last_touch", { ascending: false }),
-      supabase
-        .from("outreach")
-        .select("id,channel,subject,message,outcome,outreach_date,owner,next_step")
-        .eq("school_id", schoolId)
-        .order("outreach_date", { ascending: false }),
-      supabase
+        .order("interview_date", { ascending: false })
+    : supabase
         .from("interviews")
-        .select(
-          "id,interviewer,interview_date,sentiment,notes,follow_up,raw_notes,pain_points,current_tools,buyer,budget,budget_owner,objections,pilot_interest,referrals,next_step"
-        )
+        .select(INTERVIEW_SELECT_FULL)
         .eq("school_id", schoolId)
-        .order("interview_date", { ascending: false }),
-      supabase
-        .from("follow_ups")
-        .select("id,title,due_date,status,owner,notes")
+        .order("interview_date", { ascending: false });
+
+  const followUpsPromise = useReadonlySources
+    ? supabase
+        .from("follow_ups_readonly" as "follow_ups")
+        .select(FOLLOW_UP_SELECT_READONLY)
         .eq("school_id", schoolId)
         .neq("status", "Done")
         .order("due_date", { ascending: true })
         .limit(1)
+    : supabase
+        .from("follow_ups")
+        .select(FOLLOW_UP_SELECT_FULL)
+        .eq("school_id", schoolId)
+        .neq("status", "Done")
+        .order("due_date", { ascending: true })
+        .limit(1);
+
+  const [contactsResponse, outreachResponse, interviewsResponse, followUpsResponse] =
+    await Promise.all([
+      contactsPromise,
+      outreachPromise,
+      interviewsPromise,
+      followUpsPromise
     ]);
 
   const school = schoolResponse.data as School;
@@ -733,12 +786,15 @@ export async function getSchoolProfileData(
     school: school.name
   }));
 
+  const interviews = (interviewsResponse.data ?? []) as InterviewSummary[];
+  const followUpRows = (followUpsResponse.data ?? []) as FollowUp[];
+
   return applyRedactionForCurrentUser(schoolId, {
     school,
     contacts,
     outreach: (outreachResponse.data ?? []) as OutreachActivity[],
-    interviews: (interviewsResponse.data ?? []) as InterviewSummary[],
-    nextFollowUp: ((followUpsResponse.data ?? []) as FollowUp[])[0] ?? null,
+    interviews,
+    nextFollowUp: followUpRows[0] ?? null,
     source:
       schoolResponse.error ||
       contactsResponse.error ||
