@@ -1,5 +1,7 @@
 import { getRecordOwnershipFields, type School } from "./supabase";
-import { getServerSupabaseClient } from "./supabaseServer";
+import { MUTATION_ROLES, requireRole } from "./authz";
+import { validateUniversityResearchInput } from "./validation";
+import { getServerSupabaseClient, requireUser } from "./supabaseServer";
 
 export type UniversityResearchProfile = Required<
   Pick<
@@ -347,15 +349,35 @@ function buildProfile(
   };
 }
 
-async function saveProfile(profile: UniversityResearchProfile) {
+async function saveProfile(
+  profile: UniversityResearchProfile
+): Promise<"saved" | "denied" | "failed"> {
   // User-triggered saves use the authenticated session client so RLS applies.
   const supabase = await getServerSupabaseClient();
 
   if (!supabase) {
-    return false;
+    return "failed";
   }
 
   const ownership = await getRecordOwnershipFields();
+
+  if (!ownership) {
+    return "denied";
+  }
+
+  const { data: existingSchool } = await supabase
+    .from("schools")
+    .select("organization_id")
+    .eq("name", profile.name)
+    .eq("district", profile.public_private)
+    .maybeSingle();
+
+  if (
+    existingSchool &&
+    existingSchool.organization_id !== ownership.organization_id
+  ) {
+    return "denied";
+  }
 
   const { error } = await supabase.from("schools").upsert(
     {
@@ -393,7 +415,7 @@ async function saveProfile(profile: UniversityResearchProfile) {
     }
   );
 
-  return !error;
+  return error ? "failed" : "saved";
 }
 
 export async function researchUniversityProfile(
@@ -402,14 +424,36 @@ export async function researchUniversityProfile(
 ): Promise<UniversityResearchResult> {
   "use server";
 
-  const schoolName = String(formData.get("school_name") ?? "").trim();
-  const submittedWebsite = normalizeWebsite(String(formData.get("website") ?? ""));
+  const validation = validateUniversityResearchInput(formData);
 
-  if (!schoolName) {
+  if (!validation.success) {
     return {
       profile: buildProfile("Unknown school", "", []),
       saved: false,
-      message: "Enter a school name to run the research agent."
+      message: validation.error
+    };
+  }
+
+  const schoolName = validation.data.school_name;
+  const submittedWebsite = normalizeWebsite(validation.data.website);
+
+  const user = await requireUser();
+
+  if (!user) {
+    return {
+      profile: buildProfile(schoolName, submittedWebsite, []),
+      saved: false,
+      message: "Sign in to run the research agent."
+    };
+  }
+
+  const membership = await requireRole(user, MUTATION_ROLES);
+
+  if (!membership) {
+    return {
+      profile: buildProfile(schoolName, submittedWebsite, []),
+      saved: false,
+      message: "You do not have permission to run the research agent."
     };
   }
 
@@ -438,13 +482,16 @@ export async function researchUniversityProfile(
         }
       ];
   const profile = buildProfile(schoolName, website, fallbackPages);
-  const saved = await saveProfile(profile);
+  const saveResult = await saveProfile(profile);
+  const saved = saveResult === "saved";
 
   return {
     profile,
     saved,
     message: saved
       ? "Research complete and CRM school profile updated."
-      : "Research complete. Connect Supabase to save this profile automatically."
+      : saveResult === "denied"
+        ? "Research complete, but you do not have permission to save this profile."
+        : "Research complete. Connect Supabase to save this profile automatically."
   };
 }

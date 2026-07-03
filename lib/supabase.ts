@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { requireMembership } from "./authz";
+import { getSchoolOrganizationId, MUTATION_ROLES, requireMembership, requireRole } from "./authz";
 import { getServerSupabaseClient, requireUser } from "./supabaseServer";
+import {
+  validateInterviewNote,
+  type InterviewActionResult
+} from "./validation";
 
 // User request paths use the session-scoped client only. Do not use
 // SUPABASE_SERVICE_ROLE_KEY in this module.
@@ -657,40 +661,80 @@ export async function getSchoolProfileData(
   };
 }
 
-export async function createInterviewNote(formData: FormData) {
+export async function createInterviewNote(
+  formData: FormData
+): Promise<InterviewActionResult> {
   "use server";
 
+  const validation = validateInterviewNote(formData);
+
+  if (!validation.success) {
+    return { ok: false, error: validation.error };
+  }
+
+  const input = validation.data;
   const supabase = await getServerSupabaseClient();
 
   if (!supabase) {
-    return;
+    return { ok: false, error: "Supabase is not configured." };
+  }
+
+  const user = await requireUser();
+
+  if (!user) {
+    return { ok: false, error: "Sign in to save discovery interviews." };
+  }
+
+  const schoolOrganizationId = await getSchoolOrganizationId(
+    supabase,
+    input.school_id
+  );
+
+  if (!schoolOrganizationId) {
+    return { ok: false, error: "Select a valid school in your organization." };
+  }
+
+  const membership = await requireRole(
+    user,
+    MUTATION_ROLES,
+    schoolOrganizationId
+  );
+
+  if (!membership) {
+    return { ok: false, error: "You do not have permission to save interviews." };
   }
 
   const ownership = await getRecordOwnershipFields();
 
-  await supabase.from("interviews").insert({
-    school_id: formData.get("school_id"),
-    interviewer: formData.get("interviewer"),
-    interview_date: formData.get("interview_date"),
-    sentiment: formData.get("sentiment"),
-    notes: formData.get("notes") || formData.get("pain_points"),
-    follow_up: formData.get("next_step"),
-    raw_notes: formData.get("raw_notes"),
-    pain_points: formData.get("pain_points"),
-    current_tools: formData.get("current_tools"),
-    buyer: formData.get("buyer"),
-    budget: formData.get("budget"),
-    budget_owner: formData.get("budget_owner"),
-    objections: formData.get("objections"),
-    pilot_interest: formData.get("pilot_interest"),
-    referrals: formData.get("referrals"),
-    next_step: formData.get("next_step"),
-    ...(ownership
-      ? {
-          organization_id: ownership.organization_id,
-          created_by: ownership.created_by,
-          updated_by: ownership.updated_by
-        }
-      : {})
+  if (!ownership || ownership.organization_id !== schoolOrganizationId) {
+    return { ok: false, error: "You do not have permission to save interviews." };
+  }
+
+  const { error } = await supabase.from("interviews").insert({
+    school_id: input.school_id,
+    interviewer: input.interviewer,
+    interview_date: input.interview_date,
+    sentiment: input.sentiment,
+    notes: input.notes || input.pain_points,
+    follow_up: input.next_step,
+    raw_notes: input.raw_notes ?? null,
+    pain_points: input.pain_points ?? null,
+    current_tools: input.current_tools ?? null,
+    buyer: input.buyer ?? null,
+    budget: input.budget ?? null,
+    budget_owner: input.budget_owner ?? null,
+    objections: input.objections ?? null,
+    pilot_interest: input.pilot_interest,
+    referrals: input.referrals ?? null,
+    next_step: input.next_step,
+    organization_id: ownership.organization_id,
+    created_by: ownership.created_by,
+    updated_by: ownership.updated_by
   });
+
+  if (error) {
+    return { ok: false, error: "Could not save the discovery interview." };
+  }
+
+  return { ok: true };
 }

@@ -3,6 +3,8 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { AppRole, OrganizationMember } from "./supabase";
 import { getServerSupabaseClient } from "./supabaseServer";
 
+export const MUTATION_ROLES: AppRole[] = ["sales", "admin", "super_admin"];
+
 export async function getMembershipsForUser(
   supabase: SupabaseClient,
   userId: string
@@ -84,4 +86,21 @@ export async function requireRole(
   }
 
   return membership;
+}
+
+export async function getSchoolOrganizationId(
+  supabase: SupabaseClient,
+  schoolId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("schools")
+    .select("organization_id")
+    .eq("id", schoolId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data.organization_id;
 }

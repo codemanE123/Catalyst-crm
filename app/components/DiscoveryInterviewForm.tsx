@@ -1,7 +1,8 @@
 "use client";
 
 import type { School } from "@/lib/supabase";
-import { useState } from "react";
+import type { InterviewActionResult } from "@/lib/validation";
+import { useActionState, useState } from "react";
 
 type Summary = {
   painPoints: string;
@@ -165,11 +166,16 @@ export default function DiscoveryInterviewForm({
   action
 }: {
   schools: School[];
-  action: (formData: FormData) => void | Promise<void>;
+  action: (formData: FormData) => Promise<InterviewActionResult> | InterviewActionResult;
 }) {
   const [rawNotes, setRawNotes] = useState("");
   const [summary, setSummary] = useState<Summary>(emptySummary);
   const [summaryStatus, setSummaryStatus] = useState("");
+  const [submitState, submitAction] = useActionState(
+    async (_previousState: InterviewActionResult | null, formData: FormData) =>
+      action(formData),
+    null
+  );
 
   function generateSummary() {
     const nextSummary = summarizeNotes(rawNotes);
@@ -185,7 +191,17 @@ export default function DiscoveryInterviewForm({
       <h2 className="mt-1 text-2xl font-semibold text-slate-950">
         Capture discovery details
       </h2>
-      <form action={action} className="mt-6 space-y-4">
+      <form action={submitAction} className="mt-6 space-y-4">
+        {submitState && !submitState.ok ? (
+          <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-800">
+            {submitState.error}
+          </p>
+        ) : null}
+        {submitState?.ok ? (
+          <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            Discovery interview saved.
+          </p>
+        ) : null}
         <label className="block">
           <span className="text-sm font-medium text-slate-700">School</span>
           <select
