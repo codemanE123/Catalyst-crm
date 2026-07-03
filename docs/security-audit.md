@@ -86,17 +86,21 @@ The codebase is a prototype CRM with no committed secrets found and no obvious d
 ### 5. SSRF risk in university research agent
 
 - Severity: High
+- Status: Mitigated in Phase 1 Task 10
 - File/location:
+  - `lib/safeFetch.ts`
   - `lib/universityResearch.ts`
   - `normalizeWebsite`, `discoverWebsite`, `discoverTopicPages`, `fetchPage`, `researchUniversityProfile`
-- Risk: The server fetches user-supplied websites and discovered URLs without blocking internal/private hosts.
-- Why it matters: Attackers may use this endpoint to request internal services, localhost, cloud metadata endpoints, or private network resources from the server environment.
-- Recommended fix:
-  - Allow only `https`.
-  - Block localhost, private IP ranges, link-local addresses, metadata IPs, and non-public DNS resolutions.
-  - Resolve DNS server-side and verify final IPs before fetch.
-  - Disable redirects or revalidate redirect targets.
-  - Add response size limits and strict timeouts.
+- Prior risk: The server fetched user-supplied websites and discovered URLs without blocking internal/private hosts.
+- Implemented controls:
+  - `safeFetchText()` allows only `https://` URLs.
+  - Blocks `localhost`, private IPv4 ranges, link-local/metadata ranges such as `169.254.0.0/16`, and selected IPv6 local ranges.
+  - Rejects URL credentials, manual redirect chains are revalidated, and redirect depth is capped.
+  - Response bodies are limited to 2 MB and requests keep the existing 5 second timeout.
+  - User-influenced page fetches use `safeFetchText()`; fixed DuckDuckGo search requests remain separate trusted outbound calls.
+- Remaining gaps:
+  - No DNS-resolution IP verification before fetch.
+  - No per-user rate limits on research fetches (Task 11).
 - Priority: 5
 
 ### 6. Missing rate limits

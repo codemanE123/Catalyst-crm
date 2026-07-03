@@ -1,5 +1,11 @@
 import { getRecordOwnershipFields, type School } from "./supabase";
 import { MUTATION_ROLES, requireRole } from "./authz";
+import { isSafeHttpsUrl, safeFetchText, SAFE_FETCH_DEFAULT_TIMEOUT_MS } from "./safeFetch";
+import {
+  enforceRateLimit,
+  RATE_LIMIT_ACTIONS,
+  RATE_LIMITS
+} from "./rateLimit";
 import { validateUniversityResearchInput } from "./validation";
 import { getServerSupabaseClient, requireUser } from "./supabaseServer";
 
@@ -91,7 +97,7 @@ function normalizeWebsite(website: string) {
   }
 
   return /^https?:\/\//i.test(trimmedWebsite)
-    ? trimmedWebsite
+    ? trimmedWebsite.replace(/^http:\/\//i, "https://")
     : `https://${trimmedWebsite}`;
 }
 
@@ -144,7 +150,10 @@ async function discoverTopicPages(schoolName: string, website: string) {
           .map((result) => decodeURIComponent(result[1]))
           .find((url) => {
             try {
-              return new URL(url).hostname.includes(hostname);
+              return (
+                isSafeHttpsUrl(url) &&
+                new URL(url).hostname.includes(hostname)
+              );
             } catch {
               return false;
             }
@@ -173,18 +182,19 @@ function stripHtml(html: string) {
 
 async function fetchPage(url: string) {
   try {
-    const response = await fetch(url, {
-      headers: {
-        "user-agent": "CatalystCRMResearchAgent/1.0"
-      },
-      signal: AbortSignal.timeout(5000)
-    });
-
-    if (!response.ok) {
+    if (!isSafeHttpsUrl(url)) {
       return null;
     }
 
-    const text = stripHtml(await response.text());
+    const text = stripHtml(
+      await safeFetchText(url, {
+        headers: {
+          "user-agent": "CatalystCRMResearchAgent/1.0"
+        },
+        timeoutMs: SAFE_FETCH_DEFAULT_TIMEOUT_MS
+      })
+    );
+
     return {
       url,
       text
@@ -212,13 +222,15 @@ async function discoverWebsite(schoolName: string) {
     const html = await response.text();
     const matches = [...html.matchAll(/uddg=([^"&]+)/g)]
       .map((match) => decodeURIComponent(match[1]))
-      .filter((url) => /^https?:\/\//i.test(url));
+      .filter((url) => isSafeHttpsUrl(url));
     const eduResult = matches.find((url) => {
       const hostname = new URL(url).hostname;
       return hostname.endsWith(".edu") || hostname.includes(".edu.");
     });
 
-    return eduResult ? new URL(eduResult).origin : "";
+    return eduResult && isSafeHttpsUrl(eduResult)
+      ? new URL(eduResult).origin
+      : "";
   } catch {
     return "";
   }
@@ -457,9 +469,29 @@ export async function researchUniversityProfile(
     };
   }
 
+  const supabase = await getServerSupabaseClient();
+
+  if (supabase) {
+    const rateLimit = await enforceRateLimit(
+      supabase,
+      user.id,
+      RATE_LIMIT_ACTIONS.universityResearch,
+      RATE_LIMITS.universityResearch,
+      "Too many research requests. Please wait a few minutes and try again."
+    );
+
+    if (!rateLimit.allowed) {
+      return {
+        profile: buildProfile(schoolName, submittedWebsite, []),
+        saved: false,
+        message: rateLimit.error
+      };
+    }
+  }
+
   const website = submittedWebsite || (await discoverWebsite(schoolName));
 
-  if (!website) {
+  if (!website || !isSafeHttpsUrl(website)) {
     return {
       profile: buildProfile(schoolName, "", []),
       saved: false,
@@ -468,7 +500,11 @@ export async function researchUniversityProfile(
   }
 
   const targetUrls = [
-    ...new Set([...pageUrls(website), ...(await discoverTopicPages(schoolName, website))])
+    ...new Set(
+      [...pageUrls(website), ...(await discoverTopicPages(schoolName, website))].filter(
+        (url) => isSafeHttpsUrl(url)
+      )
+    )
   ];
   const pages = (
     await Promise.all(targetUrls.map((url) => fetchPage(url)))

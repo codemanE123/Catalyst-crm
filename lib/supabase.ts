@@ -3,6 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSchoolOrganizationId, MUTATION_ROLES, requireMembership, requireRole } from "./authz";
 import { getServerSupabaseClient, requireUser } from "./supabaseServer";
 import {
+  enforceRateLimit,
+  RATE_LIMIT_ACTIONS,
+  RATE_LIMITS
+} from "./rateLimit";
+import {
   validateInterviewNote,
   type InterviewActionResult
 } from "./validation";
@@ -683,6 +688,18 @@ export async function createInterviewNote(
 
   if (!user) {
     return { ok: false, error: "Sign in to save discovery interviews." };
+  }
+
+  const rateLimit = await enforceRateLimit(
+    supabase,
+    user.id,
+    RATE_LIMIT_ACTIONS.interviewNote,
+    RATE_LIMITS.interviewNote,
+    "Too many interview submissions. Please wait a few minutes and try again."
+  );
+
+  if (!rateLimit.allowed) {
+    return { ok: false, error: rateLimit.error };
   }
 
   const schoolOrganizationId = await getSchoolOrganizationId(
