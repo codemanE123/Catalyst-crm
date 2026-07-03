@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getServerSupabaseClient } from "./supabaseServer";
+import { requireMembership } from "./authz";
+import { getServerSupabaseClient, requireUser } from "./supabaseServer";
 
 export type AppRole = "super_admin" | "admin" | "sales" | "read_only";
 
@@ -373,6 +374,34 @@ async function getSupabaseClient(): Promise<SupabaseClient | null> {
   return getServerSupabaseClient();
 }
 
+export type RecordOwnershipFields = {
+  organization_id: string;
+  created_by: string;
+  updated_by: string;
+  assigned_to: string;
+};
+
+export async function getRecordOwnershipFields(): Promise<RecordOwnershipFields | null> {
+  const user = await requireUser();
+
+  if (!user) {
+    return null;
+  }
+
+  const membership = await requireMembership(user);
+
+  if (!membership) {
+    return null;
+  }
+
+  return {
+    organization_id: membership.organization_id,
+    created_by: user.id,
+    updated_by: user.id,
+    assigned_to: user.id
+  };
+}
+
 function buildPipeline(schools: School[]): PipelineStage[] {
   const stages: PipelineStage[] = [
     { name: "Prospect", count: 0, color: "bg-slate-400" },
@@ -638,6 +667,8 @@ export async function createInterviewNote(formData: FormData) {
     return;
   }
 
+  const ownership = await getRecordOwnershipFields();
+
   await supabase.from("interviews").insert({
     school_id: formData.get("school_id"),
     interviewer: formData.get("interviewer"),
@@ -654,6 +685,13 @@ export async function createInterviewNote(formData: FormData) {
     objections: formData.get("objections"),
     pilot_interest: formData.get("pilot_interest"),
     referrals: formData.get("referrals"),
-    next_step: formData.get("next_step")
+    next_step: formData.get("next_step"),
+    ...(ownership
+      ? {
+          organization_id: ownership.organization_id,
+          created_by: ownership.created_by,
+          updated_by: ownership.updated_by
+        }
+      : {})
   });
 }

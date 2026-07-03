@@ -1,5 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
-import type { School } from "./supabase";
+import { getRecordOwnershipFields, type School } from "./supabase";
+import { getServerSupabaseClient } from "./supabaseServer";
 
 export type UniversityResearchProfile = Required<
   Pick<
@@ -80,23 +80,6 @@ const STATE_NAMES = [
   "Wisconsin",
   "Wyoming"
 ];
-
-function getSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !key) {
-    return null;
-  }
-
-  return createClient(url, key, {
-    auth: {
-      persistSession: false
-    }
-  });
-}
 
 function normalizeWebsite(website: string) {
   const trimmedWebsite = website.trim();
@@ -365,11 +348,13 @@ function buildProfile(
 }
 
 async function saveProfile(profile: UniversityResearchProfile) {
-  const supabase = getSupabaseClient();
+  const supabase = await getServerSupabaseClient();
 
   if (!supabase) {
     return false;
   }
+
+  const ownership = await getRecordOwnershipFields();
 
   const { error } = await supabase.from("schools").upsert(
     {
@@ -392,7 +377,15 @@ async function saveProfile(profile: UniversityResearchProfile) {
       location: profile.state,
       status: "Prospect",
       owner: "Research agent",
-      next_step: "Review researched school profile"
+      next_step: "Review researched school profile",
+      ...(ownership
+        ? {
+            organization_id: ownership.organization_id,
+            created_by: ownership.created_by,
+            updated_by: ownership.updated_by,
+            assigned_to: ownership.assigned_to
+          }
+        : {})
     },
     {
       onConflict: "name,district"
