@@ -1,5 +1,6 @@
 import { getRecordOwnershipFields, type School } from "./supabase";
 import { MUTATION_ROLES, requireRole } from "./authz";
+import { AUDIT_ACTIONS, recordAuditEvent } from "./auditLog";
 import { isSafeHttpsUrl, safeFetchText, SAFE_FETCH_DEFAULT_TIMEOUT_MS } from "./safeFetch";
 import {
   enforceRateLimit,
@@ -363,18 +364,18 @@ function buildProfile(
 
 async function saveProfile(
   profile: UniversityResearchProfile
-): Promise<"saved" | "denied" | "failed"> {
+): Promise<{ status: "saved" | "denied" | "failed"; schoolId?: string }> {
   // User-triggered saves use the authenticated session client so RLS applies.
   const supabase = await getServerSupabaseClient();
 
   if (!supabase) {
-    return "failed";
+    return { status: "failed" };
   }
 
   const ownership = await getRecordOwnershipFields();
 
   if (!ownership) {
-    return "denied";
+    return { status: "denied" };
   }
 
   const { data: existingSchool } = await supabase
@@ -388,7 +389,7 @@ async function saveProfile(
     existingSchool &&
     existingSchool.organization_id !== ownership.organization_id
   ) {
-    return "denied";
+    return { status: "denied" };
   }
 
   const { error } = await supabase.from("schools").upsert(
@@ -427,7 +428,21 @@ async function saveProfile(
     }
   );
 
-  return error ? "failed" : "saved";
+  if (error) {
+    return { status: "failed" };
+  }
+
+  const { data: school } = await supabase
+    .from("schools")
+    .select("id")
+    .eq("name", profile.name)
+    .eq("district", profile.public_private)
+    .maybeSingle();
+
+  return {
+    status: "saved",
+    schoolId: school?.id
+  };
 }
 
 export async function researchUniversityProfile(
@@ -518,15 +533,45 @@ export async function researchUniversityProfile(
         }
       ];
   const profile = buildProfile(schoolName, website, fallbackPages);
+
+  if (supabase) {
+    await recordAuditEvent(supabase, {
+      organizationId: membership.organization_id,
+      actorUserId: user.id,
+      action: AUDIT_ACTIONS.universityResearchRun,
+      targetTable: "schools",
+      metadata: {
+        school_name: schoolName,
+        website_host: new URL(website).hostname,
+        source_page_count: pages.length
+      }
+    });
+  }
+
   const saveResult = await saveProfile(profile);
-  const saved = saveResult === "saved";
+  const saved = saveResult.status === "saved";
+
+  if (supabase && saved) {
+    await recordAuditEvent(supabase, {
+      organizationId: membership.organization_id,
+      actorUserId: user.id,
+      action: AUDIT_ACTIONS.universityResearchSave,
+      targetTable: "schools",
+      recordId: saveResult.schoolId ?? null,
+      metadata: {
+        school_name: schoolName,
+        website_host: new URL(website).hostname,
+        source_page_count: pages.length
+      }
+    });
+  }
 
   return {
     profile,
     saved,
     message: saved
       ? "Research complete and CRM school profile updated."
-      : saveResult === "denied"
+      : saveResult.status === "denied"
         ? "Research complete, but you do not have permission to save this profile."
         : "Research complete. Connect Supabase to save this profile automatically."
   };

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getSchoolOrganizationId, MUTATION_ROLES, requireMembership, requireRole } from "./authz";
+import { AUDIT_ACTIONS, recordAuditEvent } from "./auditLog";
 import { getServerSupabaseClient, requireUser } from "./supabaseServer";
 import {
   enforceRateLimit,
@@ -727,31 +728,49 @@ export async function createInterviewNote(
     return { ok: false, error: "You do not have permission to save interviews." };
   }
 
-  const { error } = await supabase.from("interviews").insert({
-    school_id: input.school_id,
-    interviewer: input.interviewer,
-    interview_date: input.interview_date,
-    sentiment: input.sentiment,
-    notes: input.notes || input.pain_points,
-    follow_up: input.next_step,
-    raw_notes: input.raw_notes ?? null,
-    pain_points: input.pain_points ?? null,
-    current_tools: input.current_tools ?? null,
-    buyer: input.buyer ?? null,
-    budget: input.budget ?? null,
-    budget_owner: input.budget_owner ?? null,
-    objections: input.objections ?? null,
-    pilot_interest: input.pilot_interest,
-    referrals: input.referrals ?? null,
-    next_step: input.next_step,
-    organization_id: ownership.organization_id,
-    created_by: ownership.created_by,
-    updated_by: ownership.updated_by
-  });
+  const { data: insertedInterview, error } = await supabase
+    .from("interviews")
+    .insert({
+      school_id: input.school_id,
+      interviewer: input.interviewer,
+      interview_date: input.interview_date,
+      sentiment: input.sentiment,
+      notes: input.notes || input.pain_points,
+      follow_up: input.next_step,
+      raw_notes: input.raw_notes ?? null,
+      pain_points: input.pain_points ?? null,
+      current_tools: input.current_tools ?? null,
+      buyer: input.buyer ?? null,
+      budget: input.budget ?? null,
+      budget_owner: input.budget_owner ?? null,
+      objections: input.objections ?? null,
+      pilot_interest: input.pilot_interest,
+      referrals: input.referrals ?? null,
+      next_step: input.next_step,
+      organization_id: ownership.organization_id,
+      created_by: ownership.created_by,
+      updated_by: ownership.updated_by
+    })
+    .select("id")
+    .single();
 
-  if (error) {
+  if (error || !insertedInterview) {
     return { ok: false, error: "Could not save the discovery interview." };
   }
+
+  await recordAuditEvent(supabase, {
+    organizationId: ownership.organization_id,
+    actorUserId: user.id,
+    action: AUDIT_ACTIONS.interviewCreate,
+    targetTable: "interviews",
+    recordId: insertedInterview.id,
+    metadata: {
+      school_id: input.school_id,
+      interview_date: input.interview_date,
+      sentiment: input.sentiment,
+      pilot_interest: input.pilot_interest
+    }
+  });
 
   return { ok: true };
 }
