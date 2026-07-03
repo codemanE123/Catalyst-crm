@@ -1,6 +1,6 @@
 # Catalyst CRM — Pilot IT & Security Packet
 
-**Version:** 1.0 (Phase 2 Task 2.0)  
+**Version:** 1.1 (Phase 2 Task 2.1C)  
 **Audience:** University IT, information security, legal, and data governance reviewers  
 **Product:** Catalyst CRM — school partnership pipeline tool  
 **Status:** Controlled pilot — not general-purpose student information system  
@@ -15,7 +15,7 @@ Catalyst CRM helps partnership teams track target schools, contacts, outreach, d
 
 **This product is designed for institutional partnership and sales discovery workflows. It is not a student information system (SIS) and must not be used to store student PII or FERPA-protected education records.**
 
-Phase 1 security controls are in place: authentication, organization-scoped authorization, input validation, SSRF protections on research fetches, rate limiting, audit logging, and field redaction for read-only users.
+Phase 1 security controls are in place: authentication, organization-scoped authorization, input validation, SSRF protections on research fetches, rate limiting, audit logging, and field redaction for read-only users. Phase 2 Task 2.1 adds database-enforced read-only views so restricted columns are omitted before data reaches the application; app-layer redaction remains as backup defense.
 
 ---
 
@@ -56,19 +56,20 @@ Phase 1 security controls are in place: authentication, organization-scoped auth
 
 ## 4. Authorization and RLS summary
 
-Access is enforced at **two layers**:
+Access is enforced at **three layers**:
 
-1. **Application layer** — role checks on server actions; field redaction for `read_only` users in the UI and data layer.  
-2. **Database layer (RLS)** — organization-scoped policies on all core CRM tables.
+1. **Database layer (RLS)** — organization-scoped policies on all core CRM tables.  
+2. **Database layer (read-only views)** — `interviews_readonly` and `follow_ups_readonly` omit restricted columns for `read_only` profile loads (Phase 2 Task 2.1).  
+3. **Application layer** — role checks on server actions; field redaction for `read_only` users as **backup** if restricted values ever appear in a response.
 
 ### Roles
 
 | Role | Access summary |
 | --- | --- |
-| `read_only` | Read own organization; cannot create, update, or delete |
-| `sales` | Read and write own organization; cannot delete |
-| `admin` | Read, write, and delete within own organization |
-| `super_admin` | Cross-organization platform access (Catalyst operators only; minimize use) |
+| `read_only` | Read own organization via safe views; restricted interview/follow-up columns not returned; cannot create, update, or delete |
+| `sales` | Read and write own organization (full interview/follow-up fields); cannot delete |
+| `admin` | Read, write, and delete within own organization (full fields) |
+| `super_admin` | Cross-organization platform access with full fields (Catalyst operators only; minimize use) |
 
 ### Row Level Security (Postgres)
 
@@ -84,7 +85,7 @@ Helper functions: `has_org_access()`, `can_write_org()`, `can_manage_org()`, `is
 
 **Pilot isolation:** Each pilot university receives a dedicated `organizations` row. Users in Org A cannot read or write Org B data.
 
-**Known Phase 2 improvement:** Task 2.1 will add database-level views for `read_only` column privacy (defense in depth). Phase 1 redaction is enforced in the application data layer.
+**Read-only column privacy (implemented):** Migration `20260703160000_add_readonly_safe_views.sql` defines views that exclude sensitive columns. The application routes `read_only` school profile loads to these views. App-layer redaction (Phase 1) still runs afterward as defense in depth. Details: `docs/supabase-rls-audit.md` (Phase 2 Task 2.1).
 
 ---
 
@@ -147,17 +148,26 @@ Pilot participants agree to:
 4. Use **read_only** accounts for observers who do not need edit access.  
 5. Report suspected data misuse to Catalyst contacts (Section 7).
 
-### Read-only field redaction
+### Read-only field protection
 
-Users with `read_only` role do not see these fields in the application (shown as "Restricted"):
+Users with the `read_only` role do not receive these columns from the database
+when loading school profiles (views omit them entirely):
 
-- Raw interview notes  
-- Budget  
-- Budget owner  
-- Objections  
-- Sensitive follow-up notes  
+| Table | Protected columns |
+| --- | --- |
+| `interviews` | `raw_notes`, `budget`, `budget_owner`, `objections` |
+| `follow_ups` | `notes` |
 
-Sales, admin, and super_admin users in the organization see full values.
+**Primary control:** Postgres views `interviews_readonly` and `follow_ups_readonly`
+with `security_invoker = true` (RLS on base tables still applies).
+
+**Backup control:** Application-layer redaction (Phase 1) still replaces any
+non-empty restricted value with `"Restricted"` in the UI if a query path ever
+leaks a protected field.
+
+`sales`, `admin`, and `super_admin` users in the organization load base tables
+and see full values. `read_only` users cannot mutate data via server actions or
+RLS write policies.
 
 ### Subprocessors (pilot)
 
@@ -223,10 +233,10 @@ When exceeded, the user receives a generic error message; the action is not perf
 | SSRF protection on research URLs | Implemented |
 | Rate limiting on sensitive actions | Implemented |
 | Audit events for key mutations | Implemented |
-| Read-only field redaction (app layer) | Implemented |
+| Read-only field redaction (app layer, backup) | Implemented |
+| Database-enforced read-only views (primary) | Implemented (Phase 2 Task 2.1) |
 | Privacy warnings in UI | Implemented |
 | CI lint/build on code changes | Implemented |
-| Database-enforced read-only views | Phase 2 Task 2.1 (planned) |
 | Admin membership UI | Phase 2 Task 2.6 (planned) |
 
 ---
@@ -265,7 +275,7 @@ Detailed runbook: Phase 2 Task 2.35 (`docs/incident-response-runbook.md` — to 
 
 **A.2 Data categories.** The system may store school institutional information, business contact details, partnership notes, outreach history, and commercially sensitive discovery information entered by authorized users. Users shall not enter personally identifiable information about students, student grades, student identification numbers, or other records protected under the Family Educational Rights and Privacy Act (FERPA) or equivalent law.
 
-**A.3 Access controls.** Access requires individual authentication. Each user is assigned one of the following roles: read-only observer, sales/partnerships contributor, or administrator. Read-only users cannot modify records and do not see certain sensitive commercial fields (including raw interview notes, budget, budget owner, objections, and detailed follow-up notes) in the user interface. Data is scoped to the Pilot Participant's organization and is not visible to other Catalyst customers.
+**A.3 Access controls.** Access requires individual authentication. Each user is assigned one of the following roles: read-only observer, sales/partnerships contributor, or administrator. Read-only users cannot modify records and do not receive certain sensitive commercial fields (including raw interview notes, budget, budget owner, objections, and detailed follow-up notes); those columns are omitted by database views and masked in the application as a backup control. Data is scoped to the Pilot Participant's organization and is not visible to other Catalyst customers.
 
 **A.4 Hosting and subprocessors.** The application is hosted on Vercel. Data is stored in a Supabase-managed PostgreSQL database and authenticated through Supabase Auth. Region: `[SPECIFY SUPABASE REGION]`. Deployment URL: `[SPECIFY URL]`.
 
@@ -292,6 +302,7 @@ Detailed runbook: Phase 2 Task 2.35 (`docs/incident-response-runbook.md` — to 
 | Version | Date | Change |
 | --- | --- | --- |
 | 1.0 | 2026-07-03 | Initial packet (Phase 2 Task 2.0) |
+| 1.1 | 2026-07-03 | Document database read-only views and backup app redaction (Phase 2 Task 2.1C) |
 
 ---
 

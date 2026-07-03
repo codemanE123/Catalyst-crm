@@ -27,7 +27,7 @@ Assign roles in `organization_members` for the pilot organization's `organizatio
 
 | Role | Typical user | Can view org data | Can create/edit CRM | Can delete | Restricted fields in UI |
 | --- | --- | --- | --- | --- | --- |
-| `read_only` | University observer, executive, advisor | Yes (own org) | No | No | Redacted (raw notes, budget, budget owner, objections, follow-up notes) |
+| `read_only` | University observer, executive, advisor | Yes (own org; safe DB views) | No | No | Restricted columns omitted at DB; UI shows "Restricted" if backup redaction applies |
 | `sales` | Catalyst partnerships staff | Yes (own org) | Yes | No | Full |
 | `admin` | Catalyst org administrator | Yes (own org) | Yes | Yes | Full |
 | `super_admin` | Catalyst platform operator (limit assignments) | All orgs | All orgs | All orgs | Full |
@@ -133,7 +133,7 @@ VALUES (
 
 1. Create or import pilot schools tied to `organization_id`.  
 2. Add contacts, sample outreach, or interviews as needed for rehearsal.  
-3. Confirm university `read_only` user sees redacted restricted fields on school profiles.  
+3. Confirm university `read_only` user sees restricted fields as "Restricted" on school profiles (DB views omit columns; app redaction is backup).  
 4. Confirm Catalyst `sales` user can submit discovery interview (if in scope).
 
 ### Phase E — Go-live
@@ -158,6 +158,7 @@ Apply in timestamp order on the target Supabase project:
 7. `20260703144000_replace_broad_rls_policies.sql`  
 8. `20260703152200_add_rate_limit_events.sql`  
 9. `20260703152700_add_audit_events.sql`  
+10. `20260703160000_add_readonly_safe_views.sql`  
 
 ---
 
@@ -171,7 +172,7 @@ Run on staging before production go-live.
 | 2 | Sign in as Catalyst `sales` | Dashboard loads | [ ] |
 | 3 | Open school profile | Data visible for own org | [ ] |
 | 4 | Sign in as university `read_only` | Dashboard loads; no edit actions | [ ] |
-| 5 | `read_only` school profile | Restricted fields show "Restricted" | [ ] |
+| 5 | `read_only` school profile | Restricted fields show "Restricted"; profile load uses `interviews_readonly` / `follow_ups_readonly` (no `raw_notes`, `budget`, `budget_owner`, `objections`, or follow-up `notes` in response) | [ ] |
 | 6 | `read_only` submit interview | Denied | [ ] |
 | 7 | `sales` submit interview in own org | Allowed | [ ] |
 | 8 | Sign out | Session cleared | [ ] |
@@ -185,7 +186,8 @@ Minimum criteria before first real university user accesses production:
 - [ ] Authentication required for `/` and `/schools/*`  
 - [ ] Users isolated to their `organization_id`  
 - [ ] `read_only` cannot mutate data  
-- [ ] Restricted fields redacted for `read_only` in application  
+- [ ] Migration `20260703160000_add_readonly_safe_views.sql` applied  
+- [ ] Restricted columns omitted for `read_only` via DB views; app redaction active as backup  
 - [ ] Privacy copy visible on discovery, research, and outreach forms  
 - [ ] Pilot IT/security packet acknowledged by university  
 - [ ] Incident contacts documented (see security packet Section 7)  
@@ -201,7 +203,7 @@ Use this to rehearse onboarding **without a live university** (internal dry-run)
 3. **Apply migrations** in order; create one `organizations` row.  
 4. **Create three test users:** `sales`, `read_only`, and `admin` (Catalyst staff only).  
 5. **Insert `organization_members`** rows for each user.  
-6. **Seed one school** with interview data including budget and raw notes.  
+6. **Seed one school** with interview data including budget and raw notes (verify `read_only` cannot see those fields after views migration).  
 7. **Deploy to Vercel preview** or staging with env vars set.  
 8. **Walk through smoke verification** table above.  
 9. **Role-play university IT review** — use `docs/pilot-it-security-packet.md` and confirm every question has an answer.  

@@ -4,16 +4,19 @@ Scope: Documentation of the Supabase schema and Row Level Security strategy.
 
 ## Executive summary
 
-The CRM schema now includes organization membership, ownership columns, and
+The CRM schema includes organization membership, ownership columns, and
 organization-scoped RLS on the five core CRM tables. Broad `using (true)`
 policies were replaced in migration
 `20260703144000_replace_broad_rls_policies.sql`.
 
-Remaining gaps for later phases:
+Phase 1 completed app-layer authorization, validation, rate limiting, audit
+logging, and field redaction for `read_only` users (Task 13).
 
-- Service-role usage in some server paths (Task 7).
-- App-layer role guards and validation (Tasks 8–9).
-- Field-level privacy redaction for `read_only` users (Task 13).
+Phase 2 Task 2.1 adds **database-enforced read-only views** that omit
+restricted columns before data reaches the application. App-layer redaction
+remains as **backup defense in depth** if a query path ever bypasses the views.
+
+See [Phase 2 Task 2.1 — Read-only safe views](#phase-2-task-21--read-only-safe-views).
 
 ## Implemented policy model (Phase 1 Task 6)
 
@@ -70,6 +73,98 @@ The following broad policies were removed:
 
 `organizations` and `organization_members` still use the read policies added in
 Task 4. Task 6 scoped only the five CRM tables.
+
+## Phase 2 Task 2.1 — Read-only safe views
+
+Migration: `supabase/migrations/20260703160000_add_readonly_safe_views.sql`  
+Application routing: `lib/supabase.ts` (`getSchoolProfileData`)
+
+### Purpose
+
+University observers and other `read_only` users need org-scoped read access
+without seeing sensitive commercial interview and follow-up fields. Phase 1
+redacted those fields in the application after a full-table `SELECT`. Phase 2
+Task 2.1 adds a **primary** control: Postgres views that never project the
+restricted columns for read-only profile loads.
+
+### Views
+
+| View | Base table | Omitted columns |
+| --- | --- | --- |
+| `interviews_readonly` | `interviews` | `raw_notes`, `budget`, `budget_owner`, `objections` |
+| `follow_ups_readonly` | `follow_ups` | `notes` |
+
+Both views:
+
+- Use `security_invoker = true` so underlying RLS on `interviews` and
+  `follow_ups` still applies (organization membership and `super_admin` rules
+  unchanged).
+- Grant `SELECT` to `authenticated` only (no insert/update/delete on views).
+
+Visible interview columns in the view include `notes` (summary), `pain_points`,
+`current_tools`, `buyer`, `pilot_interest`, and other non-restricted discovery
+fields. Visible follow-up columns include `title`, `due_date`, `status`, and
+`owner` — but not internal `notes`.
+
+### Protected fields (summary)
+
+| Source | Restricted for `read_only` | Visible to `sales` / `admin` |
+| --- | --- | --- |
+| `interviews` | `raw_notes`, `budget`, `budget_owner`, `objections` | All columns via base table |
+| `follow_ups` | `notes` | All columns via base table |
+
+`schools`, `contacts`, and `outreach` have no column-level restrictions in
+v1; access is organization-scoped only.
+
+### How `read_only` differs from `sales` and `admin`
+
+| Dimension | `read_only` | `sales` | `admin` |
+| --- | --- | --- | --- |
+| RLS `SELECT` | Own org (via `has_org_access`) | Own org | Own org |
+| RLS `INSERT` / `UPDATE` | Denied | Allowed in own org | Allowed in own org |
+| RLS `DELETE` | Denied | Denied | Allowed in own org |
+| School profile data source | `interviews_readonly`, `follow_ups_readonly` | `interviews`, `follow_ups` | `interviews`, `follow_ups` |
+| Restricted columns in DB result | Not projected by views | Returned from base tables | Returned from base tables |
+| App-layer redaction (backup) | Applied after load; replaces any leaked value with `"Restricted"` | Not applied | Not applied |
+| Server action mutations | Denied by role guards | Allowed (own org) | Allowed (own org) |
+
+`super_admin` (Catalyst operators) uses base tables and skips redaction, consistent
+with cross-org platform access.
+
+Routing and redaction both use `shouldRedactRestrictedFields()` in `lib/authz.ts`:
+redaction applies when the user's membership for the school's organization is
+`read_only` and they are not a global `super_admin`.
+
+### Defense in depth (application backup)
+
+Even when profile data is loaded from safe views, `getSchoolProfileData()` still
+calls `applyRedactionForCurrentUser()` (Phase 1 Task 13). If a future code path
+queries base tables by mistake, or sample/offline data includes restricted fields,
+the app layer overwrites non-empty values with the `"Restricted"` placeholder.
+
+This is **backup** protection, not the primary control. The primary control is
+that restricted columns are absent from the view definition and from the
+read-only `SELECT` lists in `lib/supabase.ts`.
+
+### Application routing (Task 2.1B)
+
+In `getSchoolProfileData()`:
+
+- When `shouldUseReadonlyProfileSources()` is true → query
+  `interviews_readonly` and `follow_ups_readonly` with narrowed column lists.
+- When false (`sales`, `admin`, or `super_admin`) → query `interviews` and
+  `follow_ups` with full column lists.
+
+Writes (interview create, follow-up updates, etc.) always target base tables and
+remain gated by server-action role checks and RLS `can_write_org()` policies.
+
+### What this does not change
+
+- RLS policies on base tables are unchanged; views inherit them via
+  `security_invoker`.
+- `read_only` users still cannot insert, update, or delete CRM rows.
+- No new RLS policies on views are required; omission of columns is enforced
+  by the view definition, not a separate column-level RLS policy.
 
 ## Historical audit notes
 
