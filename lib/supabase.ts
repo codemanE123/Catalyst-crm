@@ -1,4 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { getServerSupabaseClient } from "./supabaseServer";
 
 export type School = {
   id: string;
@@ -348,21 +350,8 @@ const sampleCeoMetrics: CeoMetric[] = [
   { label: "Paid pilots", value: 2, detail: "Converted pilot partners" }
 ];
 
-function getSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !key) {
-    return null;
-  }
-
-  return createClient(url, key, {
-    auth: {
-      persistSession: false
-    }
-  });
+async function getSupabaseClient(): Promise<SupabaseClient | null> {
+  return getServerSupabaseClient();
 }
 
 function buildPipeline(schools: School[]): PipelineStage[] {
@@ -384,7 +373,7 @@ function countOrZero(count: number | null) {
 }
 
 async function buildCeoMetrics(
-  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  supabase: SupabaseClient,
   schoolsCount: number
 ): Promise<CeoMetric[]> {
   const today = new Date().toISOString().slice(0, 10);
@@ -502,7 +491,7 @@ function getSampleSchoolProfileData(schoolId: string): SchoolProfileData | null 
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const supabase = getSupabaseClient();
+  const supabase = await getSupabaseClient();
 
   if (!supabase) {
     return {
@@ -551,7 +540,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 export async function getSchoolProfileData(
   schoolId: string
 ): Promise<SchoolProfileData | null> {
-  const supabase = getSupabaseClient();
+  const supabase = await getSupabaseClient();
 
   if (!supabase) {
     return getSampleSchoolProfileData(schoolId);
@@ -624,7 +613,7 @@ export async function getSchoolProfileData(
 export async function createInterviewNote(formData: FormData) {
   "use server";
 
-  const supabase = getSupabaseClient();
+  const supabase = await getSupabaseClient();
 
   if (!supabase) {
     return;
