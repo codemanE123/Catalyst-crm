@@ -180,7 +180,7 @@ export default function DiscoveryInterviewForm({
   function generateSummary() {
     const nextSummary = summarizeNotes(rawNotes);
     setSummary(nextSummary);
-    setSummaryStatus("AI summary generated.");
+    setSummaryStatus("Rule-based summary generated.");
   }
 
   return (
@@ -191,6 +191,18 @@ export default function DiscoveryInterviewForm({
       <h2 className="mt-1 text-2xl font-semibold text-slate-950">
         Capture discovery details
       </h2>
+      <p className="mt-2 text-sm leading-6 text-slate-500">
+        Record discovery call details for your team. Notes are stored in Catalyst
+        CRM.
+      </p>
+      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+        <p className="font-medium">Privacy reminder</p>
+        <p className="mt-1">
+          Do not enter student PII, grades, student IDs, protected education
+          records (FERPA), or other unnecessary sensitive data. Use school and
+          staff context only.
+        </p>
+      </div>
       <form action={submitAction} className="mt-6 space-y-4">
         {submitState && !submitState.ok ? (
           <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -242,6 +254,9 @@ export default function DiscoveryInterviewForm({
         </div>
         <label className="block">
           <span className="text-sm font-medium text-slate-700">Raw interview notes</span>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            School and staff details only — no student records.
+          </p>
           <textarea
             name="raw_notes"
             value={rawNotes}
@@ -258,8 +273,13 @@ export default function DiscoveryInterviewForm({
           disabled={!rawNotes.trim()}
           className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
         >
-          Generate AI summary
+          Generate summary
         </button>
+        <p className="text-sm leading-6 text-slate-500">
+          Summary uses rule-based pattern matching in your browser. It does not
+          call an external AI model, and your notes are not sent to a third-party
+          AI service for summarization.
+        </p>
         <p className="text-sm text-slate-500" aria-live="polite">
           {summaryStatus}
         </p>

@@ -82,6 +82,15 @@ export default function UniversityResearchAgent({
           Finds public pages and populates CRM fields
         </p>
       </div>
+      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+        <p className="font-medium">Public web fetch disclosure</p>
+        <p className="mt-1">
+          Running this agent fetches publicly available school websites and search
+          result pages over the network to extract profile fields. Only submit
+          school names and public website URLs — not student data or internal
+          records.
+        </p>
+      </div>
       <form action={formAction} className="mt-6 grid gap-4 md:grid-cols-[1fr_1fr_auto]">
         <label className="block">
           <span className="text-sm font-medium text-slate-700">School name</span>

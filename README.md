@@ -16,12 +16,31 @@ emails based on school name, contact role, and pain point.
 Discovery interview capture tracks pain points, current tools, budget owner,
 objections, pilot interest, referrals, and next step.
 
-An AI summary helper turns raw interview notes into structured pain points,
-buyer, budget, objections, pilot readiness, and next action fields.
+A rule-based summary helper turns raw interview notes into structured pain
+points, buyer, budget, objections, pilot readiness, and next action fields. It
+runs locally in the browser and does not call an external AI model.
 
-The AI university research agent searches public school websites and populates
-CRM profile fields for enrollment, sector, HBCU/community-college status,
-state, programs, centers, offices, and sources.
+The university research agent fetches public school websites and search result
+pages, then populates CRM profile fields for enrollment, sector,
+HBCU/community-college status, state, programs, centers, offices, and sources.
+
+## Privacy and data handling
+
+When using discovery interview capture, the outreach email generator, or the
+university research agent:
+
+- **Do not enter student PII**, including names, grades, student IDs, or
+  protected education records (FERPA).
+- **Use school and staff context only** in interview notes and outreach drafts.
+- **Interview summaries are rule-based and local.** The summary helper uses
+  pattern matching in your browser. Notes are not sent to a third-party AI
+  service for summarization.
+- **University research fetches public web pages.** Running the research agent
+  requests publicly available school websites and search result pages over the
+  network. Submit only school names and public website URLs — not student data
+  or internal records.
+- **Review outreach drafts before sending.** Email drafts are generated locally;
+  do not include unnecessary sensitive data.
 
 ## Getting started
 

@@ -73,6 +73,14 @@ export default function OutreachEmailGenerator() {
         Enter a school, role, and pain point to create a short exploratory email
         asking for a 20-minute discovery conversation.
       </p>
+      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+        <p className="font-medium">Privacy reminder</p>
+        <p className="mt-1">
+          Drafts are built locally from your inputs. Do not include student names,
+          grades, IDs, protected education records, or other sensitive personal
+          data in outreach emails. Review every draft before sending.
+        </p>
+      </div>
 
       <form onSubmit={generateEmail} className="mt-6 space-y-4">
         <div className="grid gap-4 md:grid-cols-3">
