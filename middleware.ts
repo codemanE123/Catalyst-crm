@@ -1,8 +1,33 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import {
+  canAccessSettingsRoutes,
+  getMembershipsForUser
+} from "@/lib/authz";
+
+function isSettingsPath(pathname: string) {
+  return pathname === "/settings" || pathname.startsWith("/settings/");
+}
+
 function isProtectedPath(pathname: string) {
-  return pathname === "/" || pathname.startsWith("/schools/");
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/schools/") ||
+    isSettingsPath(pathname)
+  );
+}
+
+function redirectToLogin(request: NextRequest) {
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = "/login";
+  return NextResponse.redirect(loginUrl);
+}
+
+function redirectToDashboard(request: NextRequest) {
+  const homeUrl = request.nextUrl.clone();
+  homeUrl.pathname = "/";
+  return NextResponse.redirect(homeUrl);
 }
 
 export async function middleware(request: NextRequest) {
@@ -16,9 +41,7 @@ export async function middleware(request: NextRequest) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
-    return NextResponse.redirect(loginUrl);
+    return redirectToLogin(request);
   }
 
   let supabaseResponse = NextResponse.next({ request });
@@ -45,9 +68,15 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
-    return NextResponse.redirect(loginUrl);
+    return redirectToLogin(request);
+  }
+
+  if (isSettingsPath(pathname)) {
+    const memberships = await getMembershipsForUser(supabase, user.id);
+
+    if (!canAccessSettingsRoutes(memberships)) {
+      return redirectToDashboard(request);
+    }
   }
 
   return supabaseResponse;

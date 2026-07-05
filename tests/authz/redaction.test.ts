@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { shouldRedactRestrictedFields } from "@/lib/authz";
+import { canAccessSettingsRoutes, shouldRedactRestrictedFields } from "@/lib/authz";
 import type { OrganizationMember } from "@/lib/supabase";
 
 const ORG_A = "11111111-1111-1111-1111-111111111111";
@@ -64,5 +64,27 @@ describe("shouldRedactRestrictedFields", () => {
         member("sales", otherOrg)
       ])
     ).toBe(true);
+  });
+});
+
+describe("canAccessSettingsRoutes", () => {
+  it("returns true for admin membership", () => {
+    expect(canAccessSettingsRoutes([member("admin")])).toBe(true);
+  });
+
+  it("returns true for super_admin membership", () => {
+    expect(canAccessSettingsRoutes([member("super_admin")])).toBe(true);
+  });
+
+  it("returns false for sales membership", () => {
+    expect(canAccessSettingsRoutes([member("sales")])).toBe(false);
+  });
+
+  it("returns false for read_only membership", () => {
+    expect(canAccessSettingsRoutes([member("read_only")])).toBe(false);
+  });
+
+  it("returns false when user has no memberships", () => {
+    expect(canAccessSettingsRoutes([])).toBe(false);
   });
 });

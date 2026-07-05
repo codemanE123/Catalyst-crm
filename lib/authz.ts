@@ -5,7 +5,17 @@ import { getServerSupabaseClient } from "./supabaseServer";
 
 export const MUTATION_ROLES: AppRole[] = ["sales", "admin", "super_admin"];
 
+export const SETTINGS_ADMIN_ROLES: AppRole[] = ["admin", "super_admin"];
+
 export const RESTRICTED_FIELD_PLACEHOLDER = "Restricted";
+
+export function canAccessSettingsRoutes(
+  memberships: OrganizationMember[]
+): boolean {
+  return memberships.some((membership) =>
+    SETTINGS_ADMIN_ROLES.includes(membership.role)
+  );
+}
 
 export function shouldRedactRestrictedFields(
   membership: OrganizationMember | null,
