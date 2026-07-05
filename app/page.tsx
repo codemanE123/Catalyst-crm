@@ -10,6 +10,9 @@ import { redirect } from "next/navigation";
 import DiscoveryInterviewForm from "./components/DiscoveryInterviewForm";
 import OutreachEmailGenerator from "./components/OutreachEmailGenerator";
 import UniversityResearchAgent from "./components/UniversityResearchAgent";
+import { researchUniversityProfile } from "@/lib/actions/universityResearch";
+
+export const maxDuration = 10;
 
 const statusStyles: Record<School["status"], string> = {
   Prospect: "bg-slate-100 text-slate-700 ring-slate-200",
@@ -111,7 +114,7 @@ export default async function Dashboard() {
           />
         </section>
 
-        <UniversityResearchAgent />
+        <UniversityResearchAgent action={researchUniversityProfile} />
 
         <OutreachEmailGenerator />
 

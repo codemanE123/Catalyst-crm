@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useActionState } from "react";
 import type {
   UniversityResearchProfile,
   UniversityResearchResult
@@ -57,20 +57,6 @@ function isResearchErrorMessage(message: string, saved: boolean) {
   );
 }
 
-function isUniversityResearchResult(value: unknown): value is UniversityResearchResult {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const result = value as UniversityResearchResult;
-  return (
-    typeof result.message === "string" &&
-    typeof result.saved === "boolean" &&
-    result.profile !== null &&
-    typeof result.profile === "object"
-  );
-}
-
 function ProfileField({
   label,
   value
@@ -88,49 +74,19 @@ function ProfileField({
   );
 }
 
-export default function UniversityResearchAgent() {
-  const [state, setState] = useState(initialState);
-  const [isPending, startTransition] = useTransition();
+export default function UniversityResearchAgent({
+  action
+}: {
+  action: (
+    previousState: UniversityResearchResult | null,
+    formData: FormData
+  ) => Promise<UniversityResearchResult>;
+}) {
+  const [state, formAction, isPending] = useActionState(action, initialState);
   const { profile } = state;
   const showErrorMessage = isResearchErrorMessage(state.message, state.saved);
   const hasProfile =
     Boolean(profile.name && profile.website) && !showErrorMessage;
-
-  const handleSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-
-    startTransition(async () => {
-      try {
-        const response = await fetch("/api/university-research", {
-          method: "POST",
-          body: formData,
-          credentials: "same-origin"
-        });
-
-        const payload: unknown = await response.json().catch(() => null);
-
-        if (!isUniversityResearchResult(payload)) {
-          setState({
-            profile: emptyProfile,
-            saved: false,
-            message:
-              "Research could not be completed. Please try again later."
-          });
-          return;
-        }
-
-        setState(payload);
-      } catch {
-        setState({
-          profile: emptyProfile,
-          saved: false,
-          message: "Research could not be completed. Please try again later."
-        });
-      }
-    });
-  }, []);
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -156,10 +112,7 @@ export default function UniversityResearchAgent() {
           records.
         </p>
       </div>
-      <form
-        onSubmit={handleSubmit}
-        className="mt-6 grid gap-4 md:grid-cols-[1fr_1fr_auto]"
-      >
+      <form action={formAction} className="mt-6 grid gap-4 md:grid-cols-[1fr_1fr_auto]">
         <label className="block">
           <span className="text-sm font-medium text-slate-700">School name</span>
           <input
