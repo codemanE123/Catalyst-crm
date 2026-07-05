@@ -1,8 +1,9 @@
+import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 /**
  * Basic CSP compatible with Next.js (inline hydration scripts), Tailwind
- * (inline styles), and Supabase Auth (HTTPS + WebSocket to *.supabase.co).
+ * (inline styles), Supabase Auth, and Sentry error reporting.
  * Server-side fetches (e.g. university research) are not constrained by CSP.
  */
 function buildContentSecurityPolicy(): string {
@@ -12,7 +13,7 @@ function buildContentSecurityPolicy(): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.sentry.io",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -66,4 +67,17 @@ const nextConfig: NextConfig = {
   }
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  webpack: {
+    treeshake: {
+      removeDebugLogging: true
+    }
+  },
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN
+  }
+});
