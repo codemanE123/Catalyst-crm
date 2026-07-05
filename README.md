@@ -133,8 +133,8 @@ project** per environment (staging vs production). Sample data is disabled on Ve
 | **Production** | Live pilot — security headers in `next.config.ts` (Task 2.10) |
 
 **Full procedure:** `docs/deployment-runbook.md` — staging, production promote, security
-headers, Sentry monitoring, env vars, migration checklists, Auth redirect URLs,
-rollback, and securityheaders.com verification.
+headers, env vars, migration checklists, Auth redirect URLs, rollback, and
+securityheaders.com verification.
 
 Quick checks after deploy:
 

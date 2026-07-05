@@ -12,8 +12,6 @@ import OutreachEmailGenerator from "./components/OutreachEmailGenerator";
 import UniversityResearchAgent from "./components/UniversityResearchAgent";
 import { researchUniversityProfile } from "@/lib/universityResearch";
 
-export const maxDuration = 60;
-
 const statusStyles: Record<School["status"], string> = {
   Prospect: "bg-slate-100 text-slate-700 ring-slate-200",
   Contacted: "bg-sky-100 text-sky-700 ring-sky-200",

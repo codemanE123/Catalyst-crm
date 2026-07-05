@@ -11,8 +11,6 @@
 # - Staging and preview deploys are handled by Vercel Git integration, not this workflow.
 # - Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel
 #   (Preview scope → staging Supabase). See docs/deployment-runbook.md.
-# - Sentry: set SENTRY_DSN / NEXT_PUBLIC_SENTRY_DSN on Vercel Preview and Production.
-#   See docs/deployment-runbook.md §18.
 # - Do NOT add automatic production deployment here without explicit approval (Task 2.10).
 #
 # Future optional jobs (not implemented):

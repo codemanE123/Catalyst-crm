@@ -10,7 +10,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.63.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.0",
     "next": "^16.2.10",
