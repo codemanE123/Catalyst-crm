@@ -40,6 +40,7 @@ Data is scoped by **organization** with role-based access:
 
 - `docs/pilot-it-security-packet.md` — share with institutional IT/legal
 - `docs/pilot-onboarding-checklist.md` — internal onboarding steps
+- `docs/auth-hardening.md` — MFA enrollment and session hygiene (recommended for `admin`/`sales`; not enforced in app code)
 - `docs/supabase-rls-audit.md` — database RLS and read-only view model
 - `docs/verification/readonly-view-verification.md` — manual verification procedures
 - `docs/phase-2-roadmap.md` — implementation source of truth
@@ -101,6 +102,10 @@ Set the site URL to your app origin, for example `http://localhost:3000`.
 Create test users in Supabase under Authentication → Users, then add
 `organization_members` rows with the appropriate role before signing in locally.
 See `docs/pilot-onboarding-checklist.md` for membership SQL examples.
+
+**MFA and sessions (pilot):** Catalyst recommends TOTP MFA for `admin`, `sales`, and
+`super_admin` accounts. Enrollment is configured in Supabase Auth, not in application code.
+See `docs/auth-hardening.md` for enrollment steps, session hygiene, and staging rehearsal.
 
 ## Development commands
 

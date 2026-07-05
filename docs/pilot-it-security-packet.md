@@ -44,7 +44,7 @@ Phase 1 security controls are in place: authentication, organization-scoped auth
 | Protected routes | `/` (dashboard), `/schools/*` (school profiles) — middleware requires valid session |
 | Public routes | `/login`, `/logout`, `/auth/callback`, static assets |
 | Service role key | **Not used** in user-facing application paths |
-| MFA | Supported by Supabase Auth; Catalyst recommends MFA for `admin` and `sales` accounts (enrollment documented in Phase 2 Task 2.5) |
+| MFA | Supported by Supabase Auth; Catalyst recommends MFA for `admin` and `sales` accounts — see `docs/auth-hardening.md` |
 
 **Redirect URLs (configure in Supabase dashboard):**
 
