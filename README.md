@@ -130,11 +130,11 @@ project** per environment (staging vs production). Sample data is disabled on Ve
 | --- | --- |
 | **Preview** | Per-PR Vercel deployment for review (uses staging Supabase keys) |
 | **Staging** | Pre-production validation, MFA rehearsal, smoke tests |
-| **Production** | Live pilot (see Task 2.10 in `docs/phase-2-roadmap.md`) |
+| **Production** | Live pilot — security headers in `next.config.ts` (Task 2.10) |
 
-**Full procedure:** `docs/deployment-runbook.md` — Vercel setup, preview deploys,
-environment variables, migration order, Auth redirect URLs, deployment checklist,
-rollback, and verification.
+**Full procedure:** `docs/deployment-runbook.md` — staging, production promote, security
+headers, env vars, migration checklists, Auth redirect URLs, rollback, and
+securityheaders.com verification.
 
 Quick checks after deploy:
 

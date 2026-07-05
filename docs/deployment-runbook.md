@@ -1,10 +1,10 @@
-# Deployment Runbook — Staging and Preview Environments
+# Deployment Runbook — Staging, Preview, and Production
 
-**Version:** 1.0 (Phase 2 Task 2.9)  
+**Version:** 1.1 (Phase 2 Task 2.10)  
 **Audience:** Catalyst engineering and operations  
 **Companion documents:** `docs/pilot-onboarding-checklist.md`, `docs/auth-hardening.md`, `docs/pilot-it-security-packet.md`
 
-**Scope:** This runbook covers **staging** and **Vercel preview** deployments. Production promote procedure and security headers are documented in Phase 2 Task 2.10 (extends this file).
+**Scope:** Staging and preview (Task 2.9), **production promote** (Task 2.10), and **HTTP security headers** configured in `next.config.ts`.
 
 ---
 
@@ -341,9 +341,18 @@ Application rollback does **not** roll back database migrations.
 2. **Redeploy** (env changes require a new deployment to take effect).
 3. Re-run [§10](#10-verify-staging-uses-the-correct-supabase-project).
 
-### 11.5 Doc-only rollback (Task 2.9)
+### 11.5 Doc-only rollback (Tasks 2.9 / 2.10)
 
-Revert `docs/deployment-runbook.md` and README links. No runtime change.
+Revert `docs/deployment-runbook.md` and related README links. No runtime change.
+
+### 11.6 Production security headers rollback (Task 2.10)
+
+If CSP or other headers break login, auth callback, or Next.js assets:
+
+1. Revert `next.config.ts` header changes (or remove the offending directive).
+2. Push to `main` or **Promote to Production** the last known good Vercel deployment.
+3. Re-scan with [securityheaders.com](https://securityheaders.com) after redeploy.
+4. Fix forward with a narrower CSP adjustment rather than leaving headers disabled.
 
 ---
 
@@ -364,18 +373,218 @@ See comments in `.github/workflows/ci.yml` for future optional workflows (E2E ag
 
 | Task | Adds to this runbook |
 | --- | --- |
-| 2.10 | Production promote, security headers (HSTS, CSP), production env checklist |
+| 2.10 | Production promote, security headers (§15–16) — **complete** |
 | 2.29 | Playwright E2E smoke against staging URL |
-| 2.32 | Error monitoring DSN and staging alert verification |
+| 2.32 | Error monitoring DSN and staging/production alert verification |
 | 2.35 | Incident response runbook |
 
 ---
 
-## 14. References
+## 14. Production deployment (Task 2.10)
+
+Production is a **separate Supabase project** and **Vercel Production** environment. Never reuse staging credentials on Production scope.
+
+### 14.1 Production promote procedure
+
+Complete **after** staging smoke tests pass (§8.3) and security headers are validated on a Vercel HTTPS URL (§16).
+
+| Step | Action | Owner |
+| --- | --- | --- |
+| 1 | Confirm GitHub CI green on `main` (`lint`, `test`, `build`) | Engineering |
+| 2 | Complete [production Supabase checklist](#142-production-supabase-checklist) | Engineering |
+| 3 | Complete [production Vercel env checklist](#143-production-vercel-environment-variables) | Engineering |
+| 4 | Configure [production Auth redirect URLs](#144-production-auth-redirect-urls) | Engineering |
+| 5 | Assign **custom production domain** in Vercel (HTTPS automatic) | Engineering |
+| 6 | Set Vercel **Production** env vars to production Supabase keys | Engineering |
+| 7 | Deploy `main` to Vercel Production (auto on push, or manual promote) | Engineering |
+| 8 | Run [securityheaders.com verification](#16-security-headers-verification) on production URL | Engineering |
+| 9 | Run [production smoke](#146-production-smoke-verification) | Engineering + pilot lead |
+| 10 | Record production URL, Supabase ref, and promote date in pilot record | Ops |
+
+**Cadence (pilot):** weekly or bi-weekly production promote after staging validation — see `docs/phase-2-roadmap.md` §13.
+
+**Emergency promote:** Vercel → Deployments → select known-good build → **Promote to Production** (skips git revert when hotfix already on `main`).
+
+### 14.2 Production Supabase checklist
+
+One-time setup on the **production** Supabase project (not staging):
+
+- [ ] New project created (e.g. `catalyst-crm-production`); ref recorded separately from staging
+- [ ] Region documented and aligned with pilot data-residency agreement
+- [ ] [Migration apply checklist](#145-production-migration-apply-checklist) completed in order
+- [ ] RLS enabled on CRM tables (`schools`, `contacts`, `outreach`, `interviews`, `follow_ups`, `organization_members`)
+- [ ] Read-only views exist (`interviews_readonly`, `follow_ups_readonly`)
+- [ ] Pilot `organizations` row created (production UUID recorded)
+- [ ] Production Auth users created only for approved pilot participants
+- [ ] `organization_members` rows link users to pilot org with correct roles
+- [ ] Pilot schools use correct `organization_id`
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` **not** stored in Vercel Production env
+- [ ] Staging test marker data (e.g. `STAGING_VERIFICATION_*`) **absent** in production
+
+### 14.3 Production Vercel environment variables
+
+Vercel → **Settings → Environment Variables** → **Production** scope only:
+
+| Variable | Value | Required |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://<production-ref>.supabase.co` | Yes |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Production **anon public** key | Yes |
+| `SUPABASE_SERVICE_ROLE_KEY` | — | **Do not set** |
+
+**Verification:**
+
+- [ ] Production `NEXT_PUBLIC_SUPABASE_URL` ref ≠ staging ref
+- [ ] Preview scope still uses **staging** keys (unchanged)
+- [ ] Redeploy Production after any env var change
+
+### 14.4 Production Auth redirect URLs
+
+Configure in **production** Supabase project → **Authentication → URL Configuration**:
+
+| Setting | Production value |
+| --- | --- |
+| **Site URL** | `https://<production-domain>` (custom domain or Vercel production URL) |
+| **Redirect URLs** | `https://<production-domain>/auth/callback` |
+
+**Checklist:**
+
+- [ ] Site URL matches the URL shared with pilot users
+- [ ] `/auth/callback` added for production origin only (do not point production Auth at staging domain)
+- [ ] Email/password sign-in at `/login` completes without redirect loop
+- [ ] OAuth/magic-link (if used) returns through `/auth/callback` to dashboard
+- [ ] `/logout` clears session
+
+See `docs/auth-hardening.md` for MFA on production admin/sales accounts after go-live.
+
+### 14.5 Production migration apply checklist
+
+Apply on the **production** Supabase project **before** first production deploy and before any production promote that depends on new schema.
+
+| # | Migration | Applied | Verified |
+| --- | --- | --- | --- |
+| 1 | `20260702200600_initial_crm_schema.sql` | [ ] | [ ] |
+| 2 | `20260702210800_add_discovery_interview_fields.sql` | [ ] | [ ] |
+| 3 | `20260702212500_add_ai_summary_interview_fields.sql` | [ ] | [ ] |
+| 4 | `20260702221300_add_university_research_profile_fields.sql` | [ ] | [ ] |
+| 5 | `20260703142600_add_organizations_and_roles.sql` | [ ] | [ ] |
+| 6 | `20260703143300_add_crm_ownership_fields.sql` | [ ] | [ ] |
+| 7 | `20260703144000_replace_broad_rls_policies.sql` | [ ] | [ ] |
+| 8 | `20260703152200_add_rate_limit_events.sql` | [ ] | [ ] |
+| 9 | `20260703152700_add_audit_events.sql` | [ ] | [ ] |
+| 10 | `20260703160000_add_readonly_safe_views.sql` | [ ] | [ ] |
+| 11 | `20260704203000_add_organization_members_admin_policies.sql` | [ ] | [ ] |
+
+**Discipline:** apply and smoke-test on **staging** first; then apply to production before promoting dependent app code.
+
+### 14.6 Production smoke verification
+
+Minimum checks on the **production URL** after promote:
+
+| # | Test | Expected | Pass |
+| --- | --- | --- | --- |
+| 1 | Visit `/` logged out | Redirect to `/login` | [ ] |
+| 2 | `/login` page loads | No CSP console errors; form visible | [ ] |
+| 3 | Sign in as pilot `sales` | Dashboard loads | [ ] |
+| 4 | Open school profile | Data for own org only | [ ] |
+| 5 | Sign in as university `read_only` | Restricted fields not exposed | [ ] |
+| 6 | `/settings/members` as non-admin | Redirect to dashboard | [ ] |
+| 7 | `/settings/members` as `admin` | Page loads | [ ] |
+| 8 | Sign out | Session cleared | [ ] |
+| 9 | No sample data | Dashboard empty or real data only — not demo schools | [ ] |
+
+Full table: `docs/pilot-onboarding-checklist.md` → Smoke verification.
+
+### 14.7 Production rollback procedure
+
+| Scenario | Action |
+| --- | --- |
+| **Bad application deploy** | Vercel → Deployments → last good build → **Promote to Production**; or git revert on `main` and redeploy |
+| **Wrong production Supabase env** | Fix Production env vars → redeploy; verify ref per §10.1 |
+| **Security headers break app** | See [§11.6](#116-production-security-headers-rollback-task-210) |
+| **Bad production migration** | Do not promote app depending on failed migration; fix forward on production DB; re-smoke |
+| **Full pilot halt** | Disable new user provisioning; communicate outage; roll back app deploy; keep DB for forensics |
+
+Application rollback does **not** reverse database migrations. Prefer forward-fix migrations.
+
+---
+
+## 15. Security headers (Task 2.10)
+
+Configured in `next.config.ts` for all routes. Applied on Vercel (staging, preview, and production). HSTS is sent only when `VERCEL=1` (omitted on local `npm run dev`).
+
+| Header | Value (summary) |
+| --- | --- |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains; preload` (Vercel only) |
+| `X-Frame-Options` | `DENY` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=()` |
+| `Content-Security-Policy` | See below |
+
+**CSP directives (basic, Next.js/Supabase compatible):**
+
+- `default-src 'self'`
+- `script-src 'self' 'unsafe-inline'` — Next.js hydration
+- `style-src 'self' 'unsafe-inline'` — Tailwind
+- `img-src 'self' data: blob: https:`
+- `font-src 'self' data:`
+- `connect-src 'self' https://*.supabase.co wss://*.supabase.co` — Supabase Auth/API
+- `frame-ancestors 'none'`
+- `base-uri 'self'`
+- `form-action 'self'` — login server action
+- `object-src 'none'`
+
+University research fetches run **server-side** and are not limited by browser CSP.
+
+---
+
+## 16. Security headers verification
+
+Run before Pilot Launch Gate production go-live and after any `next.config.ts` header change.
+
+### 16.1 securityheaders.com scan
+
+1. Open [https://securityheaders.com](https://securityheaders.com).
+2. Enter the **HTTPS** deployment URL (staging or production).
+3. Submit scan.
+4. Confirm presence of:
+   - `Strict-Transport-Security` (graded; may require production/custom domain for full score)
+   - `X-Frame-Options` or `Content-Security-Policy` with `frame-ancestors`
+   - `X-Content-Type-Options`
+   - `Referrer-Policy`
+   - `Content-Security-Policy`
+5. Save scan URL or PDF for IT packet evidence.
+
+**Pilot target:** aim for **A** or **A+** on production; investigate any **missing** critical headers.
+
+### 16.2 Functional verification (browser)
+
+After scan, manually confirm headers do not break auth:
+
+1. Open browser DevTools → **Console** on `/login` — no CSP violation errors.
+2. Sign in with email/password — lands on `/`.
+3. Trigger OAuth/magic-link if enabled — `/auth/callback` succeeds.
+4. Navigate dashboard and school profile — scripts and styles load.
+5. Sign out — `/logout` works.
+
+If CSP blocks assets, adjust `next.config.ts` (do not disable all headers). Roll back per §11.6 if needed.
+
+### 16.3 curl spot-check (optional)
+
+```bash
+curl -sI "https://<your-production-domain>/login"
+```
+
+Confirm response includes `content-security-policy`, `x-frame-options`, `referrer-policy`, and `strict-transport-security` (on Vercel).
+
+---
+
+## 17. References
 
 - `README.md` — Deployment section
 - `docs/pilot-onboarding-checklist.md` — smoke verification and onboarding
 - `docs/auth-hardening.md` — MFA staging rehearsal
 - `docs/phase-2-roadmap.md` — Task 2.9, 2.10, Pilot Launch Gate
 - [Vercel environment variables](https://vercel.com/docs/projects/environment-variables)
-- [Supabase migration guide](https://supabase.com/docs/guides/cli/local-development#database-migrations)
+- `next.config.ts` — security headers implementation
+- [securityheaders.com](https://securityheaders.com) — header scan
