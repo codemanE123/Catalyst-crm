@@ -41,6 +41,7 @@ Data is scoped by **organization** with role-based access:
 - `docs/pilot-it-security-packet.md` — share with institutional IT/legal
 - `docs/pilot-onboarding-checklist.md` — internal onboarding steps
 - `docs/auth-hardening.md` — MFA enrollment and session hygiene (recommended for `admin`/`sales`; not enforced in app code)
+- `docs/deployment-runbook.md` — Vercel staging, preview deploys, env vars, migrations, rollback
 - `docs/supabase-rls-audit.md` — database RLS and read-only view model
 - `docs/verification/readonly-view-verification.md` — manual verification procedures
 - `docs/phase-2-roadmap.md` — implementation source of truth
@@ -119,6 +120,28 @@ npm run build
 
 CI runs lint, test, and build on every push and pull request.
 
+## Deployment
+
+Hosted environments use **Vercel** for the Next.js app and a **dedicated Supabase
+project** per environment (staging vs production). Sample data is disabled on Vercel;
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are required.
+
+| Environment | Purpose |
+| --- | --- |
+| **Preview** | Per-PR Vercel deployment for review (uses staging Supabase keys) |
+| **Staging** | Pre-production validation, MFA rehearsal, smoke tests |
+| **Production** | Live pilot (see Task 2.10 in `docs/phase-2-roadmap.md`) |
+
+**Full procedure:** `docs/deployment-runbook.md` — Vercel setup, preview deploys,
+environment variables, migration order, Auth redirect URLs, deployment checklist,
+rollback, and verification.
+
+Quick checks after deploy:
+
+1. `/login` loads on the deployment URL.
+2. Unauthenticated `/` redirects to `/login`.
+3. Vercel `NEXT_PUBLIC_SUPABASE_URL` project ref matches the intended Supabase project.
+
 ## Supabase configuration
 
 **Development only:** When `NODE_ENV` is `development` and Supabase variables are
@@ -157,6 +180,9 @@ security and pilot onboarding:
 8. `20260703152200_add_rate_limit_events.sql`
 9. `20260703152700_add_audit_events.sql`
 10. `20260703160000_add_readonly_safe_views.sql`
+11. `20260704203000_add_organization_members_admin_policies.sql`
+
+See `docs/deployment-runbook.md` for staging apply procedure.
 
 Core tables:
 

@@ -6,6 +6,17 @@
 # next/node_modules/postcss. No safe fix without breaking Next.js downgrade.
 # The audit step uses continue-on-error until exit criteria in the exceptions
 # doc are met. Lint, test, and build remain blocking.
+#
+# Deployment (Phase 2 Task 2.9):
+# - Staging and preview deploys are handled by Vercel Git integration, not this workflow.
+# - Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel
+#   (Preview scope → staging Supabase). See docs/deployment-runbook.md.
+# - Do NOT add automatic production deployment here without explicit approval (Task 2.10).
+#
+# Future optional jobs (not implemented):
+# - test:e2e against STAGING_URL on main (Task 2.29)
+# - nightly Playwright against staging (Task 2.29 Scale Track)
+# - deploy-staging.yml — only if Vercel Git integration is insufficient
 
 name: CI
 
