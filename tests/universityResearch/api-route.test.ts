@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 
 import { POST } from "@/app/api/university-research/route";
 
-const mockRequireUserFromRequest = vi.fn();
+const mockGetServerSupabaseClient = vi.fn();
 const mockRequireRole = vi.fn();
 const mockEnforceRateLimit = vi.fn();
 
@@ -11,8 +11,7 @@ vi.mock("@/lib/supabaseServer", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/supabaseServer")>();
   return {
     ...actual,
-    requireUserFromRequest: (...args: unknown[]) =>
-      mockRequireUserFromRequest(...args)
+    getServerSupabaseClient: () => mockGetServerSupabaseClient()
   };
 });
 
@@ -50,10 +49,10 @@ describe("POST /api/university-research", () => {
   });
 
   it("returns JSON for unauthenticated requests", async () => {
-    mockRequireUserFromRequest.mockResolvedValue({
-      user: null,
-      supabase: null,
-      applySessionCookies: (response: Response) => response
+    mockGetServerSupabaseClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null })
+      }
     });
 
     const response = await POST(
@@ -70,10 +69,12 @@ describe("POST /api/university-research", () => {
   it(
     "returns JSON for a public university website",
     async () => {
-      mockRequireUserFromRequest.mockResolvedValue({
-        user: { id: "user-1" },
-        supabase: null,
-        applySessionCookies: (response: Response) => response
+      mockGetServerSupabaseClient.mockResolvedValue({
+        auth: {
+          getUser: vi
+            .fn()
+            .mockResolvedValue({ data: { user: { id: "user-1" } }, error: null })
+        }
       });
       mockRequireRole.mockResolvedValue({
         organization_id: "org-1",

@@ -1,6 +1,6 @@
 import { executeUniversityResearch } from "@/lib/universityResearch";
 import type { UniversityResearchResult } from "@/lib/universityResearch.types";
-import { requireUserFromRequest } from "@/lib/supabaseServer";
+import { getServerSupabaseClient } from "@/lib/supabaseServer";
 import { NextResponse, type NextRequest } from "next/server";
 
 export const maxDuration = 10;
@@ -31,15 +31,23 @@ function errorResult(message: string): UniversityResearchResult {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, supabase, applySessionCookies } =
-      await requireUserFromRequest(request);
     const formData = await request.formData();
+    const supabase = await getServerSupabaseClient();
 
-    if (!user) {
-      return applySessionCookies(
-        NextResponse.json(
-          errorResult("Sign in to run the research agent.")
-        )
+    if (!supabase) {
+      return NextResponse.json(
+        errorResult("Research could not be completed. Please try again later.")
+      );
+    }
+
+    const {
+      data: { user },
+      error
+    } = await supabase.auth.getUser();
+
+    if (error || !user) {
+      return NextResponse.json(
+        errorResult("Sign in to run the research agent.")
       );
     }
 
@@ -48,7 +56,7 @@ export async function POST(request: NextRequest) {
       supabase
     });
 
-    return applySessionCookies(NextResponse.json(result));
+    return NextResponse.json(result);
   } catch {
     return NextResponse.json(
       errorResult("Research could not be completed. Please try again later.")

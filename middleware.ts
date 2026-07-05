@@ -10,6 +10,10 @@ function isSettingsPath(pathname: string) {
   return pathname === "/settings" || pathname.startsWith("/settings/");
 }
 
+function isResearchApiPath(pathname: string) {
+  return pathname === "/api/university-research";
+}
+
 function isProtectedPath(pathname: string) {
   return (
     pathname === "/" ||
@@ -33,7 +37,7 @@ function redirectToDashboard(request: NextRequest) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (!isProtectedPath(pathname)) {
+  if (!isProtectedPath(pathname) && !isResearchApiPath(pathname)) {
     return NextResponse.next();
   }
 
@@ -41,6 +45,10 @@ export async function middleware(request: NextRequest) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
+    if (isResearchApiPath(pathname)) {
+      return NextResponse.next();
+    }
+
     return redirectToLogin(request);
   }
 
@@ -66,6 +74,10 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user }
   } = await supabase.auth.getUser();
+
+  if (isResearchApiPath(pathname)) {
+    return supabaseResponse;
+  }
 
   if (!user) {
     return redirectToLogin(request);
