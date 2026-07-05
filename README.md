@@ -116,8 +116,14 @@ CI runs lint, test, and build on every push and pull request.
 
 ## Supabase configuration
 
-The dashboard renders sample data when Supabase variables are not set. For
-normal signed-in app use, set only:
+**Development only:** When `NODE_ENV` is `development` and Supabase variables are
+not set, the dashboard can render built-in sample data for local demos.
+
+**Staging and production:** `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` are **required**. If they are missing, the app
+fails closed with a configuration error instead of serving sample data.
+
+For normal signed-in use, set:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=

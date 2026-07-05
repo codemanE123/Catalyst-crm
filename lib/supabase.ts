@@ -11,7 +11,12 @@ import {
   shouldRedactRestrictedFields
 } from "./authz";
 import { AUDIT_ACTIONS, recordAuditEvent } from "./auditLog";
-import { getServerSupabaseClient, requireUser } from "./supabaseServer";
+import {
+  getServerSupabaseClient,
+  isDevelopmentEnvironment,
+  SUPABASE_CONFIGURATION_ERROR,
+  requireUser
+} from "./supabaseServer";
 import {
   enforceRateLimit,
   RATE_LIMIT_ACTIONS,
@@ -581,26 +586,41 @@ export async function getDashboardData(): Promise<DashboardData> {
       .order("last_touch", { ascending: false })
   ]);
 
-  const schools = (schoolsResponse.data ?? sampleSchools) as School[];
-  const contacts = contactsResponse.data
-    ? ((contactsResponse.data as ContactRow[]).map((contact) => ({
-        id: contact.id,
-        name: contact.name,
-        role: contact.role,
-        school: getRelatedSchoolName(contact.schools),
-        email: contact.email,
-        last_touch: contact.last_touch,
-        relationship: contact.relationship
-      })) satisfies Contact[])
-    : sampleContacts;
+  if (schoolsResponse.error || contactsResponse.error) {
+    if (!isDevelopmentEnvironment()) {
+      throw new Error("Could not load dashboard data from Supabase.");
+    }
+
+    return {
+      schools: sampleSchools,
+      contacts: sampleContacts,
+      pipeline: buildPipeline(sampleSchools),
+      ceoMetrics: sampleCeoMetrics,
+      source: "sample"
+    };
+  }
+
+  const schools = (schoolsResponse.data ?? []) as School[];
+  const contacts = (contactsResponse.data ?? []).map((contact) => {
+    const row = contact as ContactRow;
+
+    return {
+      id: row.id,
+      name: row.name,
+      role: row.role,
+      school: getRelatedSchoolName(row.schools),
+      email: row.email,
+      last_touch: row.last_touch,
+      relationship: row.relationship
+    };
+  }) satisfies Contact[];
 
   return {
     schools,
     contacts,
     pipeline: buildPipeline(schools),
     ceoMetrics: await buildCeoMetrics(supabase, schools.length),
-    source:
-      schoolsResponse.error || contactsResponse.error ? "sample" : "supabase"
+    source: "supabase"
   };
 }
 
@@ -718,6 +738,10 @@ export async function getSchoolProfileData(
     .maybeSingle();
 
   if (!schoolResponse.data) {
+    if (!isDevelopmentEnvironment()) {
+      return null;
+    }
+
     const sampleProfile = getSampleSchoolProfileData(schoolId);
 
     if (!sampleProfile) {
@@ -789,20 +813,34 @@ export async function getSchoolProfileData(
   const interviews = (interviewsResponse.data ?? []) as InterviewSummary[];
   const followUpRows = (followUpsResponse.data ?? []) as FollowUp[];
 
+  const hasQueryError =
+    schoolResponse.error ||
+    contactsResponse.error ||
+    outreachResponse.error ||
+    interviewsResponse.error ||
+    followUpsResponse.error;
+
+  if (hasQueryError) {
+    if (!isDevelopmentEnvironment()) {
+      throw new Error("Could not load school profile from Supabase.");
+    }
+
+    const sampleProfile = getSampleSchoolProfileData(schoolId);
+
+    if (!sampleProfile) {
+      return null;
+    }
+
+    return applyRedactionForCurrentUser(schoolId, sampleProfile);
+  }
+
   return applyRedactionForCurrentUser(schoolId, {
     school,
     contacts,
     outreach: (outreachResponse.data ?? []) as OutreachActivity[],
     interviews,
     nextFollowUp: followUpRows[0] ?? null,
-    source:
-      schoolResponse.error ||
-      contactsResponse.error ||
-      outreachResponse.error ||
-      interviewsResponse.error ||
-      followUpsResponse.error
-        ? "sample"
-        : "supabase"
+    source: "supabase"
   });
 }
 
@@ -821,7 +859,12 @@ export async function createInterviewNote(
   const supabase = await getServerSupabaseClient();
 
   if (!supabase) {
-    return { ok: false, error: "Supabase is not configured." };
+    return {
+      ok: false,
+      error: isDevelopmentEnvironment()
+        ? "Supabase is not configured."
+        : SUPABASE_CONFIGURATION_ERROR
+    };
   }
 
   const user = await requireUser();
