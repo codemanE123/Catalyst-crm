@@ -38,6 +38,24 @@ function yesNo(value: boolean | null) {
   return value ? "Yes" : "No";
 }
 
+function isResearchErrorMessage(message: string, saved: boolean) {
+  if (!message || saved) {
+    return false;
+  }
+
+  const normalized = message.toLowerCase();
+
+  return (
+    normalized.includes("could not") ||
+    normalized.includes("permission") ||
+    normalized.includes("sign in") ||
+    normalized.includes("timed out") ||
+    normalized.includes("too many") ||
+    normalized.includes("invalid") ||
+    normalized.includes("try again")
+  );
+}
+
 function ProfileField({
   label,
   value
@@ -66,6 +84,7 @@ export default function UniversityResearchAgent({
   const [state, formAction, isPending] = useActionState(action, initialState);
   const { profile } = state;
   const hasProfile = Boolean(profile.name && profile.website);
+  const showErrorMessage = isResearchErrorMessage(state.message, state.saved);
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -120,7 +139,14 @@ export default function UniversityResearchAgent({
       </form>
 
       {state.message && (
-        <p className="mt-4 rounded-2xl bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-900">
+        <p
+          className={
+            showErrorMessage
+              ? "mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900"
+              : "mt-4 rounded-2xl bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-900"
+          }
+          role={showErrorMessage ? "alert" : "status"}
+        >
           {state.message}
         </p>
       )}

@@ -1,7 +1,7 @@
 import { getRecordOwnershipFields, type School } from "./supabase";
 import { MUTATION_ROLES, requireRole } from "./authz";
 import { AUDIT_ACTIONS, recordAuditEvent } from "./auditLog";
-import { isSafeHttpsUrl, safeFetchText, SAFE_FETCH_DEFAULT_TIMEOUT_MS } from "./safeFetch";
+import { isSafeHttpsUrl, safeFetchText, SafeFetchError, SAFE_FETCH_DEFAULT_TIMEOUT_MS } from "./safeFetch";
 import {
   enforceRateLimit,
   RATE_LIMIT_ACTIONS,
@@ -36,6 +36,125 @@ export type UniversityResearchResult = {
   saved: boolean;
   message: string;
 };
+
+const RESEARCH_FETCH_TIMEOUT_MS = 5000;
+const EMAIL_LOG_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const JWT_LOG_PATTERN = /eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*/g;
+
+function sanitizeLogMessage(message: string): string {
+  return message
+    .replace(EMAIL_LOG_PATTERN, "[redacted]")
+    .replace(JWT_LOG_PATTERN, "[redacted]")
+    .slice(0, 200);
+}
+
+function logResearchError(context: string, error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "Unknown error";
+  console.error(
+    `University research ${context}: ${sanitizeLogMessage(message)}`
+  );
+}
+
+function fetchTimeoutSignal(timeoutMs: number): AbortSignal {
+  if (typeof AbortSignal.timeout === "function") {
+    return AbortSignal.timeout(timeoutMs);
+  }
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), timeoutMs);
+  return controller.signal;
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return "";
+  }
+}
+
+function emptyResearchProfile(
+  schoolName = "",
+  website = ""
+): UniversityResearchProfile {
+  return buildProfile(schoolName || "Unknown school", website, []);
+}
+
+function toSerializableProfile(
+  profile: UniversityResearchProfile
+): UniversityResearchProfile {
+  return {
+    name: String(profile.name ?? ""),
+    website: String(profile.website ?? ""),
+    enrollment: String(profile.enrollment ?? ""),
+    public_private:
+      profile.public_private === "Public" ||
+      profile.public_private === "Private"
+        ? profile.public_private
+        : "Unknown",
+    hbcu: Boolean(profile.hbcu),
+    community_college: Boolean(profile.community_college),
+    state: String(profile.state ?? ""),
+    ai_programs: String(profile.ai_programs ?? ""),
+    cyber_programs: String(profile.cyber_programs ?? ""),
+    healthcare_programs: String(profile.healthcare_programs ?? ""),
+    innovation_center: String(profile.innovation_center ?? ""),
+    entrepreneurship_center: String(profile.entrepreneurship_center ?? ""),
+    career_services_office: String(profile.career_services_office ?? ""),
+    workforce_development_office: String(
+      profile.workforce_development_office ?? ""
+    ),
+    profile_sources: Array.isArray(profile.profile_sources)
+      ? profile.profile_sources.map((source) => String(source))
+      : []
+  };
+}
+
+function createResearchResult(
+  profile: UniversityResearchProfile,
+  saved: boolean,
+  message: string
+): UniversityResearchResult {
+  return {
+    profile: toSerializableProfile(profile),
+    saved: Boolean(saved),
+    message: String(message)
+  };
+}
+
+function toUserSafeResearchError(error: unknown): string {
+  if (error instanceof SafeFetchError) {
+    return "Could not fetch a public school page. Check the website URL and try again.";
+  }
+
+  if (error instanceof Error) {
+    if (error.name === "AbortError" || error.message.toLowerCase().includes("timeout")) {
+      return "Research timed out. Add a website URL and try again.";
+    }
+
+    if (error instanceof URIError || error.name === "URIError") {
+      return "Could not process search results. Add a website URL and try again.";
+    }
+
+    if (error.message.toLowerCase().includes("rate limit")) {
+      return "Too many research requests. Please wait a few minutes and try again.";
+    }
+
+    if (
+      error.message.toLowerCase().includes("permission") ||
+      error.message.toLowerCase().includes("not authorized")
+    ) {
+      return "You do not have permission to run the research agent.";
+    }
+  }
+
+  return "Research could not be completed. Please try again later.";
+}
 
 const STATE_NAMES = [
   "Alabama",
@@ -103,24 +222,35 @@ function normalizeWebsite(website: string) {
 }
 
 function pageUrls(baseUrl: string) {
-  const url = new URL(baseUrl);
-  const origin = url.origin;
+  try {
+    const url = new URL(baseUrl);
+    const origin = url.origin;
 
-  return [
-    origin,
-    `${origin}/about`,
-    `${origin}/academics`,
-    `${origin}/programs`,
-    `${origin}/admissions`,
-    `${origin}/career-services`,
-    `${origin}/workforce-development`,
-    `${origin}/innovation`,
-    `${origin}/entrepreneurship`
-  ];
+    return [
+      origin,
+      `${origin}/about`,
+      `${origin}/academics`,
+      `${origin}/programs`,
+      `${origin}/admissions`,
+      `${origin}/career-services`,
+      `${origin}/workforce-development`,
+      `${origin}/innovation`,
+      `${origin}/entrepreneurship`
+    ];
+  } catch {
+    return [baseUrl];
+  }
 }
 
 async function discoverTopicPages(schoolName: string, website: string) {
-  const hostname = new URL(website).hostname.replace(/^www\./, "");
+  let hostname = "";
+
+  try {
+    hostname = new URL(website).hostname.replace(/^www\./, "");
+  } catch {
+    return [];
+  }
+
   const topics = [
     "artificial intelligence program",
     "cybersecurity program",
@@ -139,7 +269,7 @@ async function discoverTopicPages(schoolName: string, website: string) {
           headers: {
             "user-agent": "CatalystCRMResearchAgent/1.0"
           },
-          signal: AbortSignal.timeout(5000)
+          signal: fetchTimeoutSignal(RESEARCH_FETCH_TIMEOUT_MS)
         });
 
         if (!response.ok) {
@@ -148,7 +278,8 @@ async function discoverTopicPages(schoolName: string, website: string) {
 
         const html = await response.text();
         const match = [...html.matchAll(/uddg=([^"&]+)/g)]
-          .map((result) => decodeURIComponent(result[1]))
+          .map((result) => safeDecodeURIComponent(result[1]))
+          .filter(Boolean)
           .find((url) => {
             try {
               return (
@@ -213,7 +344,7 @@ async function discoverWebsite(schoolName: string) {
       headers: {
         "user-agent": "CatalystCRMResearchAgent/1.0"
       },
-      signal: AbortSignal.timeout(5000)
+      signal: fetchTimeoutSignal(RESEARCH_FETCH_TIMEOUT_MS)
     });
 
     if (!response.ok) {
@@ -222,16 +353,27 @@ async function discoverWebsite(schoolName: string) {
 
     const html = await response.text();
     const matches = [...html.matchAll(/uddg=([^"&]+)/g)]
-      .map((match) => decodeURIComponent(match[1]))
+      .map((match) => safeDecodeURIComponent(match[1]))
+      .filter(Boolean)
       .filter((url) => isSafeHttpsUrl(url));
     const eduResult = matches.find((url) => {
-      const hostname = new URL(url).hostname;
-      return hostname.endsWith(".edu") || hostname.includes(".edu.");
+      try {
+        const hostname = new URL(url).hostname;
+        return hostname.endsWith(".edu") || hostname.includes(".edu.");
+      } catch {
+        return false;
+      }
     });
 
-    return eduResult && isSafeHttpsUrl(eduResult)
-      ? new URL(eduResult).origin
-      : "";
+    if (!eduResult || !isSafeHttpsUrl(eduResult)) {
+      return "";
+    }
+
+    try {
+      return new URL(eduResult).origin;
+    } catch {
+      return "";
+    }
   } catch {
     return "";
   }
@@ -451,128 +593,173 @@ export async function researchUniversityProfile(
 ): Promise<UniversityResearchResult> {
   "use server";
 
-  const validation = validateUniversityResearchInput(formData);
+  let schoolName = "";
+  let submittedWebsite = "";
 
-  if (!validation.success) {
-    return {
-      profile: buildProfile("Unknown school", "", []),
-      saved: false,
-      message: validation.error
-    };
-  }
+  try {
+    const validation = validateUniversityResearchInput(formData);
 
-  const schoolName = validation.data.school_name;
-  const submittedWebsite = normalizeWebsite(validation.data.website);
-
-  const user = await requireUser();
-
-  if (!user) {
-    return {
-      profile: buildProfile(schoolName, submittedWebsite, []),
-      saved: false,
-      message: "Sign in to run the research agent."
-    };
-  }
-
-  const membership = await requireRole(user, MUTATION_ROLES);
-
-  if (!membership) {
-    return {
-      profile: buildProfile(schoolName, submittedWebsite, []),
-      saved: false,
-      message: "You do not have permission to run the research agent."
-    };
-  }
-
-  const supabase = await getServerSupabaseClient();
-
-  if (supabase) {
-    const rateLimit = await enforceRateLimit(
-      supabase,
-      user.id,
-      RATE_LIMIT_ACTIONS.universityResearch,
-      RATE_LIMITS.universityResearch,
-      "Too many research requests. Please wait a few minutes and try again."
-    );
-
-    if (!rateLimit.allowed) {
-      return {
-        profile: buildProfile(schoolName, submittedWebsite, []),
-        saved: false,
-        message: rateLimit.error
-      };
+    if (!validation.success) {
+      return createResearchResult(
+        emptyResearchProfile(),
+        false,
+        validation.error
+      );
     }
-  }
 
-  const website = submittedWebsite || (await discoverWebsite(schoolName));
+    schoolName = validation.data.school_name;
+    submittedWebsite = normalizeWebsite(validation.data.website);
 
-  if (!website || !isSafeHttpsUrl(website)) {
-    return {
-      profile: buildProfile(schoolName, "", []),
-      saved: false,
-      message: "Could not discover an official website. Add a website and rerun the agent."
-    };
-  }
+    const user = await requireUser();
 
-  const targetUrls = [
-    ...new Set(
-      [...pageUrls(website), ...(await discoverTopicPages(schoolName, website))].filter(
-        (url) => isSafeHttpsUrl(url)
+    if (!user) {
+      return createResearchResult(
+        emptyResearchProfile(schoolName, submittedWebsite),
+        false,
+        "Sign in to run the research agent."
+      );
+    }
+
+    const membership = await requireRole(user, MUTATION_ROLES);
+
+    if (!membership) {
+      return createResearchResult(
+        emptyResearchProfile(schoolName, submittedWebsite),
+        false,
+        "You do not have permission to run the research agent."
+      );
+    }
+
+    const supabase = await getServerSupabaseClient();
+
+    if (supabase) {
+      const rateLimit = await enforceRateLimit(
+        supabase,
+        user.id,
+        RATE_LIMIT_ACTIONS.universityResearch,
+        RATE_LIMITS.universityResearch,
+        "Too many research requests. Please wait a few minutes and try again."
+      );
+
+      if (!rateLimit.allowed) {
+        return createResearchResult(
+          emptyResearchProfile(schoolName, submittedWebsite),
+          false,
+          rateLimit.error
+        );
+      }
+    }
+
+    const website = submittedWebsite || (await discoverWebsite(schoolName));
+
+    if (!website || !isSafeHttpsUrl(website)) {
+      return createResearchResult(
+        emptyResearchProfile(schoolName, ""),
+        false,
+        "Could not discover an official website. Add a website and rerun the agent."
+      );
+    }
+
+    const targetUrls = [
+      ...new Set(
+        [
+          ...pageUrls(website),
+          ...(await discoverTopicPages(schoolName, website))
+        ].filter((url) => isSafeHttpsUrl(url))
       )
-    )
-  ];
-  const pages = (
-    await Promise.all(targetUrls.map((url) => fetchPage(url)))
-  ).filter((page): page is { url: string; text: string } => Boolean(page));
-  const fallbackPages = pages.length
-    ? pages
-    : [
-        {
-          url: website,
-          text: `${schoolName} public university website`
+    ];
+    const pages = (
+      await Promise.all(targetUrls.map((url) => fetchPage(url)))
+    ).filter((page): page is { url: string; text: string } => Boolean(page));
+    const fallbackPages = pages.length
+      ? pages
+      : [
+          {
+            url: website,
+            text: `${schoolName} public university website`
+          }
+        ];
+    const profile = buildProfile(schoolName, website, fallbackPages);
+
+    if (supabase) {
+      try {
+        let websiteHost = "unknown";
+
+        try {
+          websiteHost = new URL(website).hostname;
+        } catch {
+          websiteHost = "unknown";
         }
-      ];
-  const profile = buildProfile(schoolName, website, fallbackPages);
 
-  if (supabase) {
-    await recordAuditEvent(supabase, {
-      organizationId: membership.organization_id,
-      actorUserId: user.id,
-      action: AUDIT_ACTIONS.universityResearchRun,
-      targetTable: "schools",
-      metadata: {
-        school_name: schoolName,
-        website_host: new URL(website).hostname,
-        source_page_count: pages.length
+        await recordAuditEvent(supabase, {
+          organizationId: membership.organization_id,
+          actorUserId: user.id,
+          action: AUDIT_ACTIONS.universityResearchRun,
+          targetTable: "schools",
+          metadata: {
+            school_name: schoolName,
+            website_host: websiteHost,
+            source_page_count: pages.length
+          }
+        });
+      } catch (auditError) {
+        logResearchError("audit run", auditError);
       }
-    });
-  }
+    }
 
-  const saveResult = await saveProfile(profile);
-  const saved = saveResult.status === "saved";
+    let saveResult: { status: "saved" | "denied" | "failed"; schoolId?: string };
 
-  if (supabase && saved) {
-    await recordAuditEvent(supabase, {
-      organizationId: membership.organization_id,
-      actorUserId: user.id,
-      action: AUDIT_ACTIONS.universityResearchSave,
-      targetTable: "schools",
-      recordId: saveResult.schoolId ?? null,
-      metadata: {
-        school_name: schoolName,
-        website_host: new URL(website).hostname,
-        source_page_count: pages.length
+    try {
+      saveResult = await saveProfile(profile);
+    } catch (saveError) {
+      logResearchError("save profile", saveError);
+      saveResult = { status: "failed" };
+    }
+
+    const saved = saveResult.status === "saved";
+
+    if (supabase && saved) {
+      try {
+        let websiteHost = "unknown";
+
+        try {
+          websiteHost = new URL(website).hostname;
+        } catch {
+          websiteHost = "unknown";
+        }
+
+        await recordAuditEvent(supabase, {
+          organizationId: membership.organization_id,
+          actorUserId: user.id,
+          action: AUDIT_ACTIONS.universityResearchSave,
+          targetTable: "schools",
+          recordId: saveResult.schoolId ?? null,
+          metadata: {
+            school_name: schoolName,
+            website_host: websiteHost,
+            source_page_count: pages.length
+          }
+        });
+      } catch (auditError) {
+        logResearchError("audit save", auditError);
       }
-    });
-  }
+    }
 
-  return {
-    profile,
-    saved,
-    message: saved
-      ? "Research complete and CRM school profile updated."
-      : saveResult.status === "denied"
-        ? "Research complete, but you do not have permission to save this profile."
-        : "Research complete. Connect Supabase to save this profile automatically."
-  };
+    return createResearchResult(
+      profile,
+      saved,
+      saved
+        ? "Research complete and CRM school profile updated."
+        : saveResult.status === "denied"
+          ? "Research complete, but you do not have permission to save this profile."
+          : "Research complete. Connect Supabase to save this profile automatically."
+    );
+  } catch (error) {
+    logResearchError("researchUniversityProfile", error);
+    return createResearchResult(
+      emptyResearchProfile(schoolName, submittedWebsite),
+      false,
+      toUserSafeResearchError(error)
+    );
+  }
 }
