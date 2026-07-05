@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useCallback, useState, useTransition } from "react";
 import type {
   UniversityResearchProfile,
   UniversityResearchResult
@@ -52,7 +52,22 @@ function isResearchErrorMessage(message: string, saved: boolean) {
     normalized.includes("timed out") ||
     normalized.includes("too many") ||
     normalized.includes("invalid") ||
-    normalized.includes("try again")
+    normalized.includes("try again") ||
+    normalized.includes("please try again")
+  );
+}
+
+function isUniversityResearchResult(value: unknown): value is UniversityResearchResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const result = value as UniversityResearchResult;
+  return (
+    typeof result.message === "string" &&
+    typeof result.saved === "boolean" &&
+    result.profile !== null &&
+    typeof result.profile === "object"
   );
 }
 
@@ -73,18 +88,47 @@ function ProfileField({
   );
 }
 
-export default function UniversityResearchAgent({
-  action
-}: {
-  action: (
-    previousState: UniversityResearchResult | null,
-    formData: FormData
-  ) => Promise<UniversityResearchResult>;
-}) {
-  const [state, formAction, isPending] = useActionState(action, initialState);
+export default function UniversityResearchAgent() {
+  const [state, setState] = useState(initialState);
+  const [isPending, startTransition] = useTransition();
   const { profile } = state;
   const hasProfile = Boolean(profile.name && profile.website);
   const showErrorMessage = isResearchErrorMessage(state.message, state.saved);
+
+  const handleSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/university-research", {
+          method: "POST",
+          body: formData
+        });
+
+        const payload: unknown = await response.json().catch(() => null);
+
+        if (!isUniversityResearchResult(payload)) {
+          setState({
+            profile: emptyProfile,
+            saved: false,
+            message:
+              "Research could not be completed. Please try again later."
+          });
+          return;
+        }
+
+        setState(payload);
+      } catch {
+        setState({
+          profile: emptyProfile,
+          saved: false,
+          message: "Research could not be completed. Please try again later."
+        });
+      }
+    });
+  }, []);
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -110,7 +154,10 @@ export default function UniversityResearchAgent({
           records.
         </p>
       </div>
-      <form action={formAction} className="mt-6 grid gap-4 md:grid-cols-[1fr_1fr_auto]">
+      <form
+        onSubmit={handleSubmit}
+        className="mt-6 grid gap-4 md:grid-cols-[1fr_1fr_auto]"
+      >
         <label className="block">
           <span className="text-sm font-medium text-slate-700">School name</span>
           <input
@@ -131,6 +178,7 @@ export default function UniversityResearchAgent({
           />
         </label>
         <button
+          type="submit"
           disabled={isPending}
           className="self-end rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
         >

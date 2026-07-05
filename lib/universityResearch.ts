@@ -1,5 +1,3 @@
-"use server";
-
 import { getRecordOwnershipFields } from "./supabase";
 import { MUTATION_ROLES, requireRole } from "./authz";
 import { AUDIT_ACTIONS, recordAuditEvent } from "./auditLog";
@@ -21,7 +19,9 @@ export type {
   UniversityResearchResult
 } from "./universityResearch.types";
 
-const RESEARCH_FETCH_TIMEOUT_MS = 3000;
+const RESEARCH_FETCH_TIMEOUT_MS = 2500;
+const RESEARCH_MAX_RESPONSE_BYTES = 200_000;
+const RESEARCH_MAX_TEXT_CHARS = 80_000;
 const MAX_PAGE_FETCHES = 3;
 const EMAIL_LOG_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const JWT_LOG_PATTERN = /eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*/g;
@@ -223,15 +223,21 @@ async function fetchResearchPages(urls: string[]) {
     0,
     MAX_PAGE_FETCHES
   );
-  const pages = (
-    await Promise.all(candidates.map((url) => fetchPage(url)))
-  ).filter((page): page is { url: string; text: string } => Boolean(page));
+  const pages: { url: string; text: string }[] = [];
+
+  for (const url of candidates) {
+    const page = await fetchPage(url);
+
+    if (page) {
+      pages.push(page);
+    }
+  }
 
   return pages;
 }
 
 function stripHtml(html: string) {
-  return html
+  const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
@@ -239,6 +245,8 @@ function stripHtml(html: string) {
     .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
+
+  return stripped.slice(0, RESEARCH_MAX_TEXT_CHARS);
 }
 
 async function fetchPage(url: string) {
@@ -252,7 +260,8 @@ async function fetchPage(url: string) {
         headers: {
           "user-agent": "CatalystCRMResearchAgent/1.0"
         },
-        timeoutMs: RESEARCH_FETCH_TIMEOUT_MS
+        timeoutMs: RESEARCH_FETCH_TIMEOUT_MS,
+        maxBytes: RESEARCH_MAX_RESPONSE_BYTES
       })
     );
 
@@ -516,8 +525,7 @@ async function saveProfile(
   };
 }
 
-export async function researchUniversityProfile(
-  _previousState: UniversityResearchResult | null,
+export async function executeUniversityResearch(
   formData: FormData
 ): Promise<UniversityResearchResult> {
   let schoolName = "";

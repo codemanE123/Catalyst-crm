@@ -33,7 +33,7 @@ function buildFormData(schoolName: string, website = "") {
   return formData;
 }
 
-describe("researchUniversityProfile", () => {
+describe("executeUniversityResearch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetServerSupabaseClient.mockResolvedValue(null);
@@ -43,9 +43,8 @@ describe("researchUniversityProfile", () => {
   it("returns a sign-in message when unauthenticated", async () => {
     mockRequireUser.mockResolvedValue(null);
 
-    const { researchUniversityProfile } = await import("@/lib/universityResearch");
-    const result = await researchUniversityProfile(
-      null,
+    const { executeUniversityResearch } = await import("@/lib/universityResearch");
+    const result = await executeUniversityResearch(
       buildFormData("Arizona State University", "https://www.asu.edu")
     );
 
@@ -58,9 +57,8 @@ describe("researchUniversityProfile", () => {
     mockRequireUser.mockResolvedValue({ id: "user-1" });
     mockRequireRole.mockResolvedValue(null);
 
-    const { researchUniversityProfile } = await import("@/lib/universityResearch");
-    const result = await researchUniversityProfile(
-      null,
+    const { executeUniversityResearch } = await import("@/lib/universityResearch");
+    const result = await executeUniversityResearch(
       buildFormData("Arizona State University", "https://www.asu.edu")
     );
 
@@ -77,9 +75,8 @@ describe("researchUniversityProfile", () => {
       role: "admin"
     });
 
-    const { researchUniversityProfile } = await import("@/lib/universityResearch");
-    const result = await researchUniversityProfile(
-      null,
+    const { executeUniversityResearch } = await import("@/lib/universityResearch");
+    const result = await executeUniversityResearch(
       buildFormData("Test University", "http://localhost")
     );
 
@@ -98,9 +95,8 @@ describe("researchUniversityProfile", () => {
         role: "admin"
       });
 
-      const { researchUniversityProfile } = await import("@/lib/universityResearch");
-      const result = await researchUniversityProfile(
-        null,
+      const { executeUniversityResearch } = await import("@/lib/universityResearch");
+      const result = await executeUniversityResearch(
         buildFormData("Arizona State University", "https://www.asu.edu")
       );
 
