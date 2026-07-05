@@ -1,8 +1,8 @@
 # Deployment Runbook — Staging, Preview, and Production
 
-**Version:** 1.2 (Phase 2 Task 2.32)  
+**Version:** 1.3 (Phase 2 Task 2.35)  
 **Audience:** Catalyst engineering and operations  
-**Companion documents:** `docs/pilot-onboarding-checklist.md`, `docs/auth-hardening.md`, `docs/pilot-it-security-packet.md`
+**Companion documents:** `docs/pilot-onboarding-checklist.md`, `docs/auth-hardening.md`, `docs/pilot-it-security-packet.md`, `docs/incident-response-runbook.md`
 
 **Scope:** Staging and preview (Task 2.9), production promote and security headers (Task 2.10), and **Sentry error monitoring** (Task 2.32).
 
@@ -330,6 +330,9 @@ VALUES ('00000000-0000-4000-8000-000000000099', 'STAGING_VERIFICATION_DO_NOT_USE
 
 ## 11. Rollback procedure
 
+For **security, availability, or data incidents**, declare severity and follow
+`docs/incident-response-runbook.md` in parallel with technical rollback below.
+
 ### 11.1 Disable preview deployments
 
 If preview deploys cause noise or misconfiguration:
@@ -341,6 +344,8 @@ No production impact if production uses a separate env scope.
 
 ### 11.2 Revert a bad application deploy
 
+See also `docs/incident-response-runbook.md` §12 (Vercel rollback).
+
 1. Vercel → **Deployments** → select last known good deployment → **Promote to Production** (or redeploy for staging).
 2. Or revert the git commit on `main` and push — Vercel rebuilds automatically.
 
@@ -348,11 +353,15 @@ Application rollback does **not** roll back database migrations.
 
 ### 11.3 Bad migration on staging
 
+See also `docs/incident-response-runbook.md` §11 (Supabase rollback).
+
 1. Do **not** deploy app code that depends on a failed migration.
 2. Fix forward with a new migration or manual SQL on staging only.
 3. Re-run smoke verification before promoting fixes toward production.
 
 ### 11.4 Wrong Supabase env vars
+
+See also `docs/incident-response-runbook.md` §13 (environment variable compromise).
 
 1. Update Vercel Preview variables to correct staging URL and anon key.
 2. **Redeploy** (env changes require a new deployment to take effect).
@@ -364,7 +373,8 @@ Revert `docs/deployment-runbook.md` and related README links. No runtime change.
 
 ### 11.6 Production security headers rollback (Task 2.10)
 
-If CSP or other headers break login, auth callback, or Next.js assets:
+If CSP or other headers break login, auth callback, or Next.js assets — or during a
+SEV-2+ outage — coordinate with `docs/incident-response-runbook.md` §8.
 
 1. Revert `next.config.ts` header changes (or remove the offending directive).
 2. Push to `main` or **Promote to Production** the last known good Vercel deployment.
@@ -393,7 +403,7 @@ See comments in `.github/workflows/ci.yml` for future optional workflows (E2E ag
 | 2.10 | Production promote, security headers (§15–16) — **complete** |
 | 2.29 | Playwright E2E smoke against staging URL |
 | 2.32 | Error monitoring (Sentry) — **complete** (§18) |
-| 2.35 | Incident response runbook |
+| 2.35 | Incident response runbook — **complete** (`docs/incident-response-runbook.md`) |
 
 ---
 
@@ -513,12 +523,16 @@ Full table: `docs/pilot-onboarding-checklist.md` → Smoke verification.
 
 ### 14.7 Production rollback procedure
 
+During a production incident, assign an **incident commander** per
+`docs/incident-response-runbook.md` before executing rollback.
+
 | Scenario | Action |
 | --- | --- |
 | **Bad application deploy** | Vercel → Deployments → last good build → **Promote to Production**; or git revert on `main` and redeploy |
 | **Wrong production Supabase env** | Fix Production env vars → redeploy; verify ref per §10.1 |
-| **Security headers break app** | See [§11.6](#116-production-security-headers-rollback-task-210) |
-| **Bad production migration** | Do not promote app depending on failed migration; fix forward on production DB; re-smoke |
+| **Security headers break app** | See [§11.6](#116-production-security-headers-rollback-task-210) and incident runbook §8 |
+| **Bad production migration** | Do not promote app depending on failed migration; fix forward on production DB; re-smoke — see incident runbook §11 |
+| **Secret / env compromise** | Rotate keys per `docs/incident-response-runbook.md` §13, then redeploy |
 | **Full pilot halt** | Disable new user provisioning; communicate outage; roll back app deploy; keep DB for forensics |
 
 Application rollback does **not** reverse database migrations. Prefer forward-fix migrations.
@@ -700,6 +714,9 @@ Complete **after** staging verification and production promote (§14).
 
 ### 18.6 Error monitoring rollback
 
+If Sentry misconfiguration contributes to an incident, see also
+`docs/incident-response-runbook.md` §15.
+
 | Step | Action |
 | --- | --- |
 | 1 | Remove `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` from Vercel Preview and/or Production |
@@ -714,9 +731,11 @@ Disabling env vars is sufficient for pilot halt — no database or auth impact.
 ## 19. References
 
 - `README.md` — Deployment section
+- `docs/incident-response-runbook.md` — severity, contacts, incident procedures
+- `docs/pilot-it-security-packet.md` — MOU notification terms
 - `docs/pilot-onboarding-checklist.md` — smoke verification and onboarding
-- `docs/auth-hardening.md` — MFA staging rehearsal
-- `docs/phase-2-roadmap.md` — Task 2.9, 2.10, 2.32, Pilot Launch Gate
+- `docs/auth-hardening.md` — MFA staging rehearsal and auth compromise
+- `docs/phase-2-roadmap.md` — Task 2.9, 2.10, 2.32, 2.35, Pilot Launch Gate
 - `lib/monitoring.ts` — PII scrubbing and environment tags
 - [Vercel environment variables](https://vercel.com/docs/projects/environment-variables)
 - [Sentry Next.js SDK](https://docs.sentry.io/platforms/javascript/guides/nextjs/)

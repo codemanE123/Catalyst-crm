@@ -50,6 +50,61 @@ export function scrubString(value: string): string {
   return value.replace(EMAIL_PATTERN, REDACTED).replace(JWT_PATTERN, REDACTED);
 }
 
+type RequestQueryString = NonNullable<ErrorEvent["request"]>["query_string"];
+
+function scrubQueryStringValue(value: unknown): string {
+  if (typeof value === "string") {
+    return scrubString(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === "string" ? scrubString(item) : REDACTED))
+      .join(",");
+  }
+
+  return REDACTED;
+}
+
+export function scrubQueryParams(queryString: RequestQueryString): RequestQueryString {
+  if (queryString == null) {
+    return queryString;
+  }
+
+  if (typeof queryString === "string") {
+    return scrubString(queryString);
+  }
+
+  if (Array.isArray(queryString)) {
+    return queryString.map((entry) => {
+      if (!Array.isArray(entry) || entry.length < 2) {
+        return entry;
+      }
+
+      const [key, value] = entry;
+
+      if (isSensitiveKey(String(key))) {
+        return [key, REDACTED] as (typeof queryString)[number];
+      }
+
+      return [key, scrubQueryStringValue(value)] as (typeof queryString)[number];
+    }) as RequestQueryString;
+  }
+
+  const scrubbed: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(queryString)) {
+    if (isSensitiveKey(key)) {
+      scrubbed[key] = REDACTED;
+      continue;
+    }
+
+    scrubbed[key] = scrubQueryStringValue(value);
+  }
+
+  return scrubbed;
+}
+
 function scrubUnknown(value: unknown, depth = 0): unknown {
   if (depth > 8) {
     return REDACTED;
@@ -114,8 +169,8 @@ export function scrubMonitoringEvent(event: ErrorEvent): ErrorEvent | null {
       delete request.data;
     }
 
-    if (request.query_string) {
-      request.query_string = scrubString(request.query_string);
+    if (request.query_string != null) {
+      request.query_string = scrubQueryParams(request.query_string);
     }
 
     event.request = request;
