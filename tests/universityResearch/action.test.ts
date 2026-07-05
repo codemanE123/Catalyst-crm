@@ -50,7 +50,7 @@ describe("executeUniversityResearch", () => {
 
     expect(result.saved).toBe(false);
     expect(result.message).toBe("Sign in to run the research agent.");
-    expect(result.profile.name).toBe("Arizona State University");
+    expect(result.profile.name).toBe("");
   });
 
   it("returns a permission message for read-only users", async () => {

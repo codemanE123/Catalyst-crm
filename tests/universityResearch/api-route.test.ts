@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 
 import { POST } from "@/app/api/university-research/route";
 
-const mockRequireUser = vi.fn();
+const mockRequireUserFromRequest = vi.fn();
 const mockRequireRole = vi.fn();
-const mockGetServerSupabaseClient = vi.fn();
 const mockEnforceRateLimit = vi.fn();
 
-vi.mock("@/lib/supabaseServer", () => ({
-  requireUser: () => mockRequireUser(),
-  getServerSupabaseClient: () => mockGetServerSupabaseClient()
-}));
+vi.mock("@/lib/supabaseServer", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/supabaseServer")>();
+  return {
+    ...actual,
+    requireUserFromRequest: (...args: unknown[]) =>
+      mockRequireUserFromRequest(...args)
+  };
+});
 
 vi.mock("@/lib/authz", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/authz")>();
@@ -33,7 +37,7 @@ function buildRequest(schoolName: string, website = "") {
   formData.set("school_name", schoolName);
   formData.set("website", website);
 
-  return new Request("http://localhost/api/university-research", {
+  return new NextRequest("http://localhost/api/university-research", {
     method: "POST",
     body: formData
   });
@@ -42,25 +46,35 @@ function buildRequest(schoolName: string, website = "") {
 describe("POST /api/university-research", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetServerSupabaseClient.mockResolvedValue(null);
     mockEnforceRateLimit.mockResolvedValue({ allowed: true });
   });
 
   it("returns JSON for unauthenticated requests", async () => {
-    mockRequireUser.mockResolvedValue(null);
+    mockRequireUserFromRequest.mockResolvedValue({
+      user: null,
+      supabase: null,
+      applySessionCookies: (response: Response) => response
+    });
 
-    const response = await POST(buildRequest("Arizona State University", "https://www.asu.edu"));
+    const response = await POST(
+      buildRequest("Arizona State University", "https://www.asu.edu")
+    );
     const result = await response.json();
 
     expect(response.status).toBe(200);
     expect(result.saved).toBe(false);
     expect(result.message).toBe("Sign in to run the research agent.");
+    expect(result.profile.name).toBe("");
   });
 
   it(
     "returns JSON for a public university website",
     async () => {
-      mockRequireUser.mockResolvedValue({ id: "user-1" });
+      mockRequireUserFromRequest.mockResolvedValue({
+        user: { id: "user-1" },
+        supabase: null,
+        applySessionCookies: (response: Response) => response
+      });
       mockRequireRole.mockResolvedValue({
         organization_id: "org-1",
         role: "admin"

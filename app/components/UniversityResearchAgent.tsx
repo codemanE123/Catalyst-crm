@@ -92,8 +92,9 @@ export default function UniversityResearchAgent() {
   const [state, setState] = useState(initialState);
   const [isPending, startTransition] = useTransition();
   const { profile } = state;
-  const hasProfile = Boolean(profile.name && profile.website);
   const showErrorMessage = isResearchErrorMessage(state.message, state.saved);
+  const hasProfile =
+    Boolean(profile.name && profile.website) && !showErrorMessage;
 
   const handleSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -104,7 +105,8 @@ export default function UniversityResearchAgent() {
       try {
         const response = await fetch("/api/university-research", {
           method: "POST",
-          body: formData
+          body: formData,
+          credentials: "same-origin"
         });
 
         const payload: unknown = await response.json().catch(() => null);

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { NextResponse, type NextRequest } from "next/server";
 
 export const SUPABASE_CONFIGURATION_ERROR =
   "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY. Sample data is only available when NODE_ENV is development.";
@@ -71,4 +72,82 @@ export async function requireUser(): Promise<User | null> {
   }
 
   return user;
+}
+
+export type RouteHandlerSupabaseContext = {
+  supabase: SupabaseClient;
+  applySessionCookies: (response: NextResponse) => NextResponse;
+};
+
+export async function createRouteHandlerSupabaseClient(
+  request: NextRequest
+): Promise<RouteHandlerSupabaseContext | null> {
+  const env = getSupabaseEnv();
+
+  if (!env) {
+    assertSupabaseConfiguredForRuntime();
+    return null;
+  }
+
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(env.url, env.anonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => {
+          request.cookies.set(name, value);
+        });
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) => {
+          response.cookies.set(name, value, options);
+        });
+      }
+    }
+  });
+
+  return {
+    supabase,
+    applySessionCookies(nextResponse: NextResponse) {
+      for (const cookie of response.cookies.getAll()) {
+        nextResponse.cookies.set(cookie);
+      }
+      return nextResponse;
+    }
+  };
+}
+
+export async function requireUserFromRequest(
+  request: NextRequest
+): Promise<{ user: User | null; supabase: SupabaseClient | null; applySessionCookies: (response: NextResponse) => NextResponse }> {
+  const context = await createRouteHandlerSupabaseClient(request);
+
+  if (!context) {
+    return {
+      user: null,
+      supabase: null,
+      applySessionCookies: (response) => response
+    };
+  }
+
+  const {
+    data: { user },
+    error
+  } = await context.supabase.auth.getUser();
+
+  if (error || !user) {
+    return {
+      user: null,
+      supabase: context.supabase,
+      applySessionCookies: context.applySessionCookies
+    };
+  }
+
+  return {
+    user,
+    supabase: context.supabase,
+    applySessionCookies: context.applySessionCookies
+  };
 }

@@ -9,6 +9,7 @@ import {
 } from "./rateLimit";
 import { validateUniversityResearchInput } from "./validation";
 import { getServerSupabaseClient, requireUser } from "./supabaseServer";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type {
   UniversityResearchProfile,
   UniversityResearchResult
@@ -67,7 +68,27 @@ function emptyResearchProfile(
   schoolName = "",
   website = ""
 ): UniversityResearchProfile {
-  return buildProfile(schoolName || "Unknown school", website, []);
+  if (!schoolName.trim()) {
+    return {
+      name: "",
+      website: website.trim(),
+      enrollment: "",
+      public_private: "Unknown",
+      hbcu: false,
+      community_college: false,
+      state: "",
+      ai_programs: "",
+      cyber_programs: "",
+      healthcare_programs: "",
+      innovation_center: "",
+      entrepreneurship_center: "",
+      career_services_office: "",
+      workforce_development_office: "",
+      profile_sources: []
+    };
+  }
+
+  return buildProfile(schoolName, website, []);
 }
 
 function toSerializableProfile(
@@ -525,8 +546,14 @@ async function saveProfile(
   };
 }
 
+export type UniversityResearchAuthContext = {
+  user: User;
+  supabase: SupabaseClient | null;
+};
+
 export async function executeUniversityResearch(
-  formData: FormData
+  formData: FormData,
+  auth?: UniversityResearchAuthContext
 ): Promise<UniversityResearchResult> {
   let schoolName = "";
   let submittedWebsite = "";
@@ -545,11 +572,11 @@ export async function executeUniversityResearch(
     schoolName = validation.data.school_name;
     submittedWebsite = normalizeWebsite(validation.data.website);
 
-    const user = await requireUser();
+    const user = auth?.user ?? (await requireUser());
 
     if (!user) {
       return createResearchResult(
-        emptyResearchProfile(schoolName, submittedWebsite),
+        emptyResearchProfile(),
         false,
         "Sign in to run the research agent."
       );
@@ -565,7 +592,8 @@ export async function executeUniversityResearch(
       );
     }
 
-    const supabase = await getServerSupabaseClient();
+    const supabase =
+      auth !== undefined ? auth.supabase : await getServerSupabaseClient();
 
     if (supabase) {
       const rateLimit = await enforceRateLimit(
