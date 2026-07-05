@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { canAccessSettingsRoutes, shouldRedactRestrictedFields } from "@/lib/authz";
+import {
+  canAccessSettingsRoutes,
+  canManageOrganizationMembership,
+  shouldRedactRestrictedFields
+} from "@/lib/authz";
 import type { OrganizationMember } from "@/lib/supabase";
 
 const ORG_A = "11111111-1111-1111-1111-111111111111";
@@ -86,5 +90,33 @@ describe("canAccessSettingsRoutes", () => {
 
   it("returns false when user has no memberships", () => {
     expect(canAccessSettingsRoutes([])).toBe(false);
+  });
+});
+
+describe("canManageOrganizationMembership", () => {
+  it("returns true when user is admin of the organization", () => {
+    expect(
+      canManageOrganizationMembership([member("admin", ORG_A)], ORG_A)
+    ).toBe(true);
+  });
+
+  it("returns true when user is super_admin", () => {
+    expect(
+      canManageOrganizationMembership([member("super_admin", ORG_A)], ORG_A)
+    ).toBe(true);
+  });
+
+  it("returns false when user is sales in the organization", () => {
+    expect(
+      canManageOrganizationMembership([member("sales", ORG_A)], ORG_A)
+    ).toBe(false);
+  });
+
+  it("returns false when admin membership is for a different organization", () => {
+    const otherOrg = "55555555-5555-5555-5555-555555555555";
+
+    expect(
+      canManageOrganizationMembership([member("admin", otherOrg)], ORG_A)
+    ).toBe(false);
   });
 });

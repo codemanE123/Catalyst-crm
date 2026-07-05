@@ -17,6 +17,31 @@ export function canAccessSettingsRoutes(
   );
 }
 
+export function isSuperAdmin(memberships: OrganizationMember[]): boolean {
+  return memberships.some((membership) => membership.role === "super_admin");
+}
+
+export function canManageOrganizationMembership(
+  memberships: OrganizationMember[],
+  organizationId: string
+): boolean {
+  if (isSuperAdmin(memberships)) {
+    return true;
+  }
+
+  const orgMembership = memberships.find(
+    (membership) => membership.organization_id === organizationId
+  );
+
+  return orgMembership?.role === "admin";
+}
+
+export const MEMBERSHIP_ASSIGNABLE_ROLES: AppRole[] = [
+  "read_only",
+  "sales",
+  "admin"
+];
+
 export function shouldRedactRestrictedFields(
   membership: OrganizationMember | null,
   allMemberships: OrganizationMember[]
