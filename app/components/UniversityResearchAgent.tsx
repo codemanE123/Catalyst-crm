@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import type {
   UniversityResearchProfile,
   UniversityResearchResult
-} from "@/lib/universityResearch";
+} from "@/lib/universityResearch.types";
 
 const emptyProfile: UniversityResearchProfile = {
   name: "",

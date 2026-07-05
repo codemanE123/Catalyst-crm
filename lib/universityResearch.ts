@@ -1,7 +1,9 @@
-import { getRecordOwnershipFields, type School } from "./supabase";
+"use server";
+
+import { getRecordOwnershipFields } from "./supabase";
 import { MUTATION_ROLES, requireRole } from "./authz";
 import { AUDIT_ACTIONS, recordAuditEvent } from "./auditLog";
-import { isSafeHttpsUrl, safeFetchText, SafeFetchError, SAFE_FETCH_DEFAULT_TIMEOUT_MS } from "./safeFetch";
+import { isSafeHttpsUrl, safeFetchText, SafeFetchError } from "./safeFetch";
 import {
   enforceRateLimit,
   RATE_LIMIT_ACTIONS,
@@ -9,35 +11,17 @@ import {
 } from "./rateLimit";
 import { validateUniversityResearchInput } from "./validation";
 import { getServerSupabaseClient, requireUser } from "./supabaseServer";
+import type {
+  UniversityResearchProfile,
+  UniversityResearchResult
+} from "./universityResearch.types";
 
-export type UniversityResearchProfile = Required<
-  Pick<
-    School,
-    | "name"
-    | "website"
-    | "enrollment"
-    | "public_private"
-    | "hbcu"
-    | "community_college"
-    | "state"
-    | "ai_programs"
-    | "cyber_programs"
-    | "healthcare_programs"
-    | "innovation_center"
-    | "entrepreneurship_center"
-    | "career_services_office"
-    | "workforce_development_office"
-    | "profile_sources"
-  >
->;
+export type {
+  UniversityResearchProfile,
+  UniversityResearchResult
+} from "./universityResearch.types";
 
-export type UniversityResearchResult = {
-  profile: UniversityResearchProfile;
-  saved: boolean;
-  message: string;
-};
-
-const RESEARCH_FETCH_TIMEOUT_MS = 5000;
+const RESEARCH_FETCH_TIMEOUT_MS = 4000;
 const EMAIL_LOG_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const JWT_LOG_PATTERN = /eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*/g;
 
@@ -120,11 +104,13 @@ function createResearchResult(
   saved: boolean,
   message: string
 ): UniversityResearchResult {
-  return {
+  const result: UniversityResearchResult = {
     profile: toSerializableProfile(profile),
     saved: Boolean(saved),
     message: String(message)
   };
+
+  return JSON.parse(JSON.stringify(result)) as UniversityResearchResult;
 }
 
 function toUserSafeResearchError(error: unknown): string {
@@ -323,7 +309,7 @@ async function fetchPage(url: string) {
         headers: {
           "user-agent": "CatalystCRMResearchAgent/1.0"
         },
-        timeoutMs: SAFE_FETCH_DEFAULT_TIMEOUT_MS
+        timeoutMs: RESEARCH_FETCH_TIMEOUT_MS
       })
     );
 
@@ -591,8 +577,6 @@ export async function researchUniversityProfile(
   _previousState: UniversityResearchResult | null,
   formData: FormData
 ): Promise<UniversityResearchResult> {
-  "use server";
-
   let schoolName = "";
   let submittedWebsite = "";
 
@@ -664,7 +648,9 @@ export async function researchUniversityProfile(
       ...new Set(
         [
           ...pageUrls(website),
-          ...(await discoverTopicPages(schoolName, website))
+          ...(submittedWebsite
+            ? []
+            : await discoverTopicPages(schoolName, website))
         ].filter((url) => isSafeHttpsUrl(url))
       )
     ];
