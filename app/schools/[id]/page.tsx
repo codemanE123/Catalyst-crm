@@ -14,12 +14,18 @@ import {
 } from "@/lib/authz";
 import { createOutreachLog } from "@/lib/actions/outreach";
 import {
+  completeFollowUp,
+  createFollowUp,
+  getOpenFollowUpsForSchool
+} from "@/lib/actions/followUps";
+import {
   getServerSupabaseClient,
   requireUser
 } from "@/lib/supabaseServer";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import OutreachLogForm from "@/app/components/OutreachLogForm";
+import FollowUpPanel from "@/app/components/FollowUpPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +51,8 @@ export default async function SchoolProfile({
   const { school, contacts, outreach, interviews, nextFollowUp, source, restrictedFieldsRedacted } =
     profile;
 
-  const canLogOutreach = await userCanLogOutreach(id);
+  const canMutateSchool = await userCanMutateSchool(id);
+  const openFollowUps = await getOpenFollowUpsForSchool(id);
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950 lg:px-10">
@@ -100,7 +107,7 @@ export default async function SchoolProfile({
             <UniversityProfilePanel school={school} />
             <SchoolNotes school={school} />
             <ContactsPanel contacts={contacts} />
-            {canLogOutreach ? (
+            {canMutateSchool ? (
               <OutreachLogForm
                 schoolId={school.id}
                 schoolName={school.name}
@@ -111,6 +118,15 @@ export default async function SchoolProfile({
           </div>
           <div className="flex flex-col gap-8">
             <StatusPanel school={school} nextFollowUp={nextFollowUp} />
+            {canMutateSchool ? (
+              <FollowUpPanel
+                schoolId={school.id}
+                schoolName={school.name}
+                openFollowUps={openFollowUps}
+                createAction={createFollowUp}
+                completeAction={completeFollowUp}
+              />
+            ) : null}
             <InterviewSummaries interviews={interviews} />
           </div>
         </section>
@@ -119,7 +135,7 @@ export default async function SchoolProfile({
   );
 }
 
-async function userCanLogOutreach(schoolId: string): Promise<boolean> {
+async function userCanMutateSchool(schoolId: string): Promise<boolean> {
   const user = await requireUser();
   const supabase = await getServerSupabaseClient();
 

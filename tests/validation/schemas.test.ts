@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  validateCompleteFollowUp,
+  validateCreateFollowUp,
   validateInterviewNote,
   validateOutreachLog,
   validateUniversityResearchInput
@@ -235,6 +237,98 @@ describe("validateOutreachLog", () => {
 
     if (!result.success) {
       expect(result.error).toBe("Next step is required.");
+    }
+  });
+});
+
+function createFollowUpForm(
+  overrides: Record<string, string> = {}
+): FormData {
+  const formData = new FormData();
+
+  const defaults: Record<string, string> = {
+    school_id: SCHOOL_ID,
+    title: "Send pilot deck",
+    due_date: "2026-07-10",
+    notes: "Include counselor workflow slide.",
+    owner: "Alex Morgan"
+  };
+
+  for (const [key, value] of Object.entries({ ...defaults, ...overrides })) {
+    formData.set(key, value);
+  }
+
+  return formData;
+}
+
+function completeFollowUpForm(
+  overrides: Record<string, string> = {}
+): FormData {
+  const formData = new FormData();
+
+  const defaults: Record<string, string> = {
+    school_id: SCHOOL_ID,
+    follow_up_id: "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+  };
+
+  for (const [key, value] of Object.entries({ ...defaults, ...overrides })) {
+    formData.set(key, value);
+  }
+
+  return formData;
+}
+
+describe("validateCreateFollowUp", () => {
+  it("accepts a valid follow-up payload", () => {
+    const result = validateCreateFollowUp(createFollowUpForm());
+
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      expect(result.data.title).toBe("Send pilot deck");
+      expect(result.data.owner).toBe("Alex Morgan");
+    }
+  });
+
+  it("rejects a missing title", () => {
+    const result = validateCreateFollowUp(createFollowUpForm({ title: "" }));
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error).toBe("Title is required.");
+    }
+  });
+
+  it("rejects an invalid due date", () => {
+    const result = validateCreateFollowUp(
+      createFollowUpForm({ due_date: "07/10/2026" })
+    );
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error).toBe("Due date must use YYYY-MM-DD.");
+    }
+  });
+});
+
+describe("validateCompleteFollowUp", () => {
+  it("accepts a valid complete payload", () => {
+    const result = validateCompleteFollowUp(completeFollowUpForm());
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an invalid follow-up id", () => {
+    const result = validateCompleteFollowUp(
+      completeFollowUpForm({ follow_up_id: "bad-id" })
+    );
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error).toBe("Select a valid follow-up.");
     }
   });
 });

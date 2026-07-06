@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const AUDIT_ACTIONS = {
   interviewCreate: "interview.create",
   outreachCreate: "outreach.create",
+  followUpCreate: "follow_up.create",
+  followUpComplete: "follow_up.complete",
   universityResearchRun: "university_research.run",
   universityResearchSave: "university_research.save",
   membershipRoleChange: "membership.role_change",

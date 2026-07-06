@@ -14,6 +14,11 @@ export type OutreachActionResult = {
   error?: string;
 };
 
+export type FollowUpActionResult = {
+  ok: boolean;
+  error?: string;
+};
+
 const sentimentValues = [
   "Strong fit",
   "Warm",
@@ -150,6 +155,30 @@ const outreachLogSchema = z.object({
 
 export type OutreachLogInput = z.infer<typeof outreachLogSchema>;
 
+const createFollowUpSchema = z.object({
+  school_id: z.string().uuid({ message: "Select a valid school." }),
+  title: z
+    .string()
+    .trim()
+    .min(1, "Title is required.")
+    .max(200, "Title must be 200 characters or fewer."),
+  due_date: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Due date must use YYYY-MM-DD."),
+  notes: optionalText(2000),
+  owner: optionalText(120)
+});
+
+export type CreateFollowUpInput = z.infer<typeof createFollowUpSchema>;
+
+const completeFollowUpSchema = z.object({
+  school_id: z.string().uuid({ message: "Select a valid school." }),
+  follow_up_id: z.string().uuid({ message: "Select a valid follow-up." })
+});
+
+export type CompleteFollowUpInput = z.infer<typeof completeFollowUpSchema>;
+
 function formatZodError(error: z.ZodError) {
   return error.issues[0]?.message ?? "Invalid input.";
 }
@@ -212,6 +241,39 @@ export function validateOutreachLog(
     outcome: formValue(formData, "outcome"),
     outreach_date: formValue(formData, "outreach_date"),
     next_step: formValue(formData, "next_step")
+  });
+
+  if (!parsed.success) {
+    return { success: false, error: formatZodError(parsed.error) };
+  }
+
+  return { success: true, data: parsed.data };
+}
+
+export function validateCreateFollowUp(
+  formData: FormData
+): ValidationResult<CreateFollowUpInput> {
+  const parsed = createFollowUpSchema.safeParse({
+    school_id: formValue(formData, "school_id"),
+    title: formValue(formData, "title"),
+    due_date: formValue(formData, "due_date"),
+    notes: formValue(formData, "notes"),
+    owner: formValue(formData, "owner")
+  });
+
+  if (!parsed.success) {
+    return { success: false, error: formatZodError(parsed.error) };
+  }
+
+  return { success: true, data: parsed.data };
+}
+
+export function validateCompleteFollowUp(
+  formData: FormData
+): ValidationResult<CompleteFollowUpInput> {
+  const parsed = completeFollowUpSchema.safeParse({
+    school_id: formValue(formData, "school_id"),
+    follow_up_id: formValue(formData, "follow_up_id")
   });
 
   if (!parsed.success) {
