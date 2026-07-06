@@ -19,6 +19,38 @@ export type FollowUpActionResult = {
   error?: string;
 };
 
+export type SchoolActionResult = {
+  ok: boolean;
+  error?: string;
+};
+
+const schoolStatusValues = [
+  "Prospect",
+  "Contacted",
+  "Interviewing",
+  "Partner"
+] as const;
+
+export type SchoolStatus = (typeof schoolStatusValues)[number];
+
+const schoolStatusRank: Record<SchoolStatus, number> = {
+  Prospect: 0,
+  Contacted: 1,
+  Interviewing: 2,
+  Partner: 3
+};
+
+export function isValidSchoolStatusTransition(
+  currentStatus: SchoolStatus,
+  nextStatus: SchoolStatus
+): boolean {
+  if (currentStatus === nextStatus) {
+    return true;
+  }
+
+  return schoolStatusRank[nextStatus] >= schoolStatusRank[currentStatus];
+}
+
 const sentimentValues = [
   "Strong fit",
   "Warm",
@@ -274,6 +306,120 @@ export function validateCompleteFollowUp(
   const parsed = completeFollowUpSchema.safeParse({
     school_id: formValue(formData, "school_id"),
     follow_up_id: formValue(formData, "follow_up_id")
+  });
+
+  if (!parsed.success) {
+    return { success: false, error: formatZodError(parsed.error) };
+  }
+
+  return { success: true, data: parsed.data };
+}
+
+const optionalWebsiteSchema = z
+  .string()
+  .trim()
+  .max(500, "Website must be 500 characters or fewer.")
+  .superRefine((value, context) => {
+    if (!value) {
+      return;
+    }
+
+    const normalized = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+
+    try {
+      const url = new URL(normalized);
+
+      if (!["http:", "https:"].includes(url.protocol)) {
+        context.addIssue({
+          code: "custom",
+          message: "Invalid website URL."
+        });
+      }
+    } catch {
+      context.addIssue({
+        code: "custom",
+        message: "Invalid website URL."
+      });
+    }
+  })
+  .optional()
+  .transform((value) => value || undefined);
+
+const schoolMutationFieldsSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "School name is required.")
+    .max(200, "School name must be 200 characters or fewer."),
+  website: optionalWebsiteSchema,
+  status: z.enum(schoolStatusValues, {
+    message: "Select a valid pipeline status."
+  }),
+  owner: z
+    .string()
+    .trim()
+    .min(1, "Owner is required.")
+    .max(120, "Owner must be 120 characters or fewer."),
+  next_step: z
+    .string()
+    .trim()
+    .min(1, "Next step is required.")
+    .max(500, "Next step must be 500 characters or fewer."),
+  notes: optionalText(5000),
+  assigned_to: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || undefined)
+    .pipe(
+      z
+        .string()
+        .uuid({ message: "Select a valid assignee." })
+        .optional()
+    ),
+  assign_to_me: z.boolean()
+});
+
+const createSchoolSchema = schoolMutationFieldsSchema;
+
+const updateSchoolSchema = schoolMutationFieldsSchema.extend({
+  school_id: z.string().uuid({ message: "Select a valid school." })
+});
+
+export type CreateSchoolInput = z.infer<typeof createSchoolSchema>;
+export type UpdateSchoolInput = z.infer<typeof updateSchoolSchema>;
+
+function parseSchoolMutationForm(formData: FormData) {
+  return {
+    name: formValue(formData, "name"),
+    website: formValue(formData, "website"),
+    status: formValue(formData, "status"),
+    owner: formValue(formData, "owner"),
+    next_step: formValue(formData, "next_step"),
+    notes: formValue(formData, "notes"),
+    assigned_to: formValue(formData, "assigned_to"),
+    assign_to_me: formValue(formData, "assign_to_me") === "on"
+  };
+}
+
+export function validateCreateSchool(
+  formData: FormData
+): ValidationResult<CreateSchoolInput> {
+  const parsed = createSchoolSchema.safeParse(parseSchoolMutationForm(formData));
+
+  if (!parsed.success) {
+    return { success: false, error: formatZodError(parsed.error) };
+  }
+
+  return { success: true, data: parsed.data };
+}
+
+export function validateUpdateSchool(
+  formData: FormData
+): ValidationResult<UpdateSchoolInput> {
+  const parsed = updateSchoolSchema.safeParse({
+    school_id: formValue(formData, "school_id"),
+    ...parseSchoolMutationForm(formData)
   });
 
   if (!parsed.success) {

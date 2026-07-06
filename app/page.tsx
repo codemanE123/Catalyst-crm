@@ -4,8 +4,20 @@ import {
   getDashboardData,
   School
 } from "@/lib/supabase";
+import { createSchool, updateSchool } from "@/lib/actions/schools";
+import {
+  getMembershipsForUser,
+  hasRole,
+  isSuperAdmin,
+  MUTATION_ROLES
+} from "@/lib/authz";
+import {
+  getServerSupabaseClient,
+  requireUser
+} from "@/lib/supabaseServer";
 import DiscoveryInterviewForm from "./components/DiscoveryInterviewForm";
 import OutreachEmailGenerator from "./components/OutreachEmailGenerator";
+import SchoolForm from "./components/SchoolForm";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +31,7 @@ const statusStyles: Record<School["status"], string> = {
 export default async function Dashboard() {
   const { schools, contacts, pipeline, ceoMetrics, source } =
     await getDashboardData();
+  const canManageSchools = await userCanManageSchools();
   const activeSchools = schools.filter((school) => school.status !== "Partner");
   const totalPipeline = pipeline.reduce((total, stage) => total + stage.count, 0);
 
@@ -49,6 +62,14 @@ export default async function Dashboard() {
         </section>
 
         <CeoDashboard metrics={ceoMetrics} />
+
+        {canManageSchools ? (
+          <SchoolForm
+            schools={schools}
+            createAction={createSchool}
+            updateAction={updateSchool}
+          />
+        ) : null}
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -109,6 +130,23 @@ export default async function Dashboard() {
       </div>
     </main>
   );
+}
+
+async function userCanManageSchools(): Promise<boolean> {
+  const user = await requireUser();
+  const supabase = await getServerSupabaseClient();
+
+  if (!user || !supabase) {
+    return false;
+  }
+
+  const memberships = await getMembershipsForUser(supabase, user.id);
+
+  if (isSuperAdmin(memberships)) {
+    return true;
+  }
+
+  return memberships.some((membership) => hasRole(membership, MUTATION_ROLES));
 }
 
 function MetricCard({ label, value }: { label: string; value: number }) {

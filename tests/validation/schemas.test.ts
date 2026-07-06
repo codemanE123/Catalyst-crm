@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  isValidSchoolStatusTransition,
   validateCompleteFollowUp,
   validateCreateFollowUp,
+  validateCreateSchool,
   validateInterviewNote,
   validateOutreachLog,
+  validateUpdateSchool,
   validateUniversityResearchInput
 } from "@/lib/validation";
 
@@ -329,6 +332,89 @@ describe("validateCompleteFollowUp", () => {
 
     if (!result.success) {
       expect(result.error).toBe("Select a valid follow-up.");
+    }
+  });
+});
+
+function schoolForm(
+  overrides: Record<string, string> = {},
+  includeSchoolId = false
+): FormData {
+  const formData = new FormData();
+
+  const defaults: Record<string, string> = {
+    name: "Oakwood University",
+    website: "https://oakwood.edu",
+    status: "Prospect",
+    owner: "Alex Morgan",
+    next_step: "Schedule discovery call",
+    notes: "Priority HBCU target."
+  };
+
+  if (includeSchoolId) {
+    defaults.school_id = SCHOOL_ID;
+  }
+
+  for (const [key, value] of Object.entries({ ...defaults, ...overrides })) {
+    formData.set(key, value);
+  }
+
+  return formData;
+}
+
+describe("isValidSchoolStatusTransition", () => {
+  it("allows forward transitions", () => {
+    expect(isValidSchoolStatusTransition("Prospect", "Contacted")).toBe(true);
+    expect(isValidSchoolStatusTransition("Contacted", "Partner")).toBe(true);
+  });
+
+  it("blocks backward transitions", () => {
+    expect(isValidSchoolStatusTransition("Partner", "Prospect")).toBe(false);
+    expect(isValidSchoolStatusTransition("Interviewing", "Contacted")).toBe(
+      false
+    );
+  });
+});
+
+describe("validateCreateSchool", () => {
+  it("accepts a valid school payload", () => {
+    const result = validateCreateSchool(schoolForm());
+
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      expect(result.data.name).toBe("Oakwood University");
+      expect(result.data.status).toBe("Prospect");
+    }
+  });
+
+  it("rejects an invalid website", () => {
+    const result = validateCreateSchool(
+      schoolForm({ website: "not a valid url" })
+    );
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error).toBe("Invalid website URL.");
+    }
+  });
+});
+
+describe("validateUpdateSchool", () => {
+  it("accepts a valid update payload", () => {
+    const result = validateUpdateSchool(schoolForm({}, true));
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a missing school id", () => {
+    const result = validateUpdateSchool(schoolForm({ school_id: "" }, true));
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error).toBe("Select a valid school.");
     }
   });
 });
