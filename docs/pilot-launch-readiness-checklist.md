@@ -47,6 +47,7 @@ Pilot Launch Track (PLT) tasks from `docs/phase-2-roadmap.md`. Status reflects t
 | **2.14** | Contact create and update | ✅ | `lib/actions/contacts.ts`, `app/components/ContactForm.tsx` |
 | **2.29** | E2E smoke tests (PLT subset) | ✅ | `e2e/auth.spec.ts`, `playwright.config.ts`, `npm run test:e2e` |
 | **2.31** | Documentation sync pass | ⚠️ | `README.md` aligned; `docs/pilot-it-security-packet.md` still references incident runbook as “to be created” (stale — fix before IT send) |
+| **2.32** | Error monitoring (Sentry or equivalent) | ✅ | `lib/monitoring.ts`, `instrumentation.ts`, `app/global-error.tsx` |
 | **2.34** | Middleware guards for settings routes | ✅ | `middleware.ts`; `/settings/*` admin-gated |
 | **2.35** | Incident response runbook | ✅ | `docs/incident-response-runbook.md` |
 | **2.38** | Dependency audit allowlist with expiry | ✅ | `docs/dependency-audit-exceptions.md`; CI audit step documented |
@@ -57,9 +58,7 @@ Pilot Launch Track (PLT) tasks from `docs/phase-2-roadmap.md`. Status reflects t
 
 ## 2. Remaining Pilot Launch tasks
 
-| Task | Title | Status | Notes |
-| --- | --- | --- | --- |
-| **2.32** | Error monitoring (Sentry or equivalent) | ❌ | Implemented in commit `a5387ad` but **removed** in `8b56947` (research-agent revert). `@sentry/nextjs`, `lib/monitoring.ts`, and `instrumentation.ts` are **not** in the current tree. **Re-implement before go-live.** |
+All PLT **code tasks** are complete. Remaining work is **operational verification** before the first pilot:
 
 **Operational completion (not separate tasks, but required for Pilot Launch Gate):**
 
@@ -81,7 +80,7 @@ Blockers — do **not** onboard the first university until these pass.
 
 | # | Item | Why | How to verify |
 | --- | --- | --- | --- |
-| 1 | **Re-implement Task 2.32 (error monitoring)** | Pilot Launch Gate exit criteria; no production blind spots | Sentry DSN on staging + production; test error appears in dashboard (`docs/deployment-runbook.md`) |
+| 1 | **Configure Task 2.32 on Vercel** (Sentry DSN + staging verification) | Pilot Launch Gate exit criteria; no production blind spots | `docs/deployment-runbook.md` §18 |
 | 2 | **Production Supabase isolated from staging** | Data breach / cross-environment contamination | Project refs differ; §10 of deployment runbook |
 | 3 | **All migrations applied on production** | Schema/RLS drift breaks auth and privacy | Runbook §14.5 checklist |
 | 4 | **Production env vars correct** | App fail-closed or wrong database | `NEXT_PUBLIC_SUPABASE_*` on Vercel Production only |
@@ -161,7 +160,7 @@ Run on **staging** before production promote; repeat critical paths on **product
 | # | Test | Staging | Production |
 | --- | --- | --- | --- |
 | 18 | CRM mutation produces `audit_events` row (metadata only) | [ ] | [ ] |
-| 19 | Error monitoring receives test event (after 2.32 restored) | [ ] | [ ] |
+| 19 | Error monitoring receives test event (Sentry configured on Vercel) | [ ] | [ ] |
 | 20 | `npm run test` + `npm run build` green on release commit | [ ] | [ ] |
 
 ---
@@ -218,7 +217,7 @@ Complete per environment (**staging** and **production** separately).
 | 2 | `NEXT_PUBLIC_SUPABASE_URL` set (correct project ref) | [ ] | [ ] |
 | 3 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` set (matches Supabase API) | [ ] | [ ] |
 | 4 | `SUPABASE_SERVICE_ROLE_KEY` **not** set | [ ] | [ ] |
-| 5 | `SENTRY_DSN` set (after Task 2.32 restored) | [ ] | [ ] |
+| 5 | `SENTRY_DSN` set (after Task 2.32) | [ ] | [ ] |
 | 6 | Preview deployments use **staging** Supabase keys | [ ] | N/A |
 | 7 | Production scope uses **production** keys only | N/A | [ ] |
 | 8 | `/login` loads on deployment URL | [ ] | [ ] |
@@ -253,7 +252,7 @@ Complete at the Pilot Launch Gate review meeting. **Go** requires all **Blocker*
 | 7 | Manual verification §5 passed on production | Yes | [ ] | [ ] | |
 | 8 | IT/security packet sent; pilot MOU signed | Yes | [ ] | [ ] | Date: __________ |
 | 9 | Incident runbook contacts filled; tabletop done | Yes | [ ] | [ ] | |
-| 10 | Error monitoring live on staging + production | Yes | [ ] | [ ] | |
+| 10 | Error monitoring configured on staging + production | Yes | [ ] | [ ] | |
 | 11 | `read_only` redaction verified | Yes | [ ] | [ ] | |
 | 12 | Cross-org RLS verified | Yes | [ ] | [ ] | |
 | 13 | Security headers scan acceptable | Yes | [ ] | [ ] | Scan URL: __________ |

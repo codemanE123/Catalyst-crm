@@ -1,10 +1,10 @@
 # Deployment Runbook — Staging, Preview, and Production
 
-**Version:** 1.4 (Phase 2 Task 2.29 smoke)  
+**Version:** 1.5 (Phase 2 Task 2.32)  
 **Audience:** Catalyst engineering and operations  
 **Companion documents:** `docs/pilot-onboarding-checklist.md`, `docs/auth-hardening.md`, `docs/pilot-it-security-packet.md`, `docs/incident-response-runbook.md`
 
-**Scope:** Staging and preview (Task 2.9), production promote and security headers (Task 2.10).
+**Scope:** Staging and preview (Task 2.9), production promote and security headers (Task 2.10), and **Sentry error monitoring** (Task 2.32).
 
 ---
 
@@ -177,14 +177,37 @@ When `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` is missing:
 - **Vercel (staging/preview/production):** App fails closed with a configuration error — no sample data (Phase 2 Task 2.4).
 - **Local `NODE_ENV=development`:** Sample data may render for demos.
 
-### 6.4 Future variables (not required for Task 2.9)
+### 6.4 Error monitoring variables (Task 2.32)
 
-Documented for later tasks — do not add until those tasks ship:
+Set in Vercel when Sentry is enabled. Monitoring is **inactive** when DSN is unset.
+
+| Variable | Scope | Required | Purpose |
+| --- | --- | --- | --- |
+| `SENTRY_DSN` | Preview, Production | Yes (when monitoring on) | Server-side Sentry DSN |
+| `NEXT_PUBLIC_SENTRY_DSN` | Preview, Production | Recommended | Client-side Sentry DSN (same project DSN) |
+| `SENTRY_ENVIRONMENT` | Preview, Production | Optional | Override environment tag (`staging`, `production`) |
+| `SENTRY_ENABLE_TEST_ROUTE` | Preview only | Optional | Set `true` to enable `GET /api/monitoring-test` for verification |
+| `SENTRY_ORG` | Build-time | Optional | Sentry org slug for source map upload |
+| `SENTRY_PROJECT` | Build-time | Optional | Sentry project slug for source map upload |
+| `SENTRY_AUTH_TOKEN` | Build-time | Optional | Upload source maps in CI/Vercel builds |
+
+**Environment mapping (default when `SENTRY_ENVIRONMENT` unset):**
+
+| Vercel `VERCEL_ENV` | Sentry environment tag |
+| --- | --- |
+| `preview` | `staging` |
+| `production` | `production` |
+| `development` | `development` |
+
+**Do not set** `SENTRY_DSN` on local `.env.local` unless intentionally testing — avoids polluting staging/production dashboards.
+
+See [§18 Error monitoring (Sentry)](#18-error-monitoring-sentry--task-232) for full setup.
+
+### 6.5 Future variables
 
 | Variable | Task | Purpose |
 | --- | --- | --- |
-| Sentry DSN (or equivalent) | 2.32 | Error monitoring |
-| Custom domain secrets | 2.10 | Production TLS |
+| Custom domain secrets | 2.10 | Production TLS (documented in Vercel Domains) |
 
 ---
 
@@ -439,7 +462,7 @@ See comments in `.github/workflows/ci.yml` for future optional workflows.
 | --- | --- |
 | 2.10 | Production promote, security headers (§15–16) — **complete** |
 | 2.29 | Playwright E2E smoke against staging URL — **smoke complete** (§8.4); full redaction suite deferred |
-| 2.32 | Error monitoring DSN and staging/production alert verification |
+| 2.32 | Error monitoring (Sentry) — **complete** (§18) |
 | 2.35 | Incident response runbook — **complete** (`docs/incident-response-runbook.md`) |
 
 ---
@@ -596,7 +619,7 @@ Configured in `next.config.ts` for all routes. Applied on Vercel (staging, previ
 - `style-src 'self' 'unsafe-inline'` — Tailwind
 - `img-src 'self' data: blob: https:`
 - `font-src 'self' data:`
-- `connect-src 'self' https://*.supabase.co wss://*.supabase.co` — Supabase Auth/API
+- `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.sentry.io` — Supabase Auth/API + Sentry ingest
 - `frame-ancestors 'none'`
 - `base-uri 'self'`
 - `form-action 'self'` — login server action
@@ -647,6 +670,124 @@ Confirm response includes `content-security-policy`, `x-frame-options`, `referre
 
 ---
 
+## 18. Error monitoring (Sentry) — Task 2.32
+
+Catalyst uses **@sentry/nextjs** for staging and production error reporting. Implementation: `instrumentation.ts`, `sentry.*.config.ts`, `lib/monitoring.ts`, `app/global-error.tsx`.
+
+Monitoring is **disabled** when `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` are both unset (safe default for local dev and CI).
+
+### 18.1 Sentry project setup
+
+Create **separate Sentry projects** (recommended) or one project with environment tags:
+
+| Sentry project | Maps to | Environment tag |
+| --- | --- | --- |
+| `catalyst-crm-staging` | Vercel Preview / staging URL | `staging` (default for `VERCEL_ENV=preview`) |
+| `catalyst-crm-production` | Vercel Production | `production` |
+
+**Steps:**
+
+1. Create account/org at [sentry.io](https://sentry.io).
+2. **Create project** → platform **Next.js**.
+3. Copy the **DSN** from Project Settings → Client Keys.
+4. Configure **Data Scrubbing** in Sentry project settings (supplement app-side scrubbing):
+   - Enable server-side scrubbing for passwords, cookies, authorization headers.
+5. Set alert rules (email/Slack) for new issues in staging first, then production.
+6. Restrict project access to Catalyst engineering and ops.
+
+### 18.2 Required Vercel environment variables
+
+**Preview (staging):**
+
+| Variable | Value |
+| --- | --- |
+| `SENTRY_DSN` | Staging project DSN |
+| `NEXT_PUBLIC_SENTRY_DSN` | Same staging DSN |
+| `SENTRY_ENABLE_TEST_ROUTE` | `true` during initial verification only; remove or set `false` after |
+
+**Production:**
+
+| Variable | Value |
+| --- | --- |
+| `SENTRY_DSN` | Production project DSN |
+| `NEXT_PUBLIC_SENTRY_DSN` | Same production DSN |
+| `SENTRY_ENABLE_TEST_ROUTE` | **Unset** or `false` (never leave test route enabled in production) |
+
+**Optional (both):** `SENTRY_ENVIRONMENT` to force a tag; `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` for source map upload in Vercel builds.
+
+Redeploy after changing any Sentry env var.
+
+### 18.3 No-PII monitoring policy
+
+Catalyst must **not** send PII or CRM-sensitive fields to Sentry.
+
+**Configured in `lib/monitoring.ts`:**
+
+- `sendDefaultPii: false`
+- `beforeSend` scrubbing on all events
+- `beforeBreadcrumb` scrubbing
+- User context limited to **opaque user id** — email and username stripped
+- Request `cookies`, `authorization` headers, and `data` (form payloads) removed or redacted
+- Sensitive field names redacted: `email`, `password`, `token`, `raw_notes`, `budget`, `budget_owner`, `objections`, `notes`, and similar
+- Email addresses and JWT-like strings redacted in messages and exception text
+
+**Operational rules:**
+
+- Do not call `Sentry.setUser({ email })` in application code.
+- Do not attach interview notes, budgets, or form bodies to `Sentry.captureException` context.
+- Review a sample staging event before enabling production alerts.
+- Share this policy with university IT (see `docs/pilot-it-security-packet.md`).
+
+### 18.4 Staging verification
+
+1. Set Preview env vars (§18.2) including `SENTRY_ENABLE_TEST_ROUTE=true`.
+2. Deploy to Vercel Preview or staging URL.
+3. Trigger test error:
+
+   ```text
+   GET https://<staging-url>/api/monitoring-test
+   ```
+
+   Expect HTTP 500 and error `"Sentry staging verification test event"`.
+
+4. Open Sentry → Issues — confirm new event within ~1 minute.
+5. Verify event **environment** is `staging` (or your `SENTRY_ENVIRONMENT` override).
+6. Inspect event JSON — confirm:
+   - No cookies or `Authorization` headers
+   - No email addresses
+   - No `raw_notes`, `budget`, or form field values
+7. Set `SENTRY_ENABLE_TEST_ROUTE=false` (or remove) after verification.
+
+**Alternative:** Sentry project **Settings → Client Keys → Verify** button if available for your SDK version.
+
+### 18.5 Production verification
+
+Complete **after** staging verification and production promote (§14).
+
+1. Set Production `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` (production project).
+2. Confirm `SENTRY_ENABLE_TEST_ROUTE` is **not** enabled on Production.
+3. Deploy production.
+4. Perform a controlled smoke sign-in — no intentional user-facing errors.
+5. Optionally capture a single test exception via Sentry dashboard test tool (not the test route).
+6. Confirm production events use environment tag `production`.
+7. Confirm alerts route to on-call / engineering channel.
+
+### 18.6 Error monitoring rollback
+
+If Sentry misconfiguration contributes to an incident, see also
+`docs/incident-response-runbook.md` §15.
+
+| Step | Action |
+| --- | --- |
+| 1 | Remove `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` from Vercel Preview and/or Production |
+| 2 | Remove `SENTRY_ENABLE_TEST_ROUTE` if set |
+| 3 | Redeploy — SDK stays in codebase but `enabled: false` without DSN |
+| 4 | Full code rollback (optional) — revert `instrumentation.ts`, `sentry.*.config.ts`, `lib/monitoring.ts`, `withSentryConfig` in `next.config.ts`, and remove `@sentry/nextjs` from `package.json` |
+
+Disabling env vars is sufficient for pilot halt — no database or auth impact.
+
+---
+
 ## 19. References
 
 - `README.md` — Deployment section
@@ -655,6 +796,8 @@ Confirm response includes `content-security-policy`, `x-frame-options`, `referre
 - `docs/pilot-onboarding-checklist.md` — smoke verification and onboarding
 - `docs/auth-hardening.md` — MFA staging rehearsal and auth compromise
 - `docs/phase-2-roadmap.md` — Task 2.9, 2.10, 2.32, 2.35, Pilot Launch Gate
+- `lib/monitoring.ts` — PII scrubbing and environment tags
 - [Vercel environment variables](https://vercel.com/docs/projects/environment-variables)
-- `next.config.ts` — security headers
+- [Sentry Next.js SDK](https://docs.sentry.io/platforms/javascript/guides/nextjs/)
+- `next.config.ts` — security headers and Sentry build wrapper
 - [securityheaders.com](https://securityheaders.com) — header scan

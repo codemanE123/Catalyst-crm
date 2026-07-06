@@ -1,5 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
+import { loadE2eEnvFiles } from "./e2e/env";
+
+loadE2eEnvFiles();
+
 const E2E_ENV_VARS = [
   "E2E_BASE_URL",
   "E2E_USER_EMAIL",
@@ -23,6 +27,10 @@ const missing = missingE2eEnvVars();
 if (missing.length > 0) {
   console.log(
     `\nE2E smoke tests will be skipped: set ${missing.join(", ")} to run auth smoke tests against a deployed environment.\n`
+  );
+} else {
+  console.log(
+    `\nE2E smoke target: ${process.env.E2E_BASE_URL?.trim()} (user: ${process.env.E2E_USER_EMAIL?.trim()})\n`
   );
 }
 
