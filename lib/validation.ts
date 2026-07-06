@@ -24,6 +24,11 @@ export type SchoolActionResult = {
   error?: string;
 };
 
+export type ContactActionResult = {
+  ok: boolean;
+  error?: string;
+};
+
 const schoolStatusValues = [
   "Prospect",
   "Contacted",
@@ -420,6 +425,91 @@ export function validateUpdateSchool(
   const parsed = updateSchoolSchema.safeParse({
     school_id: formValue(formData, "school_id"),
     ...parseSchoolMutationForm(formData)
+  });
+
+  if (!parsed.success) {
+    return { success: false, error: formatZodError(parsed.error) };
+  }
+
+  return { success: true, data: parsed.data };
+}
+
+const contactRelationshipValues = [
+  "New",
+  "Warm",
+  "Champion",
+  "Needs follow-up"
+] as const;
+
+const contactFieldsSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Name is required.")
+    .max(120, "Name must be 120 characters or fewer."),
+  role: z
+    .string()
+    .trim()
+    .min(1, "Role is required.")
+    .max(120, "Role must be 120 characters or fewer."),
+  email: z
+    .string()
+    .trim()
+    .min(1, "Email is required.")
+    .email("Enter a valid email address.")
+    .max(254, "Email must be 254 characters or fewer."),
+  phone: optionalText(40),
+  notes: optionalText(2000),
+  relationship: z.enum(contactRelationshipValues, {
+    message: "Select a valid relationship status."
+  })
+});
+
+const createContactSchema = contactFieldsSchema.extend({
+  school_id: z.string().uuid({ message: "Select a valid school." })
+});
+
+const updateContactSchema = contactFieldsSchema.extend({
+  school_id: z.string().uuid({ message: "Select a valid school." }),
+  contact_id: z.string().uuid({ message: "Select a valid contact." })
+});
+
+export type CreateContactInput = z.infer<typeof createContactSchema>;
+export type UpdateContactInput = z.infer<typeof updateContactSchema>;
+
+function parseContactForm(formData: FormData) {
+  return {
+    name: formValue(formData, "name"),
+    role: formValue(formData, "role"),
+    email: formValue(formData, "email"),
+    phone: formValue(formData, "phone"),
+    notes: formValue(formData, "notes"),
+    relationship: formValue(formData, "relationship")
+  };
+}
+
+export function validateCreateContact(
+  formData: FormData
+): ValidationResult<CreateContactInput> {
+  const parsed = createContactSchema.safeParse({
+    school_id: formValue(formData, "school_id"),
+    ...parseContactForm(formData)
+  });
+
+  if (!parsed.success) {
+    return { success: false, error: formatZodError(parsed.error) };
+  }
+
+  return { success: true, data: parsed.data };
+}
+
+export function validateUpdateContact(
+  formData: FormData
+): ValidationResult<UpdateContactInput> {
+  const parsed = updateContactSchema.safeParse({
+    school_id: formValue(formData, "school_id"),
+    contact_id: formValue(formData, "contact_id"),
+    ...parseContactForm(formData)
   });
 
   if (!parsed.success) {

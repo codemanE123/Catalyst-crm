@@ -18,6 +18,7 @@ import {
   createFollowUp,
   getOpenFollowUpsForSchool
 } from "@/lib/actions/followUps";
+import { createContact, updateContact } from "@/lib/actions/contacts";
 import {
   getServerSupabaseClient,
   requireUser
@@ -26,6 +27,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import OutreachLogForm from "@/app/components/OutreachLogForm";
 import FollowUpPanel from "@/app/components/FollowUpPanel";
+import ContactForm from "@/app/components/ContactForm";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +108,15 @@ export default async function SchoolProfile({
           <div className="flex flex-col gap-8">
             <UniversityProfilePanel school={school} />
             <SchoolNotes school={school} />
+            {canMutateSchool ? (
+              <ContactForm
+                schoolId={school.id}
+                schoolName={school.name}
+                contacts={contacts}
+                createAction={createContact}
+                updateAction={updateContact}
+              />
+            ) : null}
             <ContactsPanel contacts={contacts} />
             {canMutateSchool ? (
               <OutreachLogForm

@@ -7,6 +7,8 @@ export const AUDIT_ACTIONS = {
   followUpComplete: "follow_up.complete",
   schoolCreate: "school.create",
   schoolUpdate: "school.update",
+  contactCreate: "contact.create",
+  contactUpdate: "contact.update",
   universityResearchRun: "university_research.run",
   universityResearchSave: "university_research.save",
   membershipRoleChange: "membership.role_change",

@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   isValidSchoolStatusTransition,
   validateCompleteFollowUp,
+  validateCreateContact,
   validateCreateFollowUp,
   validateCreateSchool,
   validateInterviewNote,
   validateOutreachLog,
+  validateUpdateContact,
   validateUpdateSchool,
   validateUniversityResearchInput
 } from "@/lib/validation";
@@ -415,6 +417,83 @@ describe("validateUpdateSchool", () => {
 
     if (!result.success) {
       expect(result.error).toBe("Select a valid school.");
+    }
+  });
+});
+
+const CONTACT_ID = "b2c3d4e5-f6a7-4890-b123-456789abcdef";
+
+function contactForm(
+  overrides: Record<string, string> = {},
+  includeIds = false
+): FormData {
+  const formData = new FormData();
+
+  const defaults: Record<string, string> = {
+    name: "Dr. Jane Smith",
+    role: "Director of partnerships",
+    email: "jane.smith@university.edu",
+    phone: "555-0100",
+    notes: "Primary decision-maker.",
+    relationship: "Warm"
+  };
+
+  if (includeIds) {
+    defaults.school_id = SCHOOL_ID;
+  }
+
+  if (overrides.contact_id !== undefined || includeIds === "update") {
+    defaults.school_id = SCHOOL_ID;
+    defaults.contact_id = CONTACT_ID;
+  }
+
+  for (const [key, value] of Object.entries({ ...defaults, ...overrides })) {
+    formData.set(key, value);
+  }
+
+  return formData;
+}
+
+describe("validateCreateContact", () => {
+  it("accepts a valid contact payload", () => {
+    const result = validateCreateContact(contactForm({}, true));
+
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      expect(result.data.email).toBe("jane.smith@university.edu");
+    }
+  });
+
+  it("rejects an invalid email", () => {
+    const result = validateCreateContact(
+      contactForm({ email: "not-an-email" }, true)
+    );
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error).toBe("Enter a valid email address.");
+    }
+  });
+});
+
+describe("validateUpdateContact", () => {
+  it("accepts a valid update payload", () => {
+    const formData = contactForm({}, true);
+    formData.set("contact_id", CONTACT_ID);
+    const result = validateUpdateContact(formData);
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a missing contact id", () => {
+    const result = validateUpdateContact(contactForm({ contact_id: "" }, true));
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error).toBe("Select a valid contact.");
     }
   });
 });
