@@ -7,6 +7,9 @@ async function signIn(formData: FormData) {
 
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const nextParam = String(formData.get("next") ?? "/").trim();
+  const next =
+    nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/";
 
   const supabase = await getServerSupabaseClient();
 
@@ -20,18 +23,22 @@ async function signIn(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    redirect(
+      `/login?error=${encodeURIComponent(error.message)}&next=${encodeURIComponent(next)}`
+    );
   }
 
-  redirect("/");
+  redirect(next);
 }
 
 export default async function LoginPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next: nextParam } = await searchParams;
+  const next =
+    nextParam?.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/";
   const supabaseConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -69,6 +76,7 @@ export default async function LoginPage({
         ) : null}
 
         <form action={signIn} className="mt-6 space-y-4">
+          <input type="hidden" name="next" value={next} />
           <label className="block">
             <span className="text-sm font-medium text-slate-700">Email</span>
             <input

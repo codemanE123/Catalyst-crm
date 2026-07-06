@@ -695,6 +695,32 @@ const FOLLOW_UP_SELECT_FULL = "id,title,due_date,status,owner,notes";
 
 const FOLLOW_UP_SELECT_READONLY = "id,title,due_date,status,owner";
 
+const SCHOOL_SELECT_BASIC =
+  "id,name,district,location,status,owner,next_step,notes,website";
+
+const SCHOOL_SELECT_FULL = `${SCHOOL_SELECT_BASIC},enrollment,public_private,hbcu,community_college,state,ai_programs,cyber_programs,healthcare_programs,innovation_center,entrepreneurship_center,career_services_office,workforce_development_office,profile_sources`;
+
+async function fetchSchoolRow(
+  supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>,
+  schoolId: string
+) {
+  const fullResponse = await supabase
+    .from("schools")
+    .select(SCHOOL_SELECT_FULL)
+    .eq("id", schoolId)
+    .maybeSingle();
+
+  if (!fullResponse.error) {
+    return fullResponse;
+  }
+
+  return supabase
+    .from("schools")
+    .select(SCHOOL_SELECT_BASIC)
+    .eq("id", schoolId)
+    .maybeSingle();
+}
+
 async function shouldUseReadonlyProfileSources(
   supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>,
   schoolId: string
@@ -731,13 +757,9 @@ export async function getSchoolProfileData(
     return applyRedactionForCurrentUser(schoolId, sampleProfile);
   }
 
-  const schoolResponse = await supabase
-    .from("schools")
-    .select("id,name,district,location,status,owner,next_step,notes,website,enrollment,public_private,hbcu,community_college,state,ai_programs,cyber_programs,healthcare_programs,innovation_center,entrepreneurship_center,career_services_office,workforce_development_office,profile_sources")
-    .eq("id", schoolId)
-    .maybeSingle();
+  const schoolResponse = await fetchSchoolRow(supabase, schoolId);
 
-  if (!schoolResponse.data) {
+  if (schoolResponse.error || !schoolResponse.data) {
     if (!isDevelopmentEnvironment()) {
       return null;
     }
@@ -801,43 +823,51 @@ export async function getSchoolProfileData(
       followUpsPromise
     ]);
 
-  const school = schoolResponse.data as School;
-  const contacts = ((contactsResponse.data ?? []) as Omit<
-    SchoolContact,
-    "school"
-  >[]).map((contact) => ({
-    ...contact,
-    school: school.name
-  }));
+  let resolvedInterviewsResponse = interviewsResponse;
+  let resolvedFollowUpsResponse = followUpsResponse;
 
-  const interviews = (interviewsResponse.data ?? []) as InterviewSummary[];
-  const followUpRows = (followUpsResponse.data ?? []) as FollowUp[];
-
-  const hasQueryError =
-    schoolResponse.error ||
-    contactsResponse.error ||
-    outreachResponse.error ||
-    interviewsResponse.error ||
-    followUpsResponse.error;
-
-  if (hasQueryError) {
-    if (!isDevelopmentEnvironment()) {
-      return null;
-    }
-
-    const sampleProfile = getSampleSchoolProfileData(schoolId);
-
-    if (!sampleProfile) {
-      return null;
-    }
-
-    return applyRedactionForCurrentUser(schoolId, sampleProfile);
+  if (useReadonlySources && interviewsResponse.error) {
+    resolvedInterviewsResponse = await supabase
+      .from("interviews")
+      .select(INTERVIEW_SELECT_FULL)
+      .eq("school_id", schoolId)
+      .order("interview_date", { ascending: false });
   }
+
+  if (useReadonlySources && followUpsResponse.error) {
+    resolvedFollowUpsResponse = await supabase
+      .from("follow_ups")
+      .select(FOLLOW_UP_SELECT_FULL)
+      .eq("school_id", schoolId)
+      .neq("status", "Done")
+      .order("due_date", { ascending: true })
+      .limit(1);
+  }
+
+  const school = schoolResponse.data as School;
+  const contacts = (contactsResponse.error ? [] : (contactsResponse.data ?? []))
+    .map((contact) => {
+      const row = contact as Omit<SchoolContact, "school">;
+
+      return {
+        ...row,
+        school: school.name
+      };
+    });
+
+  const interviews = (resolvedInterviewsResponse.error
+    ? []
+    : (resolvedInterviewsResponse.data ?? [])) as InterviewSummary[];
+  const followUpRows = (resolvedFollowUpsResponse.error
+    ? []
+    : (resolvedFollowUpsResponse.data ?? [])) as FollowUp[];
 
   return applyRedactionForCurrentUser(schoolId, {
     school,
     contacts,
-    outreach: (outreachResponse.data ?? []) as OutreachActivity[],
+    outreach: (outreachResponse.error
+      ? []
+      : (outreachResponse.data ?? [])) as OutreachActivity[],
     interviews,
     nextFollowUp: followUpRows[0] ?? null,
     source: "supabase"

@@ -7,9 +7,10 @@ import {
   SchoolContact
 } from "@/lib/supabase";
 import { RESTRICTED_FIELD_PLACEHOLDER } from "@/lib/authz";
-import { requireUser } from "@/lib/supabaseServer";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 const statusStyles: Record<School["status"], string> = {
   Prospect: "bg-slate-100 text-slate-700 ring-slate-200",
@@ -23,12 +24,6 @@ export default async function SchoolProfile({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await requireUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
   const { id } = await params;
   const profile = await getSchoolProfileData(id);
 
