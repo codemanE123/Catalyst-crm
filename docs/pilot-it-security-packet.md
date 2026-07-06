@@ -259,7 +259,7 @@ When exceeded, the user receives a generic error message; the action is not perf
 - **Availability incident** (outage): notify Catalyst technical lead.  
 - **Data concern** (possible student PII entered): notify both Catalyst security and university privacy contact; coordinate deletion/remediation.
 
-Detailed runbook: Phase 2 Task 2.35 (`docs/incident-response-runbook.md` — to be created).
+Detailed runbook: [docs/incident-response-runbook.md](docs/incident-response-runbook.md) (Phase 2 Task 2.35) — severity levels, rollback procedures, audit queries, and communication templates.
 
 ---
 
