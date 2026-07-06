@@ -822,7 +822,7 @@ export async function getSchoolProfileData(
 
   if (hasQueryError) {
     if (!isDevelopmentEnvironment()) {
-      throw new Error("Could not load school profile from Supabase.");
+      return null;
     }
 
     const sampleProfile = getSampleSchoolProfileData(schoolId);

@@ -195,6 +195,7 @@ function SchoolsTable({ schools }: { schools: School[] }) {
                 <td className="px-6 py-5">
                   <Link
                     href={`/schools/${school.id}`}
+                    prefetch={false}
                     className="font-semibold text-slate-950 transition hover:text-cyan-700"
                   >
                     {school.name}
@@ -214,6 +215,7 @@ function SchoolsTable({ schools }: { schools: School[] }) {
                   <p className="text-slate-600">{school.next_step}</p>
                   <Link
                     href={`/schools/${school.id}`}
+                    prefetch={false}
                     className="mt-2 inline-flex text-xs font-semibold text-cyan-700 hover:text-cyan-900"
                   >
                     View profile
