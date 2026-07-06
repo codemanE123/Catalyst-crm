@@ -1,6 +1,6 @@
 # Deployment Runbook — Staging, Preview, and Production
 
-**Version:** 1.3 (Phase 2 Task 2.35)  
+**Version:** 1.4 (Phase 2 Task 2.29 smoke)  
 **Audience:** Catalyst engineering and operations  
 **Companion documents:** `docs/pilot-onboarding-checklist.md`, `docs/auth-hardening.md`, `docs/pilot-it-security-packet.md`, `docs/incident-response-runbook.md`
 
@@ -253,6 +253,60 @@ Run `docs/pilot-onboarding-checklist.md` smoke verification table, or minimum:
 - [ ] School profile loads for own org
 - [ ] Sign out clears session
 
+### 8.4 E2E smoke tests (Task 2.29 — Pilot Launch Track)
+
+Automated Playwright smoke tests cover login page load, sign-in, and dashboard load. They run **against a deployed URL** (local dev server or Vercel staging/preview), not against unit-test mocks.
+
+**Prerequisites:**
+
+1. Target environment has Supabase env vars configured and a test user exists (§3.4).
+2. Supabase Auth redirect URLs include the target origin (§7).
+3. Playwright browsers installed once per machine: `npx playwright install chromium`
+
+**Environment variables:**
+
+| Variable | Example | Required |
+| --- | --- | --- |
+| `E2E_BASE_URL` | `https://staging.crm.example.com` or `http://localhost:3000` | Yes |
+| `E2E_USER_EMAIL` | `sales-smoke@example.com` | Yes |
+| `E2E_USER_PASSWORD` | Staging test password | Yes |
+
+If any variable is missing, `npm run test:e2e` **skips** all E2E tests and prints which variables to set. CI remains green without secrets.
+
+**Run locally against `npm run dev`:**
+
+```powershell
+# Terminal 1
+npm run dev
+
+# Terminal 2 (PowerShell)
+$env:E2E_BASE_URL = "http://localhost:3000"
+$env:E2E_USER_EMAIL = "your-staging-user@example.com"
+$env:E2E_USER_PASSWORD = "your-password"
+npm run test:e2e
+```
+
+**Run against Vercel staging or preview:**
+
+```powershell
+$env:E2E_BASE_URL = "https://your-staging-or-preview-url.vercel.app"
+$env:E2E_USER_EMAIL = "sales-smoke@example.com"
+$env:E2E_USER_PASSWORD = "your-password"
+npm run test:e2e
+```
+
+Use the **stable staging `main` deployment URL** before Pilot Launch Gate. Preview URLs work when Supabase redirect URLs include that preview origin (§7).
+
+**Expected results:**
+
+| Test | Pass criteria |
+| --- | --- |
+| `/login` loads | Sign-in heading and form visible |
+| Authenticated sign-in | Redirect to `/` after submit |
+| Dashboard loads | Heading “School partnership pipeline dashboard” visible |
+
+**Deferred (Scale Track):** `e2e/redaction.spec.ts`, role-matrix flows, and CI wiring — see Task 2.29 full suite in `docs/phase-2-roadmap.md`.
+
 ---
 
 ## 9. Verification checklist
@@ -368,14 +422,14 @@ SEV-2+ outage — coordinate with `docs/incident-response-runbook.md` §8.
 
 ## 12. CI and deployment automation
 
-**Current state (Task 2.9):** GitHub Actions runs `lint`, `test`, and `build` only. Deployment is handled by **Vercel Git integration** (preview on PR, branch deploys on push).
+**Current state (Task 2.29 smoke):** GitHub Actions runs `lint`, `test`, and `build` only. E2E smoke (`npm run test:e2e`) is run **manually** against staging when `E2E_*` env vars are set — see [§8.4](#84-e2e-smoke-tests-task-229--pilot-launch-track). Deployment is handled by **Vercel Git integration** (preview on PR, branch deploys on push).
 
-**Not implemented in Task 2.9:**
+**Not implemented in Task 2.29 smoke:**
 
-- Automatic production deployment from GitHub Actions
-- Custom deploy workflow that bypasses Vercel
+- Automatic E2E job in GitHub Actions (optional future: secrets for `E2E_*` on `main`)
+- Full Playwright suite (`e2e/redaction.spec.ts`, role flows) — Scale Track
 
-See comments in `.github/workflows/ci.yml` for future optional workflows (E2E against staging in Task 2.29).
+See comments in `.github/workflows/ci.yml` for future optional workflows.
 
 ---
 
@@ -384,7 +438,7 @@ See comments in `.github/workflows/ci.yml` for future optional workflows (E2E ag
 | Task | Adds to this runbook |
 | --- | --- |
 | 2.10 | Production promote, security headers (§15–16) — **complete** |
-| 2.29 | Playwright E2E smoke against staging URL |
+| 2.29 | Playwright E2E smoke against staging URL — **smoke complete** (§8.4); full redaction suite deferred |
 | 2.32 | Error monitoring DSN and staging/production alert verification |
 | 2.35 | Incident response runbook — **complete** (`docs/incident-response-runbook.md`) |
 
