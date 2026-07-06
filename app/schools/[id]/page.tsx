@@ -39,6 +39,7 @@ export default async function SchoolProfile({
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
         <Link
           href="/"
+          prefetch={false}
           className="text-sm font-semibold text-cyan-700 hover:text-cyan-900"
         >
           Back to dashboard

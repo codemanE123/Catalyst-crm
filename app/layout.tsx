@@ -20,7 +20,7 @@ export default async function RootLayout({
       <body>
         <header className="border-b border-slate-200 bg-white px-6 py-3">
           <div className="mx-auto flex max-w-7xl items-center justify-between">
-            <Link className="font-semibold text-slate-950" href="/">
+            <Link className="font-semibold text-slate-950" href="/" prefetch={false}>
               Catalyst CRM
             </Link>
             {user ? (

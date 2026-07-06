@@ -36,6 +36,24 @@ function redirectToDashboard(request: NextRequest) {
   return NextResponse.redirect(homeUrl);
 }
 
+function isPrefetchRequest(request: NextRequest) {
+  return (
+    request.headers.has("next-router-prefetch") ||
+    request.headers.get("purpose") === "prefetch"
+  );
+}
+
+function applySessionCookies(
+  response: NextResponse,
+  supabaseResponse: NextResponse
+) {
+  for (const cookie of supabaseResponse.cookies.getAll()) {
+    response.cookies.set(cookie);
+  }
+
+  return response;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -74,6 +92,10 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    if (isPrefetchRequest(request)) {
+      return supabaseResponse;
+    }
+
     return redirectToLogin(request);
   }
 
@@ -81,7 +103,7 @@ export async function middleware(request: NextRequest) {
     const memberships = await getMembershipsForUser(supabase, user.id);
 
     if (!canAccessSettingsRoutes(memberships)) {
-      return redirectToDashboard(request);
+      return applySessionCookies(redirectToDashboard(request), supabaseResponse);
     }
   }
 
@@ -90,13 +112,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    {
-      source:
-        "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-      missing: [
-        { type: "header", key: "next-router-prefetch" },
-        { type: "header", key: "purpose", value: "prefetch" }
-      ]
-    }
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
   ]
 };
