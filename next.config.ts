@@ -1,18 +1,28 @@
+import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 /**
  * Basic CSP compatible with Next.js (inline hydration scripts), Tailwind
- * (inline styles), and Supabase Auth (HTTPS + WebSocket to *.supabase.co).
- * Server-side fetches (e.g. university research) are not constrained by CSP.
+ * (inline styles), Supabase Auth, and Sentry error reporting.
+ *
+ * `unsafe-eval` is required for React Fast Refresh in `npm run dev` only.
  */
+function isLocalDevelopment(): boolean {
+  return process.env.NODE_ENV === "development" && process.env.VERCEL !== "1";
+}
+
 function buildContentSecurityPolicy(): string {
+  const scriptSrc = isLocalDevelopment()
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    : "script-src 'self' 'unsafe-inline'";
+
   return [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.sentry.io",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -66,4 +76,17 @@ const nextConfig: NextConfig = {
   }
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  webpack: {
+    treeshake: {
+      removeDebugLogging: true
+    }
+  },
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN
+  }
+});
