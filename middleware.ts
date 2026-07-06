@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { safeNextPath } from "@/lib/authPaths";
 import {
   canAccessSettingsRoutes,
   getMembershipsForUser
@@ -15,6 +16,21 @@ function isProtectedPath(pathname: string) {
     pathname === "/" ||
     pathname.startsWith("/schools/") ||
     isSettingsPath(pathname)
+  );
+}
+
+function isPrefetchRequest(request: NextRequest) {
+  return (
+    request.headers.has("next-router-prefetch") ||
+    request.headers.get("purpose") === "prefetch"
+  );
+}
+
+function isSoftNavigationRequest(request: NextRequest) {
+  return (
+    isPrefetchRequest(request) ||
+    request.headers.get("RSC") === "1" ||
+    request.headers.has("Next-Router-State-Tree")
   );
 }
 
@@ -36,13 +52,6 @@ function redirectToDashboard(request: NextRequest) {
   return NextResponse.redirect(homeUrl);
 }
 
-function isPrefetchRequest(request: NextRequest) {
-  return (
-    request.headers.has("next-router-prefetch") ||
-    request.headers.get("purpose") === "prefetch"
-  );
-}
-
 function applySessionCookies(
   response: NextResponse,
   supabaseResponse: NextResponse
@@ -51,21 +60,22 @@ function applySessionCookies(
     response.cookies.set(cookie);
   }
 
+  response.headers.set("Cache-Control", "no-store, must-revalidate");
+
   return response;
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  if (!isProtectedPath(pathname)) {
-    return NextResponse.next();
-  }
-
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
-    return redirectToLogin(request);
+    if (isProtectedPath(pathname)) {
+      return redirectToLogin(request);
+    }
+
+    return NextResponse.next();
   }
 
   let supabaseResponse = NextResponse.next({ request });
@@ -91,12 +101,31 @@ export async function middleware(request: NextRequest) {
     data: { user }
   } = await supabase.auth.getUser();
 
+  supabaseResponse.headers.set("Cache-Control", "no-store, must-revalidate");
+
+  if (pathname === "/login") {
+    if (user) {
+      const next = safeNextPath(request.nextUrl.searchParams.get("next"));
+
+      return applySessionCookies(
+        NextResponse.redirect(new URL(next, request.url)),
+        supabaseResponse
+      );
+    }
+
+    return supabaseResponse;
+  }
+
+  if (!isProtectedPath(pathname)) {
+    return supabaseResponse;
+  }
+
   if (!user) {
-    if (isPrefetchRequest(request)) {
+    if (isSoftNavigationRequest(request)) {
       return supabaseResponse;
     }
 
-    return redirectToLogin(request);
+    return applySessionCookies(redirectToLogin(request), supabaseResponse);
   }
 
   if (isSettingsPath(pathname)) {

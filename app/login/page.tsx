@@ -1,5 +1,7 @@
-import { getServerSupabaseClient } from "@/lib/supabaseServer";
+import { safeNextPath } from "@/lib/authPaths";
+import { getServerSupabaseClient, requireUser } from "@/lib/supabaseServer";
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 async function signIn(formData: FormData) {
@@ -7,9 +9,7 @@ async function signIn(formData: FormData) {
 
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const nextParam = String(formData.get("next") ?? "/").trim();
-  const next =
-    nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/";
+  const next = safeNextPath(String(formData.get("next") ?? "/"));
 
   const supabase = await getServerSupabaseClient();
 
@@ -28,6 +28,9 @@ async function signIn(formData: FormData) {
     );
   }
 
+  revalidatePath("/", "layout");
+  revalidatePath(next, "page");
+
   redirect(next);
 }
 
@@ -37,8 +40,13 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string; next?: string }>;
 }) {
   const { error, next: nextParam } = await searchParams;
-  const next =
-    nextParam?.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/";
+  const next = safeNextPath(nextParam);
+  const user = await requireUser();
+
+  if (user) {
+    redirect(next);
+  }
+
   const supabaseConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -109,7 +117,11 @@ export default async function LoginPage({
         </form>
 
         <p className="mt-6 text-center text-sm text-slate-500">
-          <Link className="font-medium text-slate-700 hover:text-slate-950" href="/">
+          <Link
+            className="font-medium text-slate-700 hover:text-slate-950"
+            href="/"
+            prefetch={false}
+          >
             Continue to dashboard
           </Link>
         </p>

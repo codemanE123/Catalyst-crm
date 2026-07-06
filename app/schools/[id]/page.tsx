@@ -22,8 +22,8 @@ import {
   getServerSupabaseClient,
   requireUser
 } from "@/lib/supabaseServer";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import OutreachLogForm from "@/app/components/OutreachLogForm";
 import FollowUpPanel from "@/app/components/FollowUpPanel";
 

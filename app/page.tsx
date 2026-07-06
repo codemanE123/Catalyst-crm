@@ -4,8 +4,6 @@ import {
   getDashboardData,
   School
 } from "@/lib/supabase";
-import { requireUser } from "@/lib/supabaseServer";
-import { redirect } from "next/navigation";
 import DiscoveryInterviewForm from "./components/DiscoveryInterviewForm";
 import OutreachEmailGenerator from "./components/OutreachEmailGenerator";
 
@@ -19,12 +17,6 @@ const statusStyles: Record<School["status"], string> = {
 };
 
 export default async function Dashboard() {
-  const user = await requireUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
   const { schools, contacts, pipeline, ceoMetrics, source } =
     await getDashboardData();
   const activeSchools = schools.filter((school) => school.status !== "Partner");

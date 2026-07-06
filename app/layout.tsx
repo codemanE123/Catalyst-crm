@@ -24,16 +24,17 @@ export default async function RootLayout({
               Catalyst CRM
             </Link>
             {user ? (
-              <Link
+              <a
                 className="text-sm text-slate-600 hover:text-slate-950"
                 href="/logout"
               >
                 Sign out
-              </Link>
+              </a>
             ) : (
               <Link
                 className="text-sm text-slate-600 hover:text-slate-950"
                 href="/login"
+                prefetch={false}
               >
                 Sign in
               </Link>

@@ -1,29 +1,33 @@
-import { getServerSupabaseClient } from "@/lib/supabaseServer";
-import { NextResponse } from "next/server";
+import { safeNextPath } from "@/lib/authPaths";
+import { createRouteHandlerSupabaseClient } from "@/lib/supabaseServer";
+import { NextResponse, type NextRequest } from "next/server";
 
-export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+export async function GET(request: NextRequest) {
+  const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
-  const nextParam = searchParams.get("next") ?? "/";
-  const next = nextParam.startsWith("/") ? nextParam : "/";
+  const next = safeNextPath(searchParams.get("next"));
 
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=missing_code`);
   }
 
-  const supabase = await getServerSupabaseClient();
+  const context = await createRouteHandlerSupabaseClient(request);
 
-  if (!supabase) {
+  if (!context) {
     return NextResponse.redirect(`${origin}/login?error=supabase_not_configured`);
   }
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { error } = await context.supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
-    return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent(error.message)}`
+    return context.applySessionCookies(
+      NextResponse.redirect(
+        `${origin}/login?error=${encodeURIComponent(error.message)}`
+      )
     );
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  return context.applySessionCookies(
+    NextResponse.redirect(`${origin}${next}`)
+  );
 }
