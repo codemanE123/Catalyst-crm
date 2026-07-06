@@ -20,9 +20,9 @@ A rule-based summary helper turns raw interview notes into structured pain
 points, buyer, budget, objections, pilot readiness, and next action fields. It
 runs locally in the browser and does not call an external AI model.
 
-The university research agent fetches public school websites and search result
-pages, then populates CRM profile fields for enrollment, sector,
-HBCU/community-college status, state, programs, centers, offices, and sources.
+**Public-web university research is deferred.** The scraping-based research
+agent is not shown in the dashboard. Profile enrichment will return in a later
+LLM/enrichment phase (see `docs/phase-2-roadmap.md`).
 
 ## Security and access (pilot)
 
@@ -53,8 +53,7 @@ unit tests in CI.
 
 ## Privacy and data handling
 
-When using discovery interview capture, the outreach email generator, or the
-university research agent:
+When using discovery interview capture or the outreach email generator:
 
 - **Do not enter student PII**, including names, grades, student IDs, or
   protected education records (FERPA).
@@ -62,10 +61,6 @@ university research agent:
 - **Interview summaries are rule-based and local.** The summary helper uses
   pattern matching in your browser. Notes are not sent to a third-party AI
   service for summarization.
-- **University research fetches public web pages.** Running the research agent
-  requests publicly available school websites and search result pages over the
-  network. Submit only school names and public website URLs — not student data
-  or internal records.
 - **Review outreach drafts before sending.** Email drafts are generated locally;
   do not include unnecessary sensitive data.
 
@@ -159,7 +154,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` is **not required** for dashboard, school profiles,
-interview submission, or the university research agent. User actions run through
+or interview submission. User actions run through
 the authenticated session client and are enforced by Supabase RLS.
 
 Reserve `SUPABASE_SERVICE_ROLE_KEY` for future background jobs or maintenance

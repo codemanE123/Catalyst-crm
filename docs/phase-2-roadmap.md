@@ -37,6 +37,18 @@ Phase 2 balances three product themes across both horizons:
 
 **Estimated total duration:** 11–14 weeks (one engineer) or 7–9 weeks (two engineers), assuming tasks are implemented, tested, committed, and pushed independently as defined in Section 17.
 
+### Public-web university research (deferred)
+
+The scraping-based **University Research Agent is disabled in the dashboard UI**
+(July 2026). It caused production timeouts and auth issues on Vercel; enrichment
+will be revisited in a later **LLM/enrichment phase** (Scale Track tasks 2.21–2.23
+and related).
+
+**Code retained (not user-facing):** `lib/universityResearch.ts`,
+`lib/actions/universityResearch.ts`, `app/components/UniversityResearchAgent.tsx`,
+validation, rate limits, and audit actions. Do not re-enable the dashboard widget
+until async jobs, domain allowlists, and LLM integration are designed.
+
 ### Delivery tracks at a glance
 
 | Track | Tasks | Pilot gate? |
