@@ -9,6 +9,11 @@ export type InterviewActionResult = {
   error?: string;
 };
 
+export type OutreachActionResult = {
+  ok: boolean;
+  error?: string;
+};
+
 const sentimentValues = [
   "Strong fit",
   "Warm",
@@ -108,6 +113,43 @@ const universityResearchInputSchema = z.object({
 
 export type UniversityResearchInput = z.infer<typeof universityResearchInputSchema>;
 
+const outreachChannelValues = [
+  "Email",
+  "Call",
+  "Meeting",
+  "LinkedIn",
+  "Event",
+  "Other"
+] as const;
+
+const outreachLogSchema = z.object({
+  school_id: z.string().uuid({ message: "Select a valid school." }),
+  channel: z.enum(outreachChannelValues, {
+    message: "Select a valid outreach channel."
+  }),
+  subject: z
+    .string()
+    .trim()
+    .min(1, "Subject is required.")
+    .max(200, "Subject must be 200 characters or fewer."),
+  outcome: z
+    .string()
+    .trim()
+    .min(1, "Outcome is required.")
+    .max(1000, "Outcome must be 1000 characters or fewer."),
+  outreach_date: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Outreach date must use YYYY-MM-DD."),
+  next_step: z
+    .string()
+    .trim()
+    .min(1, "Next step is required.")
+    .max(500, "Next step must be 500 characters or fewer.")
+});
+
+export type OutreachLogInput = z.infer<typeof outreachLogSchema>;
+
 function formatZodError(error: z.ZodError) {
   return error.issues[0]?.message ?? "Invalid input.";
 }
@@ -151,6 +193,25 @@ export function validateUniversityResearchInput(
   const parsed = universityResearchInputSchema.safeParse({
     school_name: formValue(formData, "school_name"),
     website: formValue(formData, "website")
+  });
+
+  if (!parsed.success) {
+    return { success: false, error: formatZodError(parsed.error) };
+  }
+
+  return { success: true, data: parsed.data };
+}
+
+export function validateOutreachLog(
+  formData: FormData
+): ValidationResult<OutreachLogInput> {
+  const parsed = outreachLogSchema.safeParse({
+    school_id: formValue(formData, "school_id"),
+    channel: formValue(formData, "channel"),
+    subject: formValue(formData, "subject"),
+    outcome: formValue(formData, "outcome"),
+    outreach_date: formValue(formData, "outreach_date"),
+    next_step: formValue(formData, "next_step")
   });
 
   if (!parsed.success) {

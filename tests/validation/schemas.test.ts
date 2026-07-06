@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   validateInterviewNote,
+  validateOutreachLog,
   validateUniversityResearchInput
 } from "@/lib/validation";
 
@@ -171,5 +172,69 @@ describe("validateUniversityResearchInput", () => {
     const result = validateUniversityResearchInput(researchForm({ website: "" }));
 
     expect(result.success).toBe(true);
+  });
+});
+
+function outreachForm(
+  overrides: Record<string, string> = {}
+): FormData {
+  const formData = new FormData();
+
+  const defaults: Record<string, string> = {
+    school_id: SCHOOL_ID,
+    channel: "Email",
+    subject: "Pilot follow-up",
+    outcome: "Left voicemail and sent overview deck.",
+    outreach_date: "2026-07-06",
+    next_step: "Schedule discovery call"
+  };
+
+  for (const [key, value] of Object.entries({ ...defaults, ...overrides })) {
+    formData.set(key, value);
+  }
+
+  return formData;
+}
+
+describe("validateOutreachLog", () => {
+  it("accepts a valid outreach payload", () => {
+    const result = validateOutreachLog(outreachForm());
+
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      expect(result.data.channel).toBe("Email");
+      expect(result.data.subject).toBe("Pilot follow-up");
+    }
+  });
+
+  it("rejects an invalid school id", () => {
+    const result = validateOutreachLog(outreachForm({ school_id: "bad-id" }));
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error).toBe("Select a valid school.");
+    }
+  });
+
+  it("rejects an invalid channel", () => {
+    const result = validateOutreachLog(outreachForm({ channel: "SMS" }));
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error).toBe("Select a valid outreach channel.");
+    }
+  });
+
+  it("rejects a missing next step", () => {
+    const result = validateOutreachLog(outreachForm({ next_step: "" }));
+
+    expect(result.success).toBe(false);
+
+    if (!result.success) {
+      expect(result.error).toBe("Next step is required.");
+    }
   });
 });

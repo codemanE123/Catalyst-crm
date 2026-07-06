@@ -6,9 +6,20 @@ import {
   School,
   SchoolContact
 } from "@/lib/supabase";
-import { RESTRICTED_FIELD_PLACEHOLDER } from "@/lib/authz";
+import {
+  getSchoolOrganizationId,
+  MUTATION_ROLES,
+  requireRole,
+  RESTRICTED_FIELD_PLACEHOLDER
+} from "@/lib/authz";
+import { createOutreachLog } from "@/lib/actions/outreach";
+import {
+  getServerSupabaseClient,
+  requireUser
+} from "@/lib/supabaseServer";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import OutreachLogForm from "@/app/components/OutreachLogForm";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +44,8 @@ export default async function SchoolProfile({
 
   const { school, contacts, outreach, interviews, nextFollowUp, source, restrictedFieldsRedacted } =
     profile;
+
+  const canLogOutreach = await userCanLogOutreach(id);
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950 lg:px-10">
@@ -87,6 +100,13 @@ export default async function SchoolProfile({
             <UniversityProfilePanel school={school} />
             <SchoolNotes school={school} />
             <ContactsPanel contacts={contacts} />
+            {canLogOutreach ? (
+              <OutreachLogForm
+                schoolId={school.id}
+                schoolName={school.name}
+                action={createOutreachLog}
+              />
+            ) : null}
             <OutreachHistory outreach={outreach} />
           </div>
           <div className="flex flex-col gap-8">
@@ -97,6 +117,29 @@ export default async function SchoolProfile({
       </div>
     </main>
   );
+}
+
+async function userCanLogOutreach(schoolId: string): Promise<boolean> {
+  const user = await requireUser();
+  const supabase = await getServerSupabaseClient();
+
+  if (!user || !supabase) {
+    return false;
+  }
+
+  const schoolOrganizationId = await getSchoolOrganizationId(supabase, schoolId);
+
+  if (!schoolOrganizationId) {
+    return false;
+  }
+
+  const membership = await requireRole(
+    user,
+    MUTATION_ROLES,
+    schoolOrganizationId
+  );
+
+  return membership !== null;
 }
 
 function ProfileBadge({ label, value }: { label: string; value: string }) {
