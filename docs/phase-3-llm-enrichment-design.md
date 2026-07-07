@@ -45,10 +45,21 @@ This document defines how Catalyst should add **optional LLM enrichment** to imp
 | Job pipeline | Queue → generate (Scorecard or stub) → review → approve/reject |
 | Candidate fields | `name`, `website`, `location`, `rationale`, `confidence_score`, `source_name`, `source_url` |
 | Rationale / confidence | Rules-based (Scorecard) or curated (stub) — **not LLM-generated** |
-| LLM usage | **None** (per `docs/ai-safety-audit.md`) |
+| LLM usage | **Scaffold only** — `lib/llm/*` provider abstraction; **not connected to UI or job pipeline** |
 | `agent_runs` table | Designed in architecture doc; **not implemented** |
 
 LLM enrichment is a **post-discovery, pre-review** enhancement step — not a replacement for public-source candidate generation.
+
+### 1.4 Phase 3E.1 implementation (scaffold)
+
+| Deliverable | Status |
+| --- | --- |
+| `lib/llm/types.ts` | Safe input/output types, Zod schemas, PII scrubbing, forbidden-field guard |
+| `lib/llm/openaiProvider.ts` | OpenAI chat-completions adapter (fetch-based, JSON output) |
+| `lib/llm/index.ts` | `enrichProspectCandidate()` entry point with disabled/blocked/safe fallbacks |
+| Env vars | `LLM_ENRICHMENT_ENABLED`, `OPENAI_API_KEY` (both required to enable) |
+| UI / worker integration | **Not connected** — call manually from tests or future worker only |
+| Persistence (`enrichment` jsonb) | **Not implemented** |
 
 ---
 
@@ -642,7 +653,7 @@ Enrichment runs in the **worker** after candidate insert, before job completion 
 
 | Phase | Deliverable |
 | --- | --- |
-| **3E.1** | `lib/ai/AssistiveProvider` + `MockProvider` + `HeuristicEnrichmentProvider` |
+| **3E.1** ✅ | `lib/llm/*` provider scaffold + tests + env vars (no UI/worker wiring) |
 | **3E.2** | `enrichment` jsonb on `prospect_candidates`; worker enrichment step |
 | **3E.3** | `OpenAIAdapter` + org opt-in UI + review queue AI panel |
 | **3E.4** | Cost dashboard, quotas, rate limits, audit actions |
