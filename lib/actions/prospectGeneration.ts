@@ -10,7 +10,7 @@ import {
   type ProspectGenerationInput,
   type ProspectGenerationJob
 } from "@/lib/prospectGeneration";
-import { generateMockProspectCandidates } from "@/lib/prospectCandidateStub";
+import { generateProspectCandidatesForJob } from "@/lib/prospectSources";
 import { getRecordOwnershipFields, type RecordOwnershipFields } from "@/lib/supabase";
 import {
   getServerSupabaseClient,
@@ -81,7 +81,7 @@ async function markJobFailed(
     .from("prospect_generation_jobs")
     .update({
       status: "failed",
-      error_code: "STUB_GENERATION_FAILED",
+      error_code: "PROSPECT_GENERATION_FAILED",
       error_message: errorMessage,
       completed_at: completedAt
     })
@@ -254,6 +254,8 @@ export async function processProspectGenerationJob(
     };
   }
 
+  const generation = await generateProspectCandidatesForJob(job.input, jobId);
+
   await recordAuditEvent(supabase, {
     organizationId: ownership.organization_id,
     actorUserId: user.id,
@@ -261,11 +263,13 @@ export async function processProspectGenerationJob(
     targetTable: "prospect_generation_jobs",
     recordId: jobId,
     metadata: {
-      source: "stub_generator"
+      source: generation.summary.source,
+      source_name: generation.summary.source_name ?? null,
+      fallback_reason: generation.summary.fallback_reason ?? null
     }
   });
 
-  const drafts = generateMockProspectCandidates(job.input, jobId);
+  const drafts = generation.drafts;
 
   if (drafts.length > 0) {
     const { error: insertError } = await supabase.from("prospect_candidates").insert(
@@ -298,8 +302,8 @@ export async function processProspectGenerationJob(
         targetTable: "prospect_generation_jobs",
         recordId: jobId,
         metadata: {
-          source: "stub_generator",
-          error_code: "STUB_GENERATION_FAILED"
+          source: generation.summary.source,
+          error_code: "PROSPECT_GENERATION_FAILED"
         }
       });
 
@@ -310,10 +314,7 @@ export async function processProspectGenerationJob(
   }
 
   const completedAt = new Date().toISOString();
-  const summary = {
-    candidate_count: drafts.length,
-    source: "stub_generator"
-  };
+  const summary = generation.summary;
 
   const { data: completedJob, error: completeError } = await supabase
     .from("prospect_generation_jobs")
@@ -343,8 +344,8 @@ export async function processProspectGenerationJob(
       targetTable: "prospect_generation_jobs",
       recordId: jobId,
       metadata: {
-        source: "stub_generator",
-        error_code: "STUB_GENERATION_FAILED"
+        source: generation.summary.source,
+        error_code: "PROSPECT_GENERATION_FAILED"
       }
     });
 
@@ -360,8 +361,9 @@ export async function processProspectGenerationJob(
     targetTable: "prospect_generation_jobs",
     recordId: jobId,
     metadata: {
-      source: "stub_generator",
-      candidate_count: drafts.length
+      source: generation.summary.source,
+      candidate_count: drafts.length,
+      fallback_reason: generation.summary.fallback_reason ?? null
     }
   });
 

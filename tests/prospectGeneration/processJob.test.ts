@@ -6,6 +6,7 @@ const mockGetRecordOwnershipFields = vi.fn();
 const mockGetServerSupabaseClient = vi.fn();
 const mockRecordAuditEvent = vi.fn();
 const mockRevalidatePath = vi.fn();
+const mockGenerateProspectCandidatesForJob = vi.fn();
 
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args)
@@ -37,6 +38,11 @@ vi.mock("@/lib/auditLog", () => ({
     prospectJobFail: "prospect.job_fail"
   },
   recordAuditEvent: (...args: unknown[]) => mockRecordAuditEvent(...args)
+}));
+
+vi.mock("@/lib/prospectSources", () => ({
+  generateProspectCandidatesForJob: (...args: unknown[]) =>
+    mockGenerateProspectCandidatesForJob(...args)
 }));
 
 const queuedJob = {
@@ -149,9 +155,26 @@ describe("processProspectGenerationJob", () => {
       updated_by: "user-1",
       assigned_to: "user-1"
     });
+    mockGenerateProspectCandidatesForJob.mockResolvedValue({
+      drafts: [
+        {
+          name: "Howard University",
+          website: "https://www.howard.edu",
+          district: "Washington, DC",
+          location: "Washington, DC",
+          rationale: "Source: College Scorecard.",
+          confidence_score: 0.9
+        }
+      ],
+      summary: {
+        candidate_count: 1,
+        source: "college_scorecard",
+        source_name: "U.S. Department of Education College Scorecard"
+      }
+    });
   });
 
-  it("runs a queued job and inserts mock candidates", async () => {
+  it("runs a queued job and inserts generated candidates", async () => {
     const supabase = buildSupabaseMock();
     mockGetServerSupabaseClient.mockResolvedValue(supabase);
 
@@ -162,10 +185,14 @@ describe("processProspectGenerationJob", () => {
 
     if (result.ok) {
       expect(result.job.status).toBe("completed");
-      expect(result.candidateCount).toBeGreaterThan(0);
+      expect(result.candidateCount).toBe(1);
     }
 
-    expect(supabase.insertedCandidates.length).toBeGreaterThan(0);
+    expect(mockGenerateProspectCandidatesForJob).toHaveBeenCalledWith(
+      queuedJob.input,
+      "job-1"
+    );
+    expect(supabase.insertedCandidates.length).toBe(1);
     expect(mockRecordAuditEvent).toHaveBeenCalledTimes(2);
     expect(mockRevalidatePath).toHaveBeenCalledWith("/prospects/generate");
     expect(mockRevalidatePath).toHaveBeenCalledWith("/prospects/jobs/job-1/review");
