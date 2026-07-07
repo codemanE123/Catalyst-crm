@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import ProspectGenerationForm from "@/app/components/ProspectGenerationForm";
 import ProspectJobHistory from "@/app/components/ProspectJobHistory";
-import { createProspectGenerationJob } from "@/lib/actions/prospectGeneration";
+import { createProspectGenerationJob, processProspectGenerationJob } from "@/lib/actions/prospectGeneration";
 import {
   canEnqueueProspectGeneration,
   canViewProspectGeneration,
@@ -39,8 +39,8 @@ export default async function GenerateProspectsPage() {
       <div>
         <h1 className="text-3xl font-semibold text-slate-950">Generate prospects</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          Queue AI-assisted university prospect discovery jobs. Phase 3A stores jobs and review
-          candidates only — no AI APIs, scraping, or external services are invoked yet.
+          Queue prospect discovery jobs, then run the stub generator on queued jobs to create mock
+          candidates for review. No AI APIs, scraping, or external services are used.
         </p>
       </div>
 
@@ -49,7 +49,12 @@ export default async function GenerateProspectsPage() {
         createAction={createProspectGenerationJob}
       />
 
-      <ProspectJobHistory jobs={jobs} source={source} />
+      <ProspectJobHistory
+        canProcess={canEnqueueProspectGeneration(memberships)}
+        jobs={jobs}
+        processAction={processProspectGenerationJob}
+        source={source}
+      />
     </main>
   );
 }
