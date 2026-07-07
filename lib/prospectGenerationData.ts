@@ -34,6 +34,7 @@ type ProspectCandidateRow = {
   location: string | null;
   rationale: string | null;
   confidence_score: number | null;
+  promoted_school_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -93,6 +94,7 @@ const sampleProspectCandidates: ProspectCandidate[] = [
     location: "Washington, DC",
     rationale: "HBCU with NSA CAE-designated cybersecurity programs.",
     confidence_score: 0.91,
+    promoted_school_id: null,
     created_at: "2026-07-06T14:05:00.000Z",
     updated_at: "2026-07-06T14:05:00.000Z"
   },
@@ -107,6 +109,7 @@ const sampleProspectCandidates: ProspectCandidate[] = [
     location: "Greensboro, NC",
     rationale: "HBCU and state university with cybersecurity workforce programs.",
     confidence_score: 0.88,
+    promoted_school_id: null,
     created_at: "2026-07-06T14:05:00.000Z",
     updated_at: "2026-07-06T14:05:00.000Z"
   }
@@ -142,6 +145,7 @@ function mapCandidateRow(row: ProspectCandidateRow): ProspectCandidate {
     location: row.location,
     rationale: row.rationale,
     confidence_score: row.confidence_score,
+    promoted_school_id: row.promoted_school_id,
     created_at: row.created_at,
     updated_at: row.updated_at
   };
@@ -240,7 +244,7 @@ export async function fetchProspectCandidatesForJob(
   const { data, error } = await supabase
     .from("prospect_candidates")
     .select(
-      "id,organization_id,job_id,status,name,website,district,location,rationale,confidence_score,created_at,updated_at"
+      "id,organization_id,job_id,status,name,website,district,location,rationale,confidence_score,promoted_school_id,created_at,updated_at"
     )
     .eq("organization_id", organizationId)
     .eq("job_id", jobId)

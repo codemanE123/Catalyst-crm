@@ -60,6 +60,7 @@ export type ProspectCandidate = {
   location: string | null;
   rationale: string | null;
   confidence_score: number | null;
+  promoted_school_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -77,6 +78,15 @@ export const PROSPECT_JOB_STATUS_LABELS: Record<ProspectJobStatus, string> = {
   running: "Running",
   completed: "Completed",
   failed: "Failed"
+};
+
+export const PROSPECT_CANDIDATE_STATUS_LABELS: Record<
+  ProspectCandidateStatus,
+  string
+> = {
+  pending_review: "Pending review",
+  approved: "Approved",
+  rejected: "Rejected"
 };
 
 const MAX_RESULTS_MIN = 1;

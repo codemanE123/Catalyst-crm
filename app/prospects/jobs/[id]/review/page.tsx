@@ -2,6 +2,11 @@ import { notFound, redirect } from "next/navigation";
 
 import ProspectReviewQueue from "@/app/components/ProspectReviewQueue";
 import {
+  approveProspectCandidate,
+  rejectProspectCandidate
+} from "@/lib/actions/prospectCandidates";
+import {
+  canEnqueueProspectGeneration,
   canViewProspectGeneration,
   getMembershipsForUser
 } from "@/lib/authz";
@@ -54,7 +59,14 @@ export default async function ProspectReviewPage({
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
-      <ProspectReviewQueue candidates={candidates} job={job} source={source} />
+      <ProspectReviewQueue
+        approveAction={approveProspectCandidate}
+        canReview={canEnqueueProspectGeneration(memberships)}
+        candidates={candidates}
+        job={job}
+        rejectAction={rejectProspectCandidate}
+        source={source}
+      />
     </main>
   );
 }
