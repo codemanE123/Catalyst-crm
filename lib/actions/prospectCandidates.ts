@@ -831,7 +831,7 @@ export async function saveProspectOutreachDraft(
   if (candidate.status !== "approved" || !candidate.promoted_school_id) {
     return {
       ok: false,
-      error: "Save to outreach is only available for approved candidates with a promoted school."
+      error: "Save to CRM is only available for approved candidates with a promoted school."
     };
   }
 
@@ -913,6 +913,6 @@ export async function saveProspectOutreachDraft(
     ok: true,
     outreachId: insertedOutreach.id,
     schoolId: candidate.promoted_school_id,
-    message: "Outreach draft saved to the CRM. Review it on the school record before sending."
+    message: "Outreach draft saved to CRM outreach history. Review it on the school record before sending."
   };
 }

@@ -111,7 +111,7 @@ export default function ProspectOutreachDraftPanel({
 
     if (!canSaveToOutreach || !promotedSchoolId) {
       setNotice(
-        "Save to outreach is only available after the candidate is approved and promoted to a school."
+        "Save to CRM is only available after the candidate is approved and promoted to a school."
       );
       return;
     }
@@ -170,7 +170,7 @@ export default function ProspectOutreachDraftPanel({
         <textarea
           className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-800 outline-none ring-cyan-500 focus:ring-2"
           onChange={(event) => setDraftText(event.target.value)}
-          placeholder="Generate a draft, then edit it here before copying or saving to outreach."
+          placeholder="Generate a draft, then edit it here before copying or saving to CRM outreach history."
           rows={10}
           value={draftText}
         />
@@ -192,7 +192,7 @@ export default function ProspectOutreachDraftPanel({
             onClick={handleSaveDraft}
             type="button"
           >
-            {isSaving ? "Saving…" : "Save draft to outreach"}
+            {isSaving ? "Saving…" : "Save to CRM"}
           </button>
         ) : null}
         {copyStatus === "failed" ? (
@@ -202,7 +202,7 @@ export default function ProspectOutreachDraftPanel({
 
       {showSaveButton && promotedSchoolId ? (
         <p className="text-xs text-slate-500">
-          Saves a draft Email outreach activity on{" "}
+          Saves the draft as an Email outreach activity in CRM history for{" "}
           <a className="text-sky-700 hover:text-sky-900" href={`/schools/${promotedSchoolId}`}>
             the promoted school
           </a>

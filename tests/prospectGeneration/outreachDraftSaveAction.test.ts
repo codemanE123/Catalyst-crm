@@ -154,7 +154,7 @@ describe("saveProspectOutreachDraft action", () => {
     expect(result).toEqual({
       ok: false,
       error:
-        "Save to outreach is only available for approved candidates with a promoted school."
+        "Save to CRM is only available for approved candidates with a promoted school."
     });
   });
 
@@ -170,7 +170,7 @@ describe("saveProspectOutreachDraft action", () => {
       outreachId: "outreach-1",
       schoolId: "school-1",
       message:
-        "Outreach draft saved to the CRM. Review it on the school record before sending."
+        "Outreach draft saved to CRM outreach history. Review it on the school record before sending."
     });
     expect(supabase.insertedOutreach[0]).toMatchObject({
       school_id: "school-1",

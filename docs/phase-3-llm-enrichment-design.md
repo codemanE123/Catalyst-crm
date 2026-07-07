@@ -80,6 +80,16 @@ LLM enrichment is a **post-discovery, pre-review** enhancement step — not a re
 | Review queue | Shows summary, outreach angle, next step, status, enriched_at with clear states |
 | LLM calls | **No new calls** — display-only UX on stored enrichment fields |
 
+### 1.7 Phase 3G implementation (save outreach draft to CRM)
+
+| Deliverable | Status |
+| --- | --- |
+| `saveProspectOutreachDraft(candidateId, draftText)` | Saves edited draft to `outreach` on promoted school |
+| Review queue UI | **Save to CRM** button (approved + `promoted_school_id` only) |
+| Outreach record | Email channel, `message` = draft text, outcome `Draft template (not sent)` |
+| Email send | **Not connected** |
+| Audit | `prospect_candidate.outreach_draft_save`, `outreach.create` |
+
 ---
 
 ## 2. What data can be sent to the LLM
@@ -675,6 +685,8 @@ Enrichment runs in the **worker** after candidate insert, before job completion 
 | **3E.1** ✅ | `lib/llm/*` provider scaffold + tests + env vars (no UI/worker wiring) |
 | **3E.2** ✅ | Manual enrich server action + candidate columns + review queue button |
 | **3E.3** ✅ | Enrichment review UX panel with human-review safety copy |
+| **3F.1** ✅ | AI outreach draft generation on review queue |
+| **3G** ✅ | Save edited outreach draft to CRM outreach history (`Save to CRM`) |
 | **3E.4** | Worker enrichment step after candidate generation |
 | **3E.3** | `OpenAIAdapter` + org opt-in UI + review queue AI panel |
 | **3E.4** | Cost dashboard, quotas, rate limits, audit actions |
