@@ -60,6 +60,8 @@ export type ProspectCandidate = {
   location: string | null;
   rationale: string | null;
   confidence_score: number | null;
+  source_name: string | null;
+  source_url: string | null;
   promoted_school_id: string | null;
   created_at: string;
   updated_at: string;

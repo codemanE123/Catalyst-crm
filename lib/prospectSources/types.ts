@@ -26,6 +26,8 @@ export type ProspectCandidateDraft = {
   location: string;
   rationale: string;
   confidence_score: number | null;
+  source_name: string;
+  source_url: string | null;
 };
 
 export type ProspectGenerationSummary = {
@@ -67,6 +69,8 @@ export function toProspectCandidateDraft(
     district: location,
     location,
     rationale: candidate.rationale,
-    confidence_score: candidate.fit_score
+    confidence_score: candidate.fit_score,
+    source_name: candidate.source_name,
+    source_url: candidate.source_urls[0] ?? null
   };
 }

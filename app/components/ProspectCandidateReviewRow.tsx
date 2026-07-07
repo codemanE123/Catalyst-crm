@@ -111,9 +111,28 @@ export default function ProspectCandidateReviewRow({
         )}
       </td>
       <td className="px-3 py-3 text-slate-700">
-        {formatConfidence(candidate.confidence_score)}
+        <div className="max-w-xs space-y-1">
+          <p className="font-medium text-slate-900">{candidate.source_name ?? "—"}</p>
+          {candidate.source_url ? (
+            <a
+              className="text-xs text-sky-700 hover:text-sky-900"
+              href={candidate.source_url}
+              rel="noreferrer"
+              target="_blank"
+            >
+              View source
+            </a>
+          ) : null}
+        </div>
       </td>
-      <td className="px-3 py-3 text-slate-700">{candidate.rationale ?? "—"}</td>
+      <td className="px-3 py-3 text-slate-700">
+        <span className="font-medium text-slate-900">
+          {formatConfidence(candidate.confidence_score)}
+        </span>
+      </td>
+      <td className="px-3 py-3 text-slate-700">
+        <p className="max-w-sm text-sm leading-5">{candidate.rationale ?? "—"}</p>
+      </td>
       <td className="px-3 py-3">
         <span
           className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusStyles[candidate.status]}`}

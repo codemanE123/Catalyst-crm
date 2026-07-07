@@ -40,6 +40,8 @@ describe("generateProspectCandidatesForJob", () => {
     expect(result.summary.source).toBe("stub_generator");
     expect(result.summary.fallback_reason).toContain("COLLEGE_SCORECARD_API_KEY");
     expect(result.drafts.length).toBeGreaterThan(0);
+    expect(result.drafts[0]?.source_name).toContain("stub generator");
+    expect(result.drafts[0]?.source_url).toBeTruthy();
   });
 
   it("uses College Scorecard when configured and records are returned", async () => {
@@ -68,7 +70,9 @@ describe("generateProspectCandidatesForJob", () => {
       name: "Morgan State University",
       website: "https://www.morgan.edu",
       district: "Baltimore, MD",
-      confidence_score: 0.9
+      confidence_score: 0.9,
+      source_name: "U.S. Department of Education College Scorecard",
+      source_url: "https://collegescorecard.ed.gov/data/api/"
     });
   });
 });

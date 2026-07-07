@@ -1,4 +1,5 @@
 import type { ProspectGenerationInput, ProspectSchoolType } from "./prospectGeneration";
+import { formatProspectSchoolTypes } from "./prospectGeneration";
 
 export type StubSchoolSeed = {
   name: string;
@@ -18,7 +19,15 @@ export type MockProspectCandidateDraft = {
   location: string;
   rationale: string;
   confidence_score: number;
+  source_name: string;
+  source_url: string | null;
 };
+
+export const STUB_GENERATOR_SOURCE_NAME =
+  "Catalyst stub generator (curated public institutions)";
+
+export const STUB_GENERATOR_SOURCE_URL =
+  "https://collegescorecard.ed.gov/data/api/";
 
 const REGION_STATE_CODES: Record<string, string[]> = {
   southeast: ["AL", "FL", "GA", "KY", "LA", "MS", "NC", "SC", "TN", "VA", "DC"],
@@ -414,8 +423,10 @@ export function generateMockProspectCandidates(
       website: seed.website,
       district: `${seed.city}, ${seed.state}`,
       location: `${seed.city}, ${seed.state}`,
-      rationale: seed.rationale,
-      confidence_score: seed.confidenceScore
+      rationale: `${seed.rationale} Selected via stub generator for ${formatProspectSchoolTypes(input.schoolTypes)} in ${input.geography}.`,
+      confidence_score: seed.confidenceScore,
+      source_name: STUB_GENERATOR_SOURCE_NAME,
+      source_url: STUB_GENERATOR_SOURCE_URL
     }));
 
   return matched;

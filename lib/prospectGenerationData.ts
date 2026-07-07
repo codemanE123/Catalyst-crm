@@ -34,6 +34,8 @@ type ProspectCandidateRow = {
   location: string | null;
   rationale: string | null;
   confidence_score: number | null;
+  source_name: string | null;
+  source_url: string | null;
   promoted_school_id: string | null;
   created_at: string;
   updated_at: string;
@@ -92,8 +94,10 @@ const sampleProspectCandidates: ProspectCandidate[] = [
     website: "https://www.howard.edu",
     district: "Washington, DC",
     location: "Washington, DC",
-    rationale: "HBCU with NSA CAE-designated cybersecurity programs.",
+    rationale: "HBCU with NSA CAE-designated cybersecurity programs. Source: U.S. Department of Education College Scorecard.",
     confidence_score: 0.91,
+    source_name: "U.S. Department of Education College Scorecard",
+    source_url: "https://collegescorecard.ed.gov/data/api/",
     promoted_school_id: null,
     created_at: "2026-07-06T14:05:00.000Z",
     updated_at: "2026-07-06T14:05:00.000Z"
@@ -107,8 +111,10 @@ const sampleProspectCandidates: ProspectCandidate[] = [
     website: "https://www.ncat.edu",
     district: "Greensboro, NC",
     location: "Greensboro, NC",
-    rationale: "HBCU and state university with cybersecurity workforce programs.",
+    rationale: "HBCU and state university with cybersecurity workforce programs. Source: Catalyst stub generator.",
     confidence_score: 0.88,
+    source_name: "Catalyst stub generator (curated public institutions)",
+    source_url: "https://collegescorecard.ed.gov/data/api/",
     promoted_school_id: null,
     created_at: "2026-07-06T14:05:00.000Z",
     updated_at: "2026-07-06T14:05:00.000Z"
@@ -145,6 +151,8 @@ function mapCandidateRow(row: ProspectCandidateRow): ProspectCandidate {
     location: row.location,
     rationale: row.rationale,
     confidence_score: row.confidence_score,
+    source_name: row.source_name,
+    source_url: row.source_url,
     promoted_school_id: row.promoted_school_id,
     created_at: row.created_at,
     updated_at: row.updated_at
@@ -244,7 +252,7 @@ export async function fetchProspectCandidatesForJob(
   const { data, error } = await supabase
     .from("prospect_candidates")
     .select(
-      "id,organization_id,job_id,status,name,website,district,location,rationale,confidence_score,promoted_school_id,created_at,updated_at"
+      "id,organization_id,job_id,status,name,website,district,location,rationale,confidence_score,source_name,source_url,promoted_school_id,created_at,updated_at"
     )
     .eq("organization_id", organizationId)
     .eq("job_id", jobId)

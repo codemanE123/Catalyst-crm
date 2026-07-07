@@ -162,8 +162,10 @@ describe("processProspectGenerationJob", () => {
           website: "https://www.howard.edu",
           district: "Washington, DC",
           location: "Washington, DC",
-          rationale: "Source: College Scorecard.",
-          confidence_score: 0.9
+          rationale: "Category: HBCU. Source: U.S. Department of Education College Scorecard.",
+          confidence_score: 0.9,
+          source_name: "U.S. Department of Education College Scorecard",
+          source_url: "https://collegescorecard.ed.gov/data/api/"
         }
       ],
       summary: {
@@ -192,7 +194,11 @@ describe("processProspectGenerationJob", () => {
       queuedJob.input,
       "job-1"
     );
-    expect(supabase.insertedCandidates.length).toBe(1);
+    expect(supabase.insertedCandidates[0]).toMatchObject({
+      source_name: "U.S. Department of Education College Scorecard",
+      source_url: "https://collegescorecard.ed.gov/data/api/",
+      confidence_score: 0.9
+    });
     expect(mockRecordAuditEvent).toHaveBeenCalledTimes(2);
     expect(mockRevalidatePath).toHaveBeenCalledWith("/prospects/generate");
     expect(mockRevalidatePath).toHaveBeenCalledWith("/prospects/jobs/job-1/review");

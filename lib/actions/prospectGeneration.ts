@@ -282,7 +282,9 @@ export async function processProspectGenerationJob(
         district: draft.district,
         location: draft.location,
         rationale: draft.rationale,
-        confidence_score: draft.confidence_score
+        confidence_score: draft.confidence_score,
+        source_name: draft.source_name,
+        source_url: draft.source_url
       }))
     );
 

@@ -85,12 +85,13 @@ export default function ProspectReviewQueue({
           </p>
         ) : (
           <div className="mt-6 overflow-x-auto">
-            <table className="min-w-[960px] w-full text-left text-sm">
+            <table className="min-w-[1100px] w-full text-left text-sm">
               <thead className="border-b border-slate-200 text-slate-600">
                 <tr>
                   <th className="px-3 py-2 font-medium">School</th>
                   <th className="px-3 py-2 font-medium">Location</th>
                   <th className="px-3 py-2 font-medium">Website</th>
+                  <th className="px-3 py-2 font-medium">Source</th>
                   <th className="px-3 py-2 font-medium">Confidence</th>
                   <th className="px-3 py-2 font-medium">Rationale</th>
                   <th className="px-3 py-2 font-medium">Status</th>
