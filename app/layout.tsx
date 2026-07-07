@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/supabaseServer";
 import type { Metadata } from "next";
 import Link from "next/link";
+import GlobalSearch from "./components/GlobalSearch";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,20 +20,27 @@ export default async function RootLayout({
     <html lang="en">
       <body>
         <header className="border-b border-slate-200 bg-white px-6 py-3">
-          <div className="mx-auto flex max-w-7xl items-center justify-between">
-            <Link className="font-semibold text-slate-950" href="/" prefetch={false}>
+          <div className="mx-auto flex max-w-7xl items-center gap-4">
+            <Link className="shrink-0 font-semibold text-slate-950" href="/" prefetch={false}>
               Catalyst CRM
             </Link>
             {user ? (
+              <div className="min-w-0 flex-1">
+                <GlobalSearch />
+              </div>
+            ) : (
+              <div className="flex-1" />
+            )}
+            {user ? (
               <a
-                className="text-sm text-slate-600 hover:text-slate-950"
+                className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
                 href="/logout"
               >
                 Sign out
               </a>
             ) : (
               <Link
-                className="text-sm text-slate-600 hover:text-slate-950"
+                className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
                 href="/login"
                 prefetch={false}
               >
