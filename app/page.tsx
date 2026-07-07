@@ -1,8 +1,8 @@
 import {
-  CeoMetric,
   createInterviewNote,
   getDashboardData,
-  School
+  School,
+  type DashboardMetric
 } from "@/lib/supabase";
 import { createSchool, updateSchool } from "@/lib/actions/schools";
 import {
@@ -19,6 +19,7 @@ import {
 } from "@/lib/supabaseServer";
 import DiscoveryInterviewForm from "./components/DiscoveryInterviewForm";
 import OutreachEmailGenerator from "./components/OutreachEmailGenerator";
+import UpcomingFollowUps from "./components/UpcomingFollowUps";
 import SchoolForm from "./components/SchoolForm";
 import SchoolImport from "./components/SchoolImport";
 
@@ -32,7 +33,7 @@ const statusStyles: Record<School["status"], string> = {
 };
 
 export default async function Dashboard() {
-  const { schools, contacts, pipeline, ceoMetrics, source } =
+  const { schools, contacts, pipeline, dashboardMetrics, upcomingFollowUps, source } =
     await getDashboardData();
   const canManageSchools = await userCanManageSchools();
   const activeSchools = schools.filter((school) => school.status !== "Partner");
@@ -64,7 +65,9 @@ export default async function Dashboard() {
           </div>
         </section>
 
-        <CeoDashboard metrics={ceoMetrics} />
+        <DashboardMetrics metrics={dashboardMetrics} />
+
+        <UpcomingFollowUps followUps={upcomingFollowUps} />
 
         {canManageSchools ? (
           <>
@@ -162,26 +165,26 @@ function MetricCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-function CeoDashboard({ metrics }: { metrics: CeoMetric[] }) {
+function DashboardMetrics({ metrics }: { metrics: DashboardMetric[] }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-            CEO dashboard
+            Sales dashboard
           </p>
           <h2 className="mt-1 text-2xl font-semibold text-slate-950">
-            Growth funnel snapshot
+            Pipeline and activity metrics
           </h2>
         </div>
         <p className="text-sm text-slate-500">
-          Schools to paid-pilot conversion
+          Live counts from schools, contacts, follow-ups, and outreach
         </p>
       </div>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {metrics.map((metric) => (
           <div
-            key={metric.label}
+            key={metric.key}
             className="rounded-2xl border border-slate-100 bg-slate-50 p-5"
           >
             <p className="text-sm font-medium text-slate-500">{metric.label}</p>

@@ -1,5 +1,13 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-
+import {
+  buildDashboardMetricsFromRecords,
+  buildDashboardMetricsFromSupabase,
+  type DashboardMetric
+} from "@/lib/dashboardMetrics";
+import {
+  buildUpcomingFollowUpItems,
+  type UpcomingFollowUpItem,
+  type UpcomingFollowUpRecord
+} from "@/lib/upcomingFollowUps";
 import {
   getMembershipForUser,
   getMembershipsForUser,
@@ -134,17 +142,14 @@ export type PipelineStage = {
   color: string;
 };
 
-export type CeoMetric = {
-  label: string;
-  value: number;
-  detail: string;
-};
+export type { DashboardMetric };
 
 export type DashboardData = {
   schools: School[];
   contacts: Contact[];
   pipeline: PipelineStage[];
-  ceoMetrics: CeoMetric[];
+  dashboardMetrics: DashboardMetric[];
+  upcomingFollowUps: UpcomingFollowUpItem[];
   source: "supabase" | "sample";
 };
 
@@ -384,19 +389,27 @@ const sampleFollowUps: (FollowUp & { school_id: string })[] = [
     status: "Scheduled",
     owner: "Jon Bell",
     notes: "Ask whether district approval path is clear."
+  },
+  {
+    id: "follow-up-3",
+    school_id: "school-3",
+    title: "Check in with counseling lead",
+    due_date: "2026-07-06",
+    status: "Open",
+    owner: "Priya Shah",
+    notes: "Confirm whether a discovery call is scheduled."
   }
 ];
 
-const sampleCeoMetrics: CeoMetric[] = [
-  { label: "Schools added", value: 42, detail: "Total target accounts" },
-  { label: "Emails sent", value: 318, detail: "Outbound school emails" },
-  { label: "Replies", value: 86, detail: "Positive or neutral responses" },
-  { label: "Interviews booked", value: 24, detail: "Scheduled discovery calls" },
-  { label: "Interviews completed", value: 17, detail: "Completed school interviews" },
-  { label: "Pilot interest", value: 11, detail: "Schools showing strong fit" },
-  { label: "LOIs", value: 5, detail: "Letters of intent in motion" },
-  { label: "Paid pilots", value: 2, detail: "Converted pilot partners" }
-];
+function buildSampleDashboardMetrics(referenceDate = new Date()) {
+  return buildDashboardMetricsFromRecords(
+    sampleSchools,
+    sampleContacts.length,
+    sampleFollowUps,
+    sampleOutreach,
+    referenceDate
+  );
+}
 
 export type RecordOwnershipFields = {
   organization_id: string;
@@ -426,6 +439,41 @@ export async function getRecordOwnershipFields(): Promise<RecordOwnershipFields 
   };
 }
 
+function buildUpcomingFollowUpsForSchools(
+  schools: School[],
+  followUps: UpcomingFollowUpRecord[],
+  referenceDate = new Date()
+) {
+  const schoolNameById = new Map(schools.map((school) => [school.id, school.name]));
+
+  return buildUpcomingFollowUpItems(followUps, schoolNameById, referenceDate);
+}
+
+type FollowUpQueryRow = UpcomingFollowUpRecord;
+
+function mapFollowUpQueryRows(rows: FollowUpQueryRow[]): UpcomingFollowUpRecord[] {
+  return rows;
+}
+
+async function fetchOpenFollowUps(
+  supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>
+): Promise<UpcomingFollowUpRecord[]> {
+  const { data, error } = await supabase
+    .from("follow_ups")
+    .select("id,title,due_date,status,owner,school_id")
+    .neq("status", "Done");
+
+  if (error) {
+    if (!isDevelopmentEnvironment()) {
+      throw new Error("Could not load follow-ups from Supabase.");
+    }
+
+    return [];
+  }
+
+  return mapFollowUpQueryRows((data ?? []) as FollowUpQueryRow[]);
+}
+
 function buildPipeline(schools: School[]): PipelineStage[] {
   const stages: PipelineStage[] = [
     { name: "Prospect", count: 0, color: "bg-slate-400" },
@@ -438,96 +486,6 @@ function buildPipeline(schools: School[]): PipelineStage[] {
     ...stage,
     count: schools.filter((school) => school.status === stage.name).length
   }));
-}
-
-function countOrZero(count: number | null) {
-  return count ?? 0;
-}
-
-async function buildCeoMetrics(
-  supabase: SupabaseClient,
-  schoolsCount: number
-): Promise<CeoMetric[]> {
-  const today = new Date().toISOString().slice(0, 10);
-  const [
-    emailsSent,
-    replies,
-    interviewsBooked,
-    interviewsCompleted,
-    pilotInterest,
-    lois,
-    paidPilots
-  ] = await Promise.all([
-    supabase
-      .from("outreach")
-      .select("id", { count: "exact", head: true })
-      .eq("channel", "Email"),
-    supabase
-      .from("outreach")
-      .select("id", { count: "exact", head: true })
-      .ilike("outcome", "%reply%"),
-    supabase.from("interviews").select("id", { count: "exact", head: true }),
-    supabase
-      .from("interviews")
-      .select("id", { count: "exact", head: true })
-      .lte("interview_date", today),
-    supabase
-      .from("interviews")
-      .select("id", { count: "exact", head: true })
-      .eq("sentiment", "Strong fit"),
-    supabase
-      .from("follow_ups")
-      .select("id", { count: "exact", head: true })
-      .ilike("title", "%loi%"),
-    supabase
-      .from("follow_ups")
-      .select("id", { count: "exact", head: true })
-      .ilike("title", "%paid pilot%")
-      .eq("status", "Done")
-  ]);
-
-  return [
-    {
-      label: "Schools added",
-      value: schoolsCount,
-      detail: "Total target accounts"
-    },
-    {
-      label: "Emails sent",
-      value: countOrZero(emailsSent.count),
-      detail: "Outbound school emails"
-    },
-    {
-      label: "Replies",
-      value: countOrZero(replies.count),
-      detail: "Outreach outcomes containing reply"
-    },
-    {
-      label: "Interviews booked",
-      value: countOrZero(interviewsBooked.count),
-      detail: "Interview records created"
-    },
-    {
-      label: "Interviews completed",
-      value: countOrZero(interviewsCompleted.count),
-      detail: "Interview date on or before today"
-    },
-    {
-      label: "Pilot interest",
-      value: countOrZero(pilotInterest.count),
-      detail: "Strong-fit interview sentiment"
-    },
-    {
-      label: "LOIs",
-      value: countOrZero(lois.count),
-      detail: "Follow-ups with LOI in title"
-    },
-    {
-      label: "Paid pilots",
-      value: countOrZero(paidPilots.count),
-      detail: "Done follow-ups titled paid pilot"
-    }
-  ];
 }
 
 function getSampleSchoolProfileData(schoolId: string): SchoolProfileData | null {
@@ -570,7 +528,11 @@ export async function getDashboardData(): Promise<DashboardData> {
       schools: sampleSchools,
       contacts: sampleContacts,
       pipeline: buildPipeline(sampleSchools),
-      ceoMetrics: sampleCeoMetrics,
+      dashboardMetrics: buildSampleDashboardMetrics(),
+      upcomingFollowUps: buildUpcomingFollowUpsForSchools(
+        sampleSchools,
+        sampleFollowUps
+      ),
       source: "sample"
     };
   }
@@ -595,10 +557,16 @@ export async function getDashboardData(): Promise<DashboardData> {
       schools: sampleSchools,
       contacts: sampleContacts,
       pipeline: buildPipeline(sampleSchools),
-      ceoMetrics: sampleCeoMetrics,
+      dashboardMetrics: buildSampleDashboardMetrics(),
+      upcomingFollowUps: buildUpcomingFollowUpsForSchools(
+        sampleSchools,
+        sampleFollowUps
+      ),
       source: "sample"
     };
   }
+
+  const followUps = await fetchOpenFollowUps(supabase);
 
   const schools = (schoolsResponse.data ?? []) as School[];
   const contacts = (contactsResponse.data ?? []).map((contact) => {
@@ -619,7 +587,12 @@ export async function getDashboardData(): Promise<DashboardData> {
     schools,
     contacts,
     pipeline: buildPipeline(schools),
-    ceoMetrics: await buildCeoMetrics(supabase, schools.length),
+    dashboardMetrics: await buildDashboardMetricsFromSupabase(
+      supabase,
+      schools,
+      contacts.length
+    ),
+    upcomingFollowUps: buildUpcomingFollowUpsForSchools(schools, followUps),
     source: "supabase"
   };
 }
