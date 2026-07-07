@@ -3,7 +3,8 @@ import Link from "next/link";
 import ProspectCandidateReviewRow from "@/app/components/ProspectCandidateReviewRow";
 import type {
   ProspectCandidateActionResult,
-  ProspectCandidateEnrichResult
+  ProspectCandidateEnrichResult,
+  ProspectOutreachDraftResult
 } from "@/lib/actions/prospectCandidates";
 import {
   summarizeProspectJobInput,
@@ -19,9 +20,12 @@ export default function ProspectReviewQueue({
   canReview,
   llmEnrichmentEnabled,
   llmEnrichmentDisabledReason,
+  outreachDraftEnabled,
+  outreachDraftDisabledReason,
   approveAction,
   rejectAction,
-  enrichAction
+  enrichAction,
+  generateDraftAction
 }: {
   job: ProspectGenerationJob;
   candidates: ProspectCandidate[];
@@ -29,9 +33,12 @@ export default function ProspectReviewQueue({
   canReview: boolean;
   llmEnrichmentEnabled: boolean;
   llmEnrichmentDisabledReason: string;
+  outreachDraftEnabled: boolean;
+  outreachDraftDisabledReason: string;
   approveAction: (formData: FormData) => Promise<ProspectCandidateActionResult>;
   rejectAction: (formData: FormData) => Promise<ProspectCandidateActionResult>;
   enrichAction: (candidateId: string) => Promise<ProspectCandidateEnrichResult>;
+  generateDraftAction: (candidateId: string) => Promise<ProspectOutreachDraftResult>;
 }) {
   const pendingCount = candidates.filter(
     (candidate) => candidate.status === "pending_review"
@@ -98,7 +105,7 @@ export default function ProspectReviewQueue({
           </p>
         ) : (
           <div className="mt-6 overflow-x-auto">
-            <table className="min-w-[1280px] w-full text-left text-sm">
+            <table className="min-w-[1500px] w-full text-left text-sm">
               <thead className="border-b border-slate-200 text-slate-600">
                 <tr>
                   <th className="px-3 py-2 font-medium">School</th>
@@ -108,6 +115,7 @@ export default function ProspectReviewQueue({
                   <th className="px-3 py-2 font-medium">Confidence</th>
                   <th className="px-3 py-2 font-medium">Source rationale</th>
                   <th className="px-3 py-2 font-medium">AI enrichment review</th>
+                  <th className="px-3 py-2 font-medium">Outreach draft</th>
                   <th className="px-3 py-2 font-medium">Review status</th>
                   <th className="px-3 py-2 font-medium">Actions</th>
                 </tr>
@@ -121,9 +129,12 @@ export default function ProspectReviewQueue({
                     canReview={canReview}
                     candidate={candidate}
                     enrichAction={enrichAction}
+                    generateDraftAction={generateDraftAction}
                     jobId={job.id}
                     llmEnrichmentDisabledReason={llmEnrichmentDisabledReason}
                     llmEnrichmentEnabled={llmEnrichmentEnabled}
+                    outreachDraftDisabledReason={outreachDraftDisabledReason}
+                    outreachDraftEnabled={outreachDraftEnabled}
                     rejectAction={rejectAction}
                   />
                 ))}

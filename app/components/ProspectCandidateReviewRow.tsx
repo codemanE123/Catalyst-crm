@@ -1,9 +1,11 @@
 "use client";
 
 import ProspectEnrichmentReviewPanel from "@/app/components/ProspectEnrichmentReviewPanel";
+import ProspectOutreachDraftPanel from "@/app/components/ProspectOutreachDraftPanel";
 import type {
   ProspectCandidateActionResult,
-  ProspectCandidateEnrichResult
+  ProspectCandidateEnrichResult,
+  ProspectOutreachDraftResult
 } from "@/lib/actions/prospectCandidates";
 import {
   PROSPECT_CANDIDATE_STATUS_LABELS,
@@ -34,9 +36,12 @@ export default function ProspectCandidateReviewRow({
   actionsEnabled,
   llmEnrichmentEnabled,
   llmEnrichmentDisabledReason,
+  outreachDraftEnabled,
+  outreachDraftDisabledReason,
   approveAction,
   rejectAction,
-  enrichAction
+  enrichAction,
+  generateDraftAction
 }: {
   candidate: ProspectCandidate;
   jobId: string;
@@ -44,9 +49,12 @@ export default function ProspectCandidateReviewRow({
   actionsEnabled: boolean;
   llmEnrichmentEnabled: boolean;
   llmEnrichmentDisabledReason: string;
+  outreachDraftEnabled: boolean;
+  outreachDraftDisabledReason: string;
   approveAction: (formData: FormData) => Promise<ProspectCandidateActionResult>;
   rejectAction: (formData: FormData) => Promise<ProspectCandidateActionResult>;
   enrichAction: (candidateId: string) => Promise<ProspectCandidateEnrichResult>;
+  generateDraftAction: (candidateId: string) => Promise<ProspectOutreachDraftResult>;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -137,6 +145,9 @@ export default function ProspectCandidateReviewRow({
   }
 
   const actionsBusy = isPending || isEnriching;
+  const canGenerateOutreachDraft =
+    canReview &&
+    (candidate.status === "pending_review" || candidate.status === "approved");
 
   return (
     <tr>
@@ -187,6 +198,17 @@ export default function ProspectCandidateReviewRow({
           isEnriching={isEnriching}
           llmEnrichmentDisabledReason={llmEnrichmentDisabledReason}
           llmEnrichmentEnabled={llmEnrichmentEnabled}
+        />
+      </td>
+      <td className="px-3 py-3 align-top text-slate-700">
+        <ProspectOutreachDraftPanel
+          actionsEnabled={actionsEnabled}
+          canGenerate={canGenerateOutreachDraft}
+          candidateId={candidate.id}
+          candidateName={candidate.name}
+          generateDraftAction={generateDraftAction}
+          outreachDraftDisabledReason={outreachDraftDisabledReason}
+          outreachDraftEnabled={outreachDraftEnabled}
         />
       </td>
       <td className="px-3 py-3">

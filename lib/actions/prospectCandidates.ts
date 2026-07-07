@@ -7,9 +7,14 @@ import {
   enrichProspectCandidate as invokeLlmEnrichment,
   getLlmEnrichmentStatus
 } from "@/lib/llm";
+import {
+  generateProspectOutreachDraftWithLlm,
+  getProspectOutreachDraftStatus
+} from "@/lib/llm/outreachDraft";
 import type { ProspectGenerationInput } from "@/lib/prospectGeneration";
 import type { ProspectCandidate } from "@/lib/prospectGeneration";
 import { buildProspectEnrichmentInput } from "@/lib/prospectEnrichmentInput";
+import { buildProspectOutreachDraftInput } from "@/lib/prospectOutreachDraftInput";
 import { revalidateSchoolViews } from "@/lib/revalidateSchoolViews";
 import { getRecordOwnershipFields, type RecordOwnershipFields } from "@/lib/supabase";
 import {
@@ -45,6 +50,22 @@ export type ProspectCandidateEnrichResult =
       error: string;
       disabled?: boolean;
     };
+
+export type ProspectOutreachDraftResult =
+  | {
+      ok: true;
+      draft: string;
+    }
+  | {
+      ok: false;
+      error: string;
+      disabled?: boolean;
+    };
+
+const OUTREACH_DRAFT_ELIGIBLE_STATUSES = new Set<ProspectCandidate["status"]>([
+  "pending_review",
+  "approved"
+]);
 
 type CandidateReviewRow = ProspectCandidate & {
   promoted_school_id: string | null;
@@ -626,5 +647,128 @@ export async function enrichProspectCandidate(
   return {
     ok: true,
     message: `${candidate.name} enriched successfully.`
+  };
+}
+
+export async function generateProspectOutreachDraft(
+  candidateId: string
+): Promise<ProspectOutreachDraftResult> {
+  const trimmedCandidateId = candidateId.trim();
+
+  if (!trimmedCandidateId) {
+    return { ok: false, error: "Select a valid prospect candidate." };
+  }
+
+  const draftStatus = getProspectOutreachDraftStatus();
+
+  if (!draftStatus.enabled) {
+    return {
+      ok: false,
+      error: draftStatus.reason,
+      disabled: true
+    };
+  }
+
+  const context = await requireProspectReviewContext();
+
+  if (!context.ok) {
+    return { ok: false, error: context.error };
+  }
+
+  const { supabase, user, ownership } = context;
+  const candidate = await loadCandidateForReview(
+    supabase,
+    trimmedCandidateId,
+    ownership.organization_id
+  );
+
+  if (!candidate) {
+    return {
+      ok: false,
+      error: "Prospect candidate not found in your organization."
+    };
+  }
+
+  if (!OUTREACH_DRAFT_ELIGIBLE_STATUSES.has(candidate.status)) {
+    return {
+      ok: false,
+      error: "Outreach drafts are only available for pending or approved candidates."
+    };
+  }
+
+  const jobInput = await loadJobInputForCandidate(
+    supabase,
+    candidate.job_id,
+    ownership.organization_id
+  );
+
+  if (!jobInput) {
+    return {
+      ok: false,
+      error: "Only candidates from completed jobs can generate outreach drafts."
+    };
+  }
+
+  const draftInput = buildProspectOutreachDraftInput({
+    candidate,
+    jobInput
+  });
+
+  const draftResult = await generateProspectOutreachDraftWithLlm({
+    input: draftInput,
+    context: {
+      organization_id: ownership.organization_id,
+      job_id: candidate.job_id,
+      candidate_id: candidate.id
+    }
+  });
+
+  if (!draftResult.ok) {
+    if (draftResult.status === "disabled") {
+      return {
+        ok: false,
+        error: draftResult.reason,
+        disabled: true
+      };
+    }
+
+    await recordAuditEvent(supabase, {
+      organizationId: ownership.organization_id,
+      actorUserId: user.id,
+      action: AUDIT_ACTIONS.prospectCandidateOutreachDraft,
+      targetTable: "prospect_candidates",
+      recordId: candidate.id,
+      metadata: {
+        job_id: candidate.job_id,
+        outcome: draftResult.status,
+        reason: draftResult.reason
+      }
+    });
+
+    return {
+      ok: false,
+      error: draftResult.reason
+    };
+  }
+
+  await recordAuditEvent(supabase, {
+    organizationId: ownership.organization_id,
+    actorUserId: user.id,
+    action: AUDIT_ACTIONS.prospectCandidateOutreachDraft,
+    targetTable: "prospect_candidates",
+    recordId: candidate.id,
+    metadata: {
+      job_id: candidate.job_id,
+      outcome: "draft_ready",
+      provider: draftResult.provider,
+      model: draftResult.model,
+      prompt_version: draftResult.prompt_version,
+      draft_length: draftResult.data.draft_text.length
+    }
+  });
+
+  return {
+    ok: true,
+    draft: draftResult.data.draft_text
   };
 }

@@ -4,6 +4,7 @@ import ProspectReviewQueue from "@/app/components/ProspectReviewQueue";
 import {
   approveProspectCandidate,
   enrichProspectCandidate,
+  generateProspectOutreachDraft,
   rejectProspectCandidate
 } from "@/lib/actions/prospectCandidates";
 import {
@@ -12,6 +13,7 @@ import {
   getMembershipsForUser
 } from "@/lib/authz";
 import { getLlmEnrichmentStatus } from "@/lib/llm";
+import { getProspectOutreachDraftStatus } from "@/lib/llm/outreachDraft";
 import {
   fetchProspectCandidatesForJob,
   fetchProspectGenerationJob
@@ -59,6 +61,7 @@ export default async function ProspectReviewPage({
     id
   );
   const llmStatus = getLlmEnrichmentStatus();
+  const outreachDraftStatus = getProspectOutreachDraftStatus();
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
@@ -67,9 +70,12 @@ export default async function ProspectReviewPage({
         canReview={canEnqueueProspectGeneration(memberships)}
         candidates={candidates}
         enrichAction={enrichProspectCandidate}
+        generateDraftAction={generateProspectOutreachDraft}
         job={job}
         llmEnrichmentDisabledReason={llmStatus.reason}
         llmEnrichmentEnabled={llmStatus.enabled}
+        outreachDraftDisabledReason={outreachDraftStatus.reason}
+        outreachDraftEnabled={outreachDraftStatus.enabled}
         rejectAction={rejectProspectCandidate}
         source={source}
       />
