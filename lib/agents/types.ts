@@ -3,6 +3,7 @@ export const AGENT_NAMES = [
   "ProspectEnrichmentAgent",
   "OutreachDraftAgent",
   "ContactDiscoveryAgent",
+  "MeetingPrepAgent",
   "FutureContactDiscoveryAgent",
   "FutureMeetingPrepAgent"
 ] as const;
@@ -88,7 +89,7 @@ export const PROSPECT_AGENT_PIPELINE: AgentName[] = [
   "OutreachDraftAgent"
 ];
 
-export const FUTURE_AGENT_NAMES: AgentName[] = ["FutureMeetingPrepAgent"];
+export const FUTURE_AGENT_NAMES: AgentName[] = [];
 
 export function isFutureAgent(agentName: AgentName): boolean {
   return FUTURE_AGENT_NAMES.includes(agentName);

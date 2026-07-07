@@ -28,9 +28,12 @@ import Link from "next/link";
 import OutreachLogForm from "@/app/components/OutreachLogForm";
 import FollowUpPanel from "@/app/components/FollowUpPanel";
 import ContactForm from "@/app/components/ContactForm";
+import SchoolMeetingPrepSection from "@/app/components/SchoolMeetingPrepSection";
 import SchoolRecommendedContactRolesSection from "@/app/components/SchoolRecommendedContactRolesSection";
 import { runContactDiscoveryForSchool } from "@/lib/actions/contactDiscovery";
+import { runMeetingPrepForSchool } from "@/lib/actions/meetingPrep";
 import { fetchContactRecommendationsForTarget } from "@/lib/contactDiscovery/execute";
+import { fetchLatestMeetingPrepBrief } from "@/lib/meetingPrep/execute";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +74,15 @@ export default async function SchoolProfile({
           id
         )
       : [];
+  const meetingPrepBrief =
+    supabase && schoolOrganizationId && source === "supabase"
+      ? await fetchLatestMeetingPrepBrief(
+          supabase,
+          schoolOrganizationId,
+          "school",
+          id
+        )
+      : null;
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950 lg:px-10">
@@ -128,6 +140,14 @@ export default async function SchoolProfile({
               canDiscover={canMutateSchool}
               discoverAction={runContactDiscoveryForSchool}
               recommendations={contactRecommendations}
+              schoolId={school.id}
+              schoolName={school.name}
+            />
+            <SchoolMeetingPrepSection
+              actionsEnabled={source === "supabase"}
+              brief={meetingPrepBrief}
+              canGenerate={canMutateSchool}
+              generateAction={runMeetingPrepForSchool}
               schoolId={school.id}
               schoolName={school.name}
             />

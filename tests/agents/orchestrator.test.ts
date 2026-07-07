@@ -279,6 +279,60 @@ describe("AgentOrchestrator", () => {
     }
   });
 
+  it("runs MeetingPrepAgent when handler dependency is provided", async () => {
+    const runMeetingPrep = vi.fn(async () => ({
+      ok: true as const,
+      metadata: { confidence_score: 0.82 }
+    }));
+
+    const meetingPrepOrchestrator = new AgentOrchestrator(
+      store,
+      createAgentHandlerRegistry({ runMeetingPrep }),
+      async (event) => {
+        auditEvents.push(event);
+      }
+    );
+
+    await meetingPrepOrchestrator.queueAgent({
+      organizationId,
+      actorUserId,
+      agentName: "MeetingPrepAgent",
+      targetType: "school",
+      targetId: "school-1"
+    });
+
+    const run = await meetingPrepOrchestrator.runNextAgent({
+      organizationId,
+      actorUserId
+    });
+
+    expect(run.ok).toBe(true);
+
+    if (run.ok && run.ran) {
+      expect(run.execution.status).toBe("completed");
+      expect(runMeetingPrep).toHaveBeenCalled();
+    }
+  });
+
+  it("marks legacy future meeting prep agent as failed until migrated", async () => {
+    await orchestrator.queueAgent({
+      organizationId,
+      actorUserId,
+      agentName: "FutureMeetingPrepAgent",
+      targetType: "school",
+      targetId: "school-1"
+    });
+
+    const run = await orchestrator.runNextAgent({ organizationId, actorUserId });
+
+    expect(run.ok).toBe(true);
+
+    if (run.ok && run.ran) {
+      expect(run.execution.status).toBe("failed");
+      expect(run.execution.error_message).toContain("not implemented");
+    }
+  });
+
   it("does not run chained agents until dependencies complete", async () => {
     const executors = new Map<AgentName, AgentExecutor>();
     executors.set("ProspectGenerationAgent", async () => ({ ok: true }));

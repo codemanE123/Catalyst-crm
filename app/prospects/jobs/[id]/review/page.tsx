@@ -8,10 +8,10 @@ import {
   rejectProspectCandidate,
   saveProspectOutreachDraft
 } from "@/lib/actions/prospectCandidates";
-import {
-  runContactDiscoveryForCandidate
-} from "@/lib/actions/contactDiscovery";
+import { runContactDiscoveryForCandidate } from "@/lib/actions/contactDiscovery";
+import { runMeetingPrepForCandidate } from "@/lib/actions/meetingPrep";
 import { fetchContactRecommendationsForCandidates } from "@/lib/contactDiscovery/execute";
+import { fetchLatestMeetingPrepBriefsForCandidates } from "@/lib/meetingPrep/execute";
 import {
   canEnqueueProspectGeneration,
   canViewProspectGeneration,
@@ -79,6 +79,14 @@ export default async function ProspectReviewPage({
           ).entries()
         )
       : {};
+  const meetingPrepBriefsByCandidateId =
+    supabase && source === "supabase"
+      ? await fetchLatestMeetingPrepBriefsForCandidates(
+          supabase,
+          organizationId,
+          candidates.map((candidate) => candidate.id)
+        )
+      : {};
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
@@ -89,10 +97,12 @@ export default async function ProspectReviewPage({
         contactRecommendationsByCandidateId={contactRecommendationsByCandidateId}
         discoverContactRolesAction={runContactDiscoveryForCandidate}
         enrichAction={enrichProspectCandidate}
+        generateMeetingPrepAction={runMeetingPrepForCandidate}
         generateDraftAction={generateProspectOutreachDraft}
         job={job}
         llmEnrichmentDisabledReason={llmStatus.reason}
         llmEnrichmentEnabled={llmStatus.enabled}
+        meetingPrepBriefsByCandidateId={meetingPrepBriefsByCandidateId}
         outreachDraftDisabledReason={outreachDraftStatus.reason}
         outreachDraftEnabled={outreachDraftStatus.enabled}
         rejectAction={rejectProspectCandidate}

@@ -16,9 +16,10 @@ describe("agent types helpers", () => {
     ]);
   });
 
-  it("identifies future extension agents", () => {
-    expect(isFutureAgent("FutureMeetingPrepAgent")).toBe(true);
+  it("identifies legacy future extension agents", () => {
+    expect(isFutureAgent("FutureMeetingPrepAgent")).toBe(false);
     expect(isFutureAgent("FutureContactDiscoveryAgent")).toBe(false);
+    expect(isFutureAgent("MeetingPrepAgent")).toBe(false);
     expect(isFutureAgent("ContactDiscoveryAgent")).toBe(false);
     expect(isFutureAgent("ProspectGenerationAgent")).toBe(false);
   });

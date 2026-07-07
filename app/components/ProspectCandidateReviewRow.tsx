@@ -1,9 +1,11 @@
 "use client";
 
+import MeetingPrepPanel from "@/app/components/MeetingPrepPanel";
 import ProspectEnrichmentReviewPanel from "@/app/components/ProspectEnrichmentReviewPanel";
 import ProspectOutreachDraftPanel from "@/app/components/ProspectOutreachDraftPanel";
 import RecommendedContactRolesPanel from "@/app/components/RecommendedContactRolesPanel";
 import type { ContactDiscoveryActionResult } from "@/lib/actions/contactDiscovery";
+import type { MeetingPrepActionResult } from "@/lib/actions/meetingPrep";
 import type {
   ProspectCandidateActionResult,
   ProspectCandidateEnrichResult,
@@ -11,6 +13,7 @@ import type {
   ProspectOutreachDraftSaveResult
 } from "@/lib/actions/prospectCandidates";
 import type { ProspectContactRecommendation } from "@/lib/contactDiscovery/types";
+import type { MeetingPrepBrief } from "@/lib/meetingPrep/types";
 import {
   PROSPECT_CANDIDATE_STATUS_LABELS,
   type ProspectCandidate,
@@ -48,7 +51,9 @@ export default function ProspectCandidateReviewRow({
   generateDraftAction,
   saveDraftAction,
   contactRecommendations,
-  discoverContactRolesAction
+  discoverContactRolesAction,
+  meetingPrepBrief,
+  generateMeetingPrepAction
 }: {
   candidate: ProspectCandidate;
   jobId: string;
@@ -68,6 +73,8 @@ export default function ProspectCandidateReviewRow({
   ) => Promise<ProspectOutreachDraftSaveResult>;
   contactRecommendations: ProspectContactRecommendation[];
   discoverContactRolesAction: (candidateId: string) => Promise<ContactDiscoveryActionResult>;
+  meetingPrepBrief: MeetingPrepBrief | null;
+  generateMeetingPrepAction: (candidateId: string) => Promise<MeetingPrepActionResult>;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -223,6 +230,15 @@ export default function ProspectCandidateReviewRow({
           canDiscover={canReview}
           discoverAction={() => discoverContactRolesAction(candidate.id)}
           recommendations={contactRecommendations}
+          targetLabel={candidate.name}
+        />
+      </td>
+      <td className="px-3 py-3 align-top text-slate-700">
+        <MeetingPrepPanel
+          actionsEnabled={actionsEnabled}
+          brief={meetingPrepBrief}
+          canGenerate={canReview}
+          generateAction={() => generateMeetingPrepAction(candidate.id)}
           targetLabel={candidate.name}
         />
       </td>
