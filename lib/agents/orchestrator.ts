@@ -1,13 +1,13 @@
-import {
-  isFutureAgent,
-  type AgentExecutor,
-  type AgentExecutorResult,
-  type AgentExecution,
-  type AgentName,
-  type QueueAgentChainInput,
-  type QueueAgentInput
-} from "./types";
+import { sanitizeAgentErrorMessage } from "./sanitize";
+import { createAgentHandlerRegistry } from "./handlers";
 import type { AgentExecutionStore } from "./store";
+import type {
+  AgentExecution,
+  AgentExecutor,
+  AgentName,
+  QueueAgentChainInput,
+  QueueAgentInput
+} from "./types";
 
 export type AgentAuditEventInput = {
   organizationId: string;
@@ -47,48 +47,11 @@ export type RetryAgentResult =
   | { ok: true; execution: AgentExecution }
   | { ok: false; error: string };
 
-function defaultFutureAgentExecutor(
-  execution: AgentExecution
-): AgentExecutorResult {
-  return {
+function defaultMissingAgentExecutor(agentName: AgentName): AgentExecutor {
+  return async () => ({
     ok: false,
-    error_message: `${execution.agent_name} is not implemented yet.`,
-    metadata: {
-      extension_point: "future_agent",
-      agent_name: execution.agent_name
-    }
-  };
-}
-
-export function createDefaultAgentExecutors(): Map<AgentName, AgentExecutor> {
-  const executors = new Map<AgentName, AgentExecutor>();
-
-  for (const agentName of [
-    "ProspectGenerationAgent",
-    "ProspectEnrichmentAgent",
-    "OutreachDraftAgent",
-    "FutureContactDiscoveryAgent",
-    "FutureMeetingPrepAgent"
-  ] as AgentName[]) {
-    executors.set(agentName, async (execution, context) => {
-      if (isFutureAgent(execution.agent_name)) {
-        return defaultFutureAgentExecutor(execution);
-      }
-
-      return {
-        ok: true,
-        metadata: {
-          mode: "manual_orchestrator_stub",
-          agent_name: execution.agent_name,
-          target_type: execution.target_type,
-          target_id: execution.target_id,
-          actor_user_id: context.actorUserId
-        }
-      };
-    });
-  }
-
-  return executors;
+    error_message: `${agentName} is not registered.`
+  });
 }
 
 export class AgentOrchestrator {
@@ -99,7 +62,7 @@ export class AgentOrchestrator {
     executors?: Map<AgentName, AgentExecutor>,
     private readonly audit?: AgentAuditRecorder
   ) {
-    this.executors = executors ?? createDefaultAgentExecutors();
+    this.executors = executors ?? createAgentHandlerRegistry();
   }
 
   async queueAgent(input: QueueAgentInput): Promise<QueueAgentResult> {
@@ -214,7 +177,7 @@ export class AgentOrchestrator {
 
     const executor =
       this.executors.get(running.agent_name) ??
-      (async (execution) => defaultFutureAgentExecutor(execution));
+      defaultMissingAgentExecutor(running.agent_name);
 
     let result: Awaited<ReturnType<AgentExecutor>>;
 
@@ -227,6 +190,13 @@ export class AgentOrchestrator {
       result = {
         ok: false,
         error_message: "Agent execution failed unexpectedly."
+      };
+    }
+
+    if (!result.ok) {
+      result = {
+        ...result,
+        error_message: sanitizeAgentErrorMessage(result.error_message)
       };
     }
 

@@ -78,7 +78,14 @@ describe("AgentOrchestrator", () => {
   });
 
   it("runs queued agents in dependency order", async () => {
-    const chain = await orchestrator.queueAgentChain({
+    const executors = new Map<AgentName, AgentExecutor>();
+    for (const agentName of PROSPECT_AGENT_PIPELINE) {
+      executors.set(agentName, async () => ({ ok: true }));
+    }
+
+    const pipelineOrchestrator = new AgentOrchestrator(store, executors);
+
+    const chain = await pipelineOrchestrator.queueAgentChain({
       organizationId,
       actorUserId,
       targetType: "prospect_candidate",
@@ -91,7 +98,7 @@ describe("AgentOrchestrator", () => {
     const completedAgents: AgentName[] = [];
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
-      const run = await orchestrator.runNextAgent({
+      const run = await pipelineOrchestrator.runNextAgent({
         organizationId,
         actorUserId
       });
@@ -237,7 +244,14 @@ describe("AgentOrchestrator", () => {
   });
 
   it("does not run chained agents until dependencies complete", async () => {
-    const chain = await orchestrator.queueAgentChain({
+    const executors = new Map<AgentName, AgentExecutor>();
+    executors.set("ProspectGenerationAgent", async () => ({ ok: true }));
+    executors.set("ProspectEnrichmentAgent", async () => ({ ok: true }));
+    executors.set("OutreachDraftAgent", async () => ({ ok: true }));
+
+    const pipelineOrchestrator = new AgentOrchestrator(store, executors);
+
+    const chain = await pipelineOrchestrator.queueAgentChain({
       organizationId,
       actorUserId,
       targetType: "prospect_candidate",
@@ -247,7 +261,10 @@ describe("AgentOrchestrator", () => {
 
     expect(chain.ok).toBe(true);
 
-    const firstRun = await orchestrator.runNextAgent({ organizationId, actorUserId });
+    const firstRun = await pipelineOrchestrator.runNextAgent({
+      organizationId,
+      actorUserId
+    });
     expect(firstRun.ok).toBe(true);
 
     if (firstRun.ok && firstRun.ran) {

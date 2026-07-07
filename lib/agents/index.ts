@@ -22,11 +22,32 @@ export {
   AGENT_AUDIT_ACTIONS,
   AgentOrchestrator,
   cancelAgent,
-  createDefaultAgentExecutors,
   queueAgent,
   retryAgent,
   runNextAgent
 } from "./orchestrator";
+
+export {
+  createAgentHandlerRegistry,
+  mapExecutorFailureToResult,
+  type AgentHandlerDependencies
+} from "./handlers";
+
+export { sanitizeAgentErrorMessage } from "./sanitize";
+
+export {
+  AgentWorker,
+  createAgentOrchestrator,
+  createAgentWorkerFromStore,
+  createAgentWorkerFromSupabase,
+  toWorkerResult,
+  type ProcessNextAgentWorkerResult
+} from "./worker";
+
+export {
+  createSupabaseAgentAuditRecorder,
+  SupabaseAgentExecutionStore
+} from "./supabaseStore";
 
 export type {
   AgentExecution,

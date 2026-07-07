@@ -9,6 +9,20 @@ export const SETTINGS_ADMIN_ROLES: AppRole[] = ["admin", "super_admin"];
 
 export const RESTRICTED_FIELD_PLACEHOLDER = "Restricted";
 
+export const AGENT_WORKER_ROLES: AppRole[] = ["admin", "super_admin"];
+
+export function canTriggerAgentWorker(
+  memberships: OrganizationMember[]
+): boolean {
+  if (isSuperAdmin(memberships)) {
+    return true;
+  }
+
+  return memberships.some((membership) =>
+    AGENT_WORKER_ROLES.includes(membership.role)
+  );
+}
+
 export function canAccessSettingsRoutes(
   memberships: OrganizationMember[]
 ): boolean {
