@@ -71,6 +71,15 @@ LLM enrichment is a **post-discovery, pre-review** enhancement step — not a re
 | Audit | `prospect_candidate.enrich` |
 | Auto worker enrichment | **Not connected** |
 
+### 1.6 Phase 3E.3 implementation (enrichment review UX)
+
+| Deliverable | Status |
+| --- | --- |
+| `lib/prospectEnrichmentReview.ts` | Review-state resolver, labels, safety copy, timestamp formatting |
+| `app/components/ProspectEnrichmentReviewPanel.tsx` | Dedicated AI enrichment review column UI |
+| Review queue | Shows summary, outreach angle, next step, status, enriched_at with clear states |
+| LLM calls | **No new calls** — display-only UX on stored enrichment fields |
+
 ---
 
 ## 2. What data can be sent to the LLM
@@ -665,7 +674,8 @@ Enrichment runs in the **worker** after candidate insert, before job completion 
 | --- | --- |
 | **3E.1** ✅ | `lib/llm/*` provider scaffold + tests + env vars (no UI/worker wiring) |
 | **3E.2** ✅ | Manual enrich server action + candidate columns + review queue button |
-| **3E.3** | Worker enrichment step after candidate generation |
+| **3E.3** ✅ | Enrichment review UX panel with human-review safety copy |
+| **3E.4** | Worker enrichment step after candidate generation |
 | **3E.3** | `OpenAIAdapter` + org opt-in UI + review queue AI panel |
 | **3E.4** | Cost dashboard, quotas, rate limits, audit actions |
 | **3E.5** | Approve dialog "Apply AI next step" + `agent_feedback` |

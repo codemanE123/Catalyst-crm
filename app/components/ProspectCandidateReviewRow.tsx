@@ -1,5 +1,6 @@
 "use client";
 
+import ProspectEnrichmentReviewPanel from "@/app/components/ProspectEnrichmentReviewPanel";
 import type {
   ProspectCandidateActionResult,
   ProspectCandidateEnrichResult
@@ -51,6 +52,7 @@ export default function ProspectCandidateReviewRow({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [enrichNotice, setEnrichNotice] = useState<string | null>(null);
+  const [isEnriching, setIsEnriching] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function buildFormData() {
@@ -110,23 +112,31 @@ export default function ProspectCandidateReviewRow({
       return;
     }
 
-    startTransition(async () => {
-      const result = await enrichAction(candidate.id);
+    setIsEnriching(true);
 
-      if (!result.ok) {
-        if (result.disabled) {
-          setEnrichNotice(result.error);
+    startTransition(async () => {
+      try {
+        const result = await enrichAction(candidate.id);
+
+        if (!result.ok) {
+          if (result.disabled) {
+            setEnrichNotice(result.error);
+            return;
+          }
+
+          setError(result.error);
           return;
         }
 
-        setError(result.error);
-        return;
+        setMessage(result.message);
+        router.refresh();
+      } finally {
+        setIsEnriching(false);
       }
-
-      setMessage(result.message);
-      router.refresh();
     });
   }
+
+  const actionsBusy = isPending || isEnriching;
 
   return (
     <tr>
@@ -169,28 +179,15 @@ export default function ProspectCandidateReviewRow({
         </span>
       </td>
       <td className="px-3 py-3 text-slate-700">
-        <div className="max-w-sm space-y-2 text-sm leading-5">
-          <p>{candidate.rationale ?? "—"}</p>
-          {candidate.enrichment_status === "enriched" ? (
-            <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-950">
-              <p className="font-semibold">AI enrichment</p>
-              {candidate.enrichment_summary ? (
-                <p className="mt-1">{candidate.enrichment_summary}</p>
-              ) : null}
-              {candidate.outreach_angle ? (
-                <p className="mt-2">
-                  <span className="font-medium">Outreach:</span> {candidate.outreach_angle}
-                </p>
-              ) : null}
-              {candidate.recommended_next_step ? (
-                <p className="mt-1">
-                  <span className="font-medium">Next step:</span>{" "}
-                  {candidate.recommended_next_step}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+        <p className="max-w-sm text-sm leading-5">{candidate.rationale ?? "—"}</p>
+      </td>
+      <td className="px-3 py-3 align-top text-slate-700">
+        <ProspectEnrichmentReviewPanel
+          candidate={candidate}
+          isEnriching={isEnriching}
+          llmEnrichmentDisabledReason={llmEnrichmentDisabledReason}
+          llmEnrichmentEnabled={llmEnrichmentEnabled}
+        />
       </td>
       <td className="px-3 py-3">
         <span
@@ -209,13 +206,13 @@ export default function ProspectCandidateReviewRow({
           </p>
         ) : null}
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-3 align-top">
         {candidate.status === "pending_review" && canReview ? (
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap gap-2">
               <button
                 className="rounded-full bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                disabled={!actionsEnabled || isPending}
+                disabled={!actionsEnabled || actionsBusy}
                 onClick={handleApprove}
                 type="button"
               >
@@ -223,7 +220,7 @@ export default function ProspectCandidateReviewRow({
               </button>
               <button
                 className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
-                disabled={!actionsEnabled || isPending}
+                disabled={!actionsEnabled || actionsBusy}
                 onClick={handleReject}
                 type="button"
               >
@@ -231,16 +228,13 @@ export default function ProspectCandidateReviewRow({
               </button>
               <button
                 className="rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-800 disabled:opacity-60"
-                disabled={!actionsEnabled || isPending}
+                disabled={!actionsEnabled || actionsBusy}
                 onClick={handleEnrich}
                 type="button"
               >
-                Enrich
+                {isEnriching ? "Enriching…" : "Enrich"}
               </button>
             </div>
-            {!llmEnrichmentEnabled ? (
-              <p className="text-xs text-slate-500">{llmEnrichmentDisabledReason}</p>
-            ) : null}
             {!actionsEnabled ? (
               <p className="text-xs text-amber-700">
                 Connect Supabase to approve or reject candidates.
@@ -262,6 +256,8 @@ export default function ProspectCandidateReviewRow({
               </p>
             ) : null}
           </div>
+        ) : candidate.enrichment_status === "enriched" ? (
+          <span className="text-xs text-slate-500">Review AI output before approving.</span>
         ) : (
           <span className="text-slate-400">—</span>
         )}

@@ -104,13 +104,15 @@ const sampleProspectCandidates: ProspectCandidate[] = [
     source_name: "U.S. Department of Education College Scorecard",
     source_url: "https://collegescorecard.ed.gov/data/api/",
     promoted_school_id: null,
-    enrichment_summary: null,
-    outreach_angle: null,
-    recommended_next_step: null,
-    enrichment_status: "not_enriched",
-    enriched_at: null,
+    enrichment_summary:
+      "Howard University is a historically Black university in Washington, DC with public cybersecurity-related program signals.",
+    outreach_angle:
+      "Lead with workforce development and cybersecurity program alignment for institutional partnerships.",
+    recommended_next_step: "Initial outreach - cyber workforce program",
+    enrichment_status: "enriched",
+    enriched_at: "2026-07-06T15:00:00.000Z",
     created_at: "2026-07-06T14:05:00.000Z",
-    updated_at: "2026-07-06T14:05:00.000Z"
+    updated_at: "2026-07-06T15:00:00.000Z"
   },
   {
     id: "sample-candidate-2",

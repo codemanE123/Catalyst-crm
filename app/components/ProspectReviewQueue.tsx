@@ -10,6 +10,7 @@ import {
   type ProspectCandidate,
   type ProspectGenerationJob
 } from "@/lib/prospectGeneration";
+import { PROSPECT_ENRICHMENT_QUEUE_WARNING } from "@/lib/prospectEnrichmentReview";
 
 export default function ProspectReviewQueue({
   job,
@@ -47,7 +48,10 @@ export default function ProspectReviewQueue({
             </h1>
             <p className="mt-2 text-sm text-slate-600">
               Approve candidates to add them as Prospect schools in your CRM. Rejected candidates
-              stay out of the pipeline. Optional AI enrichment uses public institution data only.
+              stay out of the pipeline. Enrichment is optional and never auto-creates schools.
+            </p>
+            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+              {PROSPECT_ENRICHMENT_QUEUE_WARNING}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -94,7 +98,7 @@ export default function ProspectReviewQueue({
           </p>
         ) : (
           <div className="mt-6 overflow-x-auto">
-            <table className="min-w-[1100px] w-full text-left text-sm">
+            <table className="min-w-[1280px] w-full text-left text-sm">
               <thead className="border-b border-slate-200 text-slate-600">
                 <tr>
                   <th className="px-3 py-2 font-medium">School</th>
@@ -102,8 +106,9 @@ export default function ProspectReviewQueue({
                   <th className="px-3 py-2 font-medium">Website</th>
                   <th className="px-3 py-2 font-medium">Source</th>
                   <th className="px-3 py-2 font-medium">Confidence</th>
-                  <th className="px-3 py-2 font-medium">Rationale</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium">Source rationale</th>
+                  <th className="px-3 py-2 font-medium">AI enrichment review</th>
+                  <th className="px-3 py-2 font-medium">Review status</th>
                   <th className="px-3 py-2 font-medium">Actions</th>
                 </tr>
               </thead>
