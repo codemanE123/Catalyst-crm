@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import ProspectReviewQueue from "@/app/components/ProspectReviewQueue";
 import {
   approveProspectCandidate,
+  enrichProspectCandidate,
   rejectProspectCandidate
 } from "@/lib/actions/prospectCandidates";
 import {
@@ -10,6 +11,7 @@ import {
   canViewProspectGeneration,
   getMembershipsForUser
 } from "@/lib/authz";
+import { getLlmEnrichmentStatus } from "@/lib/llm";
 import {
   fetchProspectCandidatesForJob,
   fetchProspectGenerationJob
@@ -56,6 +58,7 @@ export default async function ProspectReviewPage({
     organizationId,
     id
   );
+  const llmStatus = getLlmEnrichmentStatus();
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
@@ -63,7 +66,10 @@ export default async function ProspectReviewPage({
         approveAction={approveProspectCandidate}
         canReview={canEnqueueProspectGeneration(memberships)}
         candidates={candidates}
+        enrichAction={enrichProspectCandidate}
         job={job}
+        llmEnrichmentDisabledReason={llmStatus.reason}
+        llmEnrichmentEnabled={llmStatus.enabled}
         rejectAction={rejectProspectCandidate}
         source={source}
       />

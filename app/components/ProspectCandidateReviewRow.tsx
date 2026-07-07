@@ -1,7 +1,8 @@
 "use client";
 
 import type {
-  ProspectCandidateActionResult
+  ProspectCandidateActionResult,
+  ProspectCandidateEnrichResult
 } from "@/lib/actions/prospectCandidates";
 import {
   PROSPECT_CANDIDATE_STATUS_LABELS,
@@ -30,19 +31,26 @@ export default function ProspectCandidateReviewRow({
   jobId,
   canReview,
   actionsEnabled,
+  llmEnrichmentEnabled,
+  llmEnrichmentDisabledReason,
   approveAction,
-  rejectAction
+  rejectAction,
+  enrichAction
 }: {
   candidate: ProspectCandidate;
   jobId: string;
   canReview: boolean;
   actionsEnabled: boolean;
+  llmEnrichmentEnabled: boolean;
+  llmEnrichmentDisabledReason: string;
   approveAction: (formData: FormData) => Promise<ProspectCandidateActionResult>;
   rejectAction: (formData: FormData) => Promise<ProspectCandidateActionResult>;
+  enrichAction: (candidateId: string) => Promise<ProspectCandidateEnrichResult>;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [enrichNotice, setEnrichNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function buildFormData() {
@@ -55,6 +63,7 @@ export default function ProspectCandidateReviewRow({
   function handleApprove() {
     setMessage(null);
     setError(null);
+    setEnrichNotice(null);
 
     startTransition(async () => {
       const result = await approveAction(buildFormData());
@@ -76,6 +85,7 @@ export default function ProspectCandidateReviewRow({
   function handleReject() {
     setMessage(null);
     setError(null);
+    setEnrichNotice(null);
 
     startTransition(async () => {
       const result = await rejectAction(buildFormData());
@@ -86,6 +96,34 @@ export default function ProspectCandidateReviewRow({
       }
 
       setMessage(`${candidate.name} rejected.`);
+      router.refresh();
+    });
+  }
+
+  function handleEnrich() {
+    setMessage(null);
+    setError(null);
+    setEnrichNotice(null);
+
+    if (!llmEnrichmentEnabled) {
+      setEnrichNotice(llmEnrichmentDisabledReason);
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await enrichAction(candidate.id);
+
+      if (!result.ok) {
+        if (result.disabled) {
+          setEnrichNotice(result.error);
+          return;
+        }
+
+        setError(result.error);
+        return;
+      }
+
+      setMessage(result.message);
       router.refresh();
     });
   }
@@ -131,7 +169,28 @@ export default function ProspectCandidateReviewRow({
         </span>
       </td>
       <td className="px-3 py-3 text-slate-700">
-        <p className="max-w-sm text-sm leading-5">{candidate.rationale ?? "—"}</p>
+        <div className="max-w-sm space-y-2 text-sm leading-5">
+          <p>{candidate.rationale ?? "—"}</p>
+          {candidate.enrichment_status === "enriched" ? (
+            <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-950">
+              <p className="font-semibold">AI enrichment</p>
+              {candidate.enrichment_summary ? (
+                <p className="mt-1">{candidate.enrichment_summary}</p>
+              ) : null}
+              {candidate.outreach_angle ? (
+                <p className="mt-2">
+                  <span className="font-medium">Outreach:</span> {candidate.outreach_angle}
+                </p>
+              ) : null}
+              {candidate.recommended_next_step ? (
+                <p className="mt-1">
+                  <span className="font-medium">Next step:</span>{" "}
+                  {candidate.recommended_next_step}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </td>
       <td className="px-3 py-3">
         <span
@@ -170,7 +229,18 @@ export default function ProspectCandidateReviewRow({
               >
                 Reject
               </button>
+              <button
+                className="rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-800 disabled:opacity-60"
+                disabled={!actionsEnabled || isPending}
+                onClick={handleEnrich}
+                type="button"
+              >
+                Enrich
+              </button>
             </div>
+            {!llmEnrichmentEnabled ? (
+              <p className="text-xs text-slate-500">{llmEnrichmentDisabledReason}</p>
+            ) : null}
             {!actionsEnabled ? (
               <p className="text-xs text-amber-700">
                 Connect Supabase to approve or reject candidates.
@@ -184,6 +254,11 @@ export default function ProspectCandidateReviewRow({
             {message ? (
               <p className="text-xs text-emerald-700" role="status">
                 {message}
+              </p>
+            ) : null}
+            {enrichNotice ? (
+              <p className="text-xs text-slate-600" role="status">
+                {enrichNotice}
               </p>
             ) : null}
           </div>

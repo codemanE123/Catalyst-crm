@@ -56,6 +56,13 @@ const pendingCandidate = {
   rationale: "HBCU with cybersecurity programs.",
   confidence_score: 0.91,
   promoted_school_id: null,
+  source_name: "U.S. Department of Education College Scorecard",
+  source_url: "https://collegescorecard.ed.gov/data/api/",
+  enrichment_summary: null,
+  outreach_angle: null,
+  recommended_next_step: null,
+  enrichment_status: "not_enriched",
+  enriched_at: null,
   created_at: "2026-07-07T12:00:00.000Z",
   updated_at: "2026-07-07T12:00:00.000Z"
 };

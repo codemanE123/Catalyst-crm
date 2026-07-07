@@ -1,7 +1,10 @@
 import Link from "next/link";
 
 import ProspectCandidateReviewRow from "@/app/components/ProspectCandidateReviewRow";
-import type { ProspectCandidateActionResult } from "@/lib/actions/prospectCandidates";
+import type {
+  ProspectCandidateActionResult,
+  ProspectCandidateEnrichResult
+} from "@/lib/actions/prospectCandidates";
 import {
   summarizeProspectJobInput,
   type ProspectCandidate,
@@ -13,15 +16,21 @@ export default function ProspectReviewQueue({
   candidates,
   source,
   canReview,
+  llmEnrichmentEnabled,
+  llmEnrichmentDisabledReason,
   approveAction,
-  rejectAction
+  rejectAction,
+  enrichAction
 }: {
   job: ProspectGenerationJob;
   candidates: ProspectCandidate[];
   source: "supabase" | "sample";
   canReview: boolean;
+  llmEnrichmentEnabled: boolean;
+  llmEnrichmentDisabledReason: string;
   approveAction: (formData: FormData) => Promise<ProspectCandidateActionResult>;
   rejectAction: (formData: FormData) => Promise<ProspectCandidateActionResult>;
+  enrichAction: (candidateId: string) => Promise<ProspectCandidateEnrichResult>;
 }) {
   const pendingCount = candidates.filter(
     (candidate) => candidate.status === "pending_review"
@@ -38,7 +47,7 @@ export default function ProspectReviewQueue({
             </h1>
             <p className="mt-2 text-sm text-slate-600">
               Approve candidates to add them as Prospect schools in your CRM. Rejected candidates
-              stay out of the pipeline.
+              stay out of the pipeline. Optional AI enrichment uses public institution data only.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -106,7 +115,10 @@ export default function ProspectReviewQueue({
                     approveAction={approveAction}
                     canReview={canReview}
                     candidate={candidate}
+                    enrichAction={enrichAction}
                     jobId={job.id}
+                    llmEnrichmentDisabledReason={llmEnrichmentDisabledReason}
+                    llmEnrichmentEnabled={llmEnrichmentEnabled}
                     rejectAction={rejectAction}
                   />
                 ))}

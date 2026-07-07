@@ -37,6 +37,11 @@ type ProspectCandidateRow = {
   source_name: string | null;
   source_url: string | null;
   promoted_school_id: string | null;
+  enrichment_summary: string | null;
+  outreach_angle: string | null;
+  recommended_next_step: string | null;
+  enrichment_status: ProspectCandidate["enrichment_status"];
+  enriched_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -99,6 +104,11 @@ const sampleProspectCandidates: ProspectCandidate[] = [
     source_name: "U.S. Department of Education College Scorecard",
     source_url: "https://collegescorecard.ed.gov/data/api/",
     promoted_school_id: null,
+    enrichment_summary: null,
+    outreach_angle: null,
+    recommended_next_step: null,
+    enrichment_status: "not_enriched",
+    enriched_at: null,
     created_at: "2026-07-06T14:05:00.000Z",
     updated_at: "2026-07-06T14:05:00.000Z"
   },
@@ -116,6 +126,11 @@ const sampleProspectCandidates: ProspectCandidate[] = [
     source_name: "Catalyst stub generator (curated public institutions)",
     source_url: "https://collegescorecard.ed.gov/data/api/",
     promoted_school_id: null,
+    enrichment_summary: null,
+    outreach_angle: null,
+    recommended_next_step: null,
+    enrichment_status: "not_enriched",
+    enriched_at: null,
     created_at: "2026-07-06T14:05:00.000Z",
     updated_at: "2026-07-06T14:05:00.000Z"
   }
@@ -154,6 +169,11 @@ function mapCandidateRow(row: ProspectCandidateRow): ProspectCandidate {
     source_name: row.source_name,
     source_url: row.source_url,
     promoted_school_id: row.promoted_school_id,
+    enrichment_summary: row.enrichment_summary,
+    outreach_angle: row.outreach_angle,
+    recommended_next_step: row.recommended_next_step,
+    enrichment_status: row.enrichment_status,
+    enriched_at: row.enriched_at,
     created_at: row.created_at,
     updated_at: row.updated_at
   };
@@ -252,7 +272,7 @@ export async function fetchProspectCandidatesForJob(
   const { data, error } = await supabase
     .from("prospect_candidates")
     .select(
-      "id,organization_id,job_id,status,name,website,district,location,rationale,confidence_score,source_name,source_url,promoted_school_id,created_at,updated_at"
+      "id,organization_id,job_id,status,name,website,district,location,rationale,confidence_score,source_name,source_url,promoted_school_id,enrichment_summary,outreach_angle,recommended_next_step,enrichment_status,enriched_at,created_at,updated_at"
     )
     .eq("organization_id", organizationId)
     .eq("job_id", jobId)

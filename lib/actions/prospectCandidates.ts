@@ -3,7 +3,13 @@ import type { User } from "@supabase/supabase-js";
 
 import { AUDIT_ACTIONS, recordAuditEvent } from "@/lib/auditLog";
 import { MUTATION_ROLES, requireRole } from "@/lib/authz";
+import {
+  enrichProspectCandidate as invokeLlmEnrichment,
+  getLlmEnrichmentStatus
+} from "@/lib/llm";
+import type { ProspectGenerationInput } from "@/lib/prospectGeneration";
 import type { ProspectCandidate } from "@/lib/prospectGeneration";
+import { buildProspectEnrichmentInput } from "@/lib/prospectEnrichmentInput";
 import { revalidateSchoolViews } from "@/lib/revalidateSchoolViews";
 import { getRecordOwnershipFields, type RecordOwnershipFields } from "@/lib/supabase";
 import {
@@ -29,8 +35,27 @@ export type ProspectCandidateActionResult =
     }
   | { ok: false; error: string };
 
+export type ProspectCandidateEnrichResult =
+  | {
+      ok: true;
+      message: string;
+    }
+  | {
+      ok: false;
+      error: string;
+      disabled?: boolean;
+    };
+
 type CandidateReviewRow = ProspectCandidate & {
   promoted_school_id: string | null;
+};
+
+type CandidateEnrichmentRow = CandidateReviewRow & {
+  enrichment_summary: string | null;
+  outreach_angle: string | null;
+  recommended_next_step: string | null;
+  enrichment_status: ProspectCandidate["enrichment_status"];
+  enriched_at: string | null;
 };
 
 async function requireProspectReviewContext(): Promise<ProspectReviewContext> {
@@ -122,11 +147,11 @@ async function loadCandidateForReview(
   supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>,
   candidateId: string,
   organizationId: string
-): Promise<CandidateReviewRow | null> {
+): Promise<CandidateEnrichmentRow | null> {
   const { data, error } = await supabase
     .from("prospect_candidates")
     .select(
-      "id,organization_id,job_id,status,name,website,district,location,rationale,confidence_score,promoted_school_id,created_at,updated_at"
+      "id,organization_id,job_id,status,name,website,district,location,rationale,confidence_score,source_name,source_url,promoted_school_id,enrichment_summary,outreach_angle,recommended_next_step,enrichment_status,enriched_at,created_at,updated_at"
     )
     .eq("id", candidateId)
     .eq("organization_id", organizationId)
@@ -136,7 +161,26 @@ async function loadCandidateForReview(
     return null;
   }
 
-  return data as CandidateReviewRow;
+  return data as CandidateEnrichmentRow;
+}
+
+async function loadJobInputForCandidate(
+  supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>,
+  jobId: string,
+  organizationId: string
+): Promise<ProspectGenerationInput | null> {
+  const { data, error } = await supabase
+    .from("prospect_generation_jobs")
+    .select("input,status")
+    .eq("id", jobId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (error || !data || data.status !== "completed") {
+    return null;
+  }
+
+  return data.input as ProspectGenerationInput;
 }
 
 async function ensureJobIsCompleted(
@@ -425,4 +469,162 @@ export async function rejectProspectCandidate(
   revalidateProspectReviewViews(jobId);
 
   return { ok: true };
+}
+
+export async function enrichProspectCandidate(
+  candidateId: string
+): Promise<ProspectCandidateEnrichResult> {
+  const trimmedCandidateId = candidateId.trim();
+
+  if (!trimmedCandidateId) {
+    return { ok: false, error: "Select a valid prospect candidate." };
+  }
+
+  const llmStatus = getLlmEnrichmentStatus();
+
+  if (!llmStatus.enabled) {
+    return {
+      ok: false,
+      error: llmStatus.reason,
+      disabled: true
+    };
+  }
+
+  const context = await requireProspectReviewContext();
+
+  if (!context.ok) {
+    return { ok: false, error: context.error };
+  }
+
+  const { supabase, user, ownership } = context;
+  const candidate = await loadCandidateForReview(
+    supabase,
+    trimmedCandidateId,
+    ownership.organization_id
+  );
+
+  if (!candidate) {
+    return {
+      ok: false,
+      error: "Prospect candidate not found in your organization."
+    };
+  }
+
+  if (candidate.status !== "pending_review") {
+    return {
+      ok: false,
+      error: "Only pending review candidates can be enriched."
+    };
+  }
+
+  const jobInput = await loadJobInputForCandidate(
+    supabase,
+    candidate.job_id,
+    ownership.organization_id
+  );
+
+  if (!jobInput) {
+    return {
+      ok: false,
+      error: "Only candidates from completed jobs can be enriched."
+    };
+  }
+
+  const enrichmentInput = buildProspectEnrichmentInput({
+    candidate,
+    jobInput
+  });
+
+  const enrichmentResult = await invokeLlmEnrichment({
+    input: enrichmentInput,
+    context: {
+      organization_id: ownership.organization_id,
+      job_id: candidate.job_id,
+      candidate_id: candidate.id
+    }
+  });
+
+  if (!enrichmentResult.ok) {
+    if (enrichmentResult.status === "disabled") {
+      return {
+        ok: false,
+        error: enrichmentResult.reason,
+        disabled: true
+      };
+    }
+
+    const failureStatus =
+      enrichmentResult.status === "blocked" ? "blocked" : "failed";
+
+    await supabase
+      .from("prospect_candidates")
+      .update({ enrichment_status: failureStatus })
+      .eq("id", candidate.id)
+      .eq("organization_id", ownership.organization_id)
+      .eq("status", "pending_review");
+
+    await recordAuditEvent(supabase, {
+      organizationId: ownership.organization_id,
+      actorUserId: user.id,
+      action: AUDIT_ACTIONS.prospectCandidateEnrich,
+      targetTable: "prospect_candidates",
+      recordId: candidate.id,
+      metadata: {
+        job_id: candidate.job_id,
+        outcome: failureStatus,
+        reason: enrichmentResult.reason
+      }
+    });
+
+    revalidateProspectReviewViews(candidate.job_id);
+
+    return {
+      ok: false,
+      error: enrichmentResult.reason
+    };
+  }
+
+  const enrichedAt = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("prospect_candidates")
+    .update({
+      enrichment_summary: enrichmentResult.data.public_summary,
+      outreach_angle: enrichmentResult.data.outreach_angle,
+      recommended_next_step: enrichmentResult.data.suggested_next_step,
+      enrichment_status: "enriched",
+      enriched_at: enrichedAt
+    })
+    .eq("id", candidate.id)
+    .eq("organization_id", ownership.organization_id)
+    .eq("status", "pending_review");
+
+  if (updateError) {
+    return {
+      ok: false,
+      error: "Could not save prospect enrichment results."
+    };
+  }
+
+  await recordAuditEvent(supabase, {
+    organizationId: ownership.organization_id,
+    actorUserId: user.id,
+    action: AUDIT_ACTIONS.prospectCandidateEnrich,
+    targetTable: "prospect_candidates",
+    recordId: candidate.id,
+    metadata: {
+      job_id: candidate.job_id,
+      outcome: "enriched",
+      provider: enrichmentResult.provider,
+      model: enrichmentResult.model,
+      prompt_version: enrichmentResult.prompt_version,
+      enrichment_confidence: enrichmentResult.data.enrichment_confidence
+    }
+  });
+
+  revalidateProspectReviewViews(candidate.job_id);
+
+  return {
+    ok: true,
+    message: `${candidate.name} enriched successfully.`
+  };
 }

@@ -26,6 +26,16 @@ export const PROSPECT_CANDIDATE_STATUSES = [
 export type ProspectCandidateStatus =
   (typeof PROSPECT_CANDIDATE_STATUSES)[number];
 
+export const PROSPECT_CANDIDATE_ENRICHMENT_STATUSES = [
+  "not_enriched",
+  "enriched",
+  "failed",
+  "blocked"
+] as const;
+
+export type ProspectCandidateEnrichmentStatus =
+  (typeof PROSPECT_CANDIDATE_ENRICHMENT_STATUSES)[number];
+
 export type ProspectGenerationInput = {
   geography: string;
   schoolTypes: ProspectSchoolType[];
@@ -63,6 +73,11 @@ export type ProspectCandidate = {
   source_name: string | null;
   source_url: string | null;
   promoted_school_id: string | null;
+  enrichment_summary: string | null;
+  outreach_angle: string | null;
+  recommended_next_step: string | null;
+  enrichment_status: ProspectCandidateEnrichmentStatus;
+  enriched_at: string | null;
   created_at: string;
   updated_at: string;
 };

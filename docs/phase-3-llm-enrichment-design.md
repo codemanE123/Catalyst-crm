@@ -61,6 +61,16 @@ LLM enrichment is a **post-discovery, pre-review** enhancement step — not a re
 | UI / worker integration | **Not connected** — call manually from tests or future worker only |
 | Persistence (`enrichment` jsonb) | **Not implemented** |
 
+### 1.5 Phase 3E.2 implementation (manual enrich action)
+
+| Deliverable | Status |
+| --- | --- |
+| `enrichProspectCandidate(candidateId)` server action | Sales/admin/super_admin; org-scoped; pending_review only |
+| Migration | `enrichment_summary`, `outreach_angle`, `recommended_next_step`, `enrichment_status`, `enriched_at` |
+| Review queue UI | **Enrich** button with disabled/safe message when flag off |
+| Audit | `prospect_candidate.enrich` |
+| Auto worker enrichment | **Not connected** |
+
 ---
 
 ## 2. What data can be sent to the LLM
@@ -654,7 +664,8 @@ Enrichment runs in the **worker** after candidate insert, before job completion 
 | Phase | Deliverable |
 | --- | --- |
 | **3E.1** ✅ | `lib/llm/*` provider scaffold + tests + env vars (no UI/worker wiring) |
-| **3E.2** | `enrichment` jsonb on `prospect_candidates`; worker enrichment step |
+| **3E.2** ✅ | Manual enrich server action + candidate columns + review queue button |
+| **3E.3** | Worker enrichment step after candidate generation |
 | **3E.3** | `OpenAIAdapter` + org opt-in UI + review queue AI panel |
 | **3E.4** | Cost dashboard, quotas, rate limits, audit actions |
 | **3E.5** | Approve dialog "Apply AI next step" + `agent_feedback` |
