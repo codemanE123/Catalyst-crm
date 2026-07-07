@@ -1,31 +1,47 @@
 "use client";
 
-import type { ProspectOutreachDraftResult } from "@/lib/actions/prospectCandidates";
+import type {
+  ProspectOutreachDraftResult,
+  ProspectOutreachDraftSaveResult
+} from "@/lib/actions/prospectCandidates";
 import { PROSPECT_OUTREACH_DRAFT_REVIEW_WARNING } from "@/lib/llm/outreachDraft";
 import { useState, useTransition } from "react";
 
 export default function ProspectOutreachDraftPanel({
   candidateId,
   candidateName,
+  candidateStatus,
+  promotedSchoolId,
   canGenerate,
+  canSaveToOutreach,
   actionsEnabled,
   outreachDraftEnabled,
   outreachDraftDisabledReason,
-  generateDraftAction
+  generateDraftAction,
+  saveDraftAction
 }: {
   candidateId: string;
   candidateName: string;
+  candidateStatus: "pending_review" | "approved" | "rejected";
+  promotedSchoolId: string | null;
   canGenerate: boolean;
+  canSaveToOutreach: boolean;
   actionsEnabled: boolean;
   outreachDraftEnabled: boolean;
   outreachDraftDisabledReason: string;
   generateDraftAction: (candidateId: string) => Promise<ProspectOutreachDraftResult>;
+  saveDraftAction: (
+    candidateId: string,
+    draftText: string
+  ) => Promise<ProspectOutreachDraftSaveResult>;
 }) {
   const [draftText, setDraftText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   async function copyDraft() {
@@ -58,6 +74,7 @@ export default function ProspectOutreachDraftPanel({
   function handleGenerateDraft() {
     setError(null);
     setNotice(null);
+    setSaveMessage(null);
 
     if (!outreachDraftEnabled) {
       setNotice(outreachDraftDisabledReason);
@@ -87,11 +104,45 @@ export default function ProspectOutreachDraftPanel({
     });
   }
 
+  function handleSaveDraft() {
+    setError(null);
+    setNotice(null);
+    setSaveMessage(null);
+
+    if (!canSaveToOutreach || !promotedSchoolId) {
+      setNotice(
+        "Save to outreach is only available after the candidate is approved and promoted to a school."
+      );
+      return;
+    }
+
+    setIsSaving(true);
+
+    startTransition(async () => {
+      try {
+        const result = await saveDraftAction(candidateId, draftText);
+
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+
+        setSaveMessage(result.message);
+      } finally {
+        setIsSaving(false);
+      }
+    });
+  }
+
   if (!canGenerate) {
     return <span className="text-slate-400">—</span>;
   }
 
-  const busy = isPending || isGenerating;
+  const busy = isPending || isGenerating || isSaving;
+  const showSaveButton =
+    canSaveToOutreach &&
+    candidateStatus === "approved" &&
+    Boolean(promotedSchoolId);
 
   return (
     <div className="max-w-md space-y-3">
@@ -119,7 +170,7 @@ export default function ProspectOutreachDraftPanel({
         <textarea
           className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-800 outline-none ring-cyan-500 focus:ring-2"
           onChange={(event) => setDraftText(event.target.value)}
-          placeholder="Generate a draft, then edit it here before copying or sending externally."
+          placeholder="Generate a draft, then edit it here before copying or saving to outreach."
           rows={10}
           value={draftText}
         />
@@ -128,16 +179,36 @@ export default function ProspectOutreachDraftPanel({
       <div className="flex flex-wrap items-center gap-2">
         <button
           className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-          disabled={!draftText.trim()}
+          disabled={!draftText.trim() || busy}
           onClick={copyDraft}
           type="button"
         >
           {copyStatus === "copied" ? "Copied" : "Copy to clipboard"}
         </button>
+        {showSaveButton ? (
+          <button
+            className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 disabled:opacity-60"
+            disabled={!actionsEnabled || !draftText.trim() || busy}
+            onClick={handleSaveDraft}
+            type="button"
+          >
+            {isSaving ? "Saving…" : "Save draft to outreach"}
+          </button>
+        ) : null}
         {copyStatus === "failed" ? (
           <span className="text-xs text-red-700">Copy failed. Select the text manually.</span>
         ) : null}
       </div>
+
+      {showSaveButton && promotedSchoolId ? (
+        <p className="text-xs text-slate-500">
+          Saves a draft Email outreach activity on{" "}
+          <a className="text-sky-700 hover:text-sky-900" href={`/schools/${promotedSchoolId}`}>
+            the promoted school
+          </a>
+          . Nothing is sent automatically.
+        </p>
+      ) : null}
 
       {error ? (
         <p className="text-xs text-red-700" role="alert">
@@ -147,6 +218,11 @@ export default function ProspectOutreachDraftPanel({
       {notice ? (
         <p className="text-xs text-slate-600" role="status">
           {notice}
+        </p>
+      ) : null}
+      {saveMessage ? (
+        <p className="text-xs text-emerald-700" role="status">
+          {saveMessage}
         </p>
       ) : null}
     </div>

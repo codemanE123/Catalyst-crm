@@ -4,7 +4,8 @@ import ProspectCandidateReviewRow from "@/app/components/ProspectCandidateReview
 import type {
   ProspectCandidateActionResult,
   ProspectCandidateEnrichResult,
-  ProspectOutreachDraftResult
+  ProspectOutreachDraftResult,
+  ProspectOutreachDraftSaveResult
 } from "@/lib/actions/prospectCandidates";
 import {
   summarizeProspectJobInput,
@@ -25,7 +26,8 @@ export default function ProspectReviewQueue({
   approveAction,
   rejectAction,
   enrichAction,
-  generateDraftAction
+  generateDraftAction,
+  saveDraftAction
 }: {
   job: ProspectGenerationJob;
   candidates: ProspectCandidate[];
@@ -39,6 +41,10 @@ export default function ProspectReviewQueue({
   rejectAction: (formData: FormData) => Promise<ProspectCandidateActionResult>;
   enrichAction: (candidateId: string) => Promise<ProspectCandidateEnrichResult>;
   generateDraftAction: (candidateId: string) => Promise<ProspectOutreachDraftResult>;
+  saveDraftAction: (
+    candidateId: string,
+    draftText: string
+  ) => Promise<ProspectOutreachDraftSaveResult>;
 }) {
   const pendingCount = candidates.filter(
     (candidate) => candidate.status === "pending_review"
@@ -136,6 +142,7 @@ export default function ProspectReviewQueue({
                     outreachDraftDisabledReason={outreachDraftDisabledReason}
                     outreachDraftEnabled={outreachDraftEnabled}
                     rejectAction={rejectAction}
+                    saveDraftAction={saveDraftAction}
                   />
                 ))}
               </tbody>

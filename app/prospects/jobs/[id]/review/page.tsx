@@ -5,7 +5,8 @@ import {
   approveProspectCandidate,
   enrichProspectCandidate,
   generateProspectOutreachDraft,
-  rejectProspectCandidate
+  rejectProspectCandidate,
+  saveProspectOutreachDraft
 } from "@/lib/actions/prospectCandidates";
 import {
   canEnqueueProspectGeneration,
@@ -77,6 +78,7 @@ export default async function ProspectReviewPage({
         outreachDraftDisabledReason={outreachDraftStatus.reason}
         outreachDraftEnabled={outreachDraftStatus.enabled}
         rejectAction={rejectProspectCandidate}
+        saveDraftAction={saveProspectOutreachDraft}
         source={source}
       />
     </main>

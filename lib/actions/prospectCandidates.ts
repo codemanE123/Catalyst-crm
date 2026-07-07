@@ -2,7 +2,7 @@ import { revalidatePath } from "next/cache";
 import type { User } from "@supabase/supabase-js";
 
 import { AUDIT_ACTIONS, recordAuditEvent } from "@/lib/auditLog";
-import { MUTATION_ROLES, requireRole } from "@/lib/authz";
+import { MUTATION_ROLES, requireRole, getSchoolOrganizationId } from "@/lib/authz";
 import {
   enrichProspectCandidate as invokeLlmEnrichment,
   getLlmEnrichmentStatus
@@ -15,6 +15,14 @@ import type { ProspectGenerationInput } from "@/lib/prospectGeneration";
 import type { ProspectCandidate } from "@/lib/prospectGeneration";
 import { buildProspectEnrichmentInput } from "@/lib/prospectEnrichmentInput";
 import { buildProspectOutreachDraftInput } from "@/lib/prospectOutreachDraftInput";
+import {
+  buildProspectOutreachDraftNextStep,
+  parseOutreachDraftSubject,
+  PROSPECT_OUTREACH_DRAFT_TEMPLATE_CHANNEL,
+  PROSPECT_OUTREACH_DRAFT_TEMPLATE_OUTCOME,
+  todayIsoDate,
+  validateProspectOutreachDraftText
+} from "@/lib/prospectOutreachDraftSave";
 import { revalidateSchoolViews } from "@/lib/revalidateSchoolViews";
 import { getRecordOwnershipFields, type RecordOwnershipFields } from "@/lib/supabase";
 import {
@@ -60,6 +68,18 @@ export type ProspectOutreachDraftResult =
       ok: false;
       error: string;
       disabled?: boolean;
+    };
+
+export type ProspectOutreachDraftSaveResult =
+  | {
+      ok: true;
+      outreachId: string;
+      schoolId: string;
+      message: string;
+    }
+  | {
+      ok: false;
+      error: string;
     };
 
 const OUTREACH_DRAFT_ELIGIBLE_STATUSES = new Set<ProspectCandidate["status"]>([
@@ -770,5 +790,129 @@ export async function generateProspectOutreachDraft(
   return {
     ok: true,
     draft: draftResult.data.draft_text
+  };
+}
+
+export async function saveProspectOutreachDraft(
+  candidateId: string,
+  draftText: string
+): Promise<ProspectOutreachDraftSaveResult> {
+  const trimmedCandidateId = candidateId.trim();
+  const validatedDraft = validateProspectOutreachDraftText(draftText);
+
+  if (!validatedDraft.ok) {
+    return { ok: false, error: validatedDraft.error };
+  }
+
+  if (!trimmedCandidateId) {
+    return { ok: false, error: "Select a valid prospect candidate." };
+  }
+
+  const context = await requireProspectReviewContext();
+
+  if (!context.ok) {
+    return { ok: false, error: context.error };
+  }
+
+  const { supabase, user, ownership } = context;
+  const candidate = await loadCandidateForReview(
+    supabase,
+    trimmedCandidateId,
+    ownership.organization_id
+  );
+
+  if (!candidate) {
+    return {
+      ok: false,
+      error: "Prospect candidate not found in your organization."
+    };
+  }
+
+  if (candidate.status !== "approved" || !candidate.promoted_school_id) {
+    return {
+      ok: false,
+      error: "Save to outreach is only available for approved candidates with a promoted school."
+    };
+  }
+
+  const schoolOrganizationId = await getSchoolOrganizationId(
+    supabase,
+    candidate.promoted_school_id
+  );
+
+  if (!schoolOrganizationId || schoolOrganizationId !== ownership.organization_id) {
+    return {
+      ok: false,
+      error: "The promoted school was not found in your organization."
+    };
+  }
+
+  const subject = parseOutreachDraftSubject(
+    validatedDraft.draft,
+    `Outreach draft - ${candidate.name}`
+  );
+  const nextStep = buildProspectOutreachDraftNextStep(
+    candidate.recommended_next_step
+  );
+
+  const { data: insertedOutreach, error: insertError } = await supabase
+    .from("outreach")
+    .insert({
+      school_id: candidate.promoted_school_id,
+      channel: PROSPECT_OUTREACH_DRAFT_TEMPLATE_CHANNEL,
+      subject,
+      message: validatedDraft.draft,
+      outcome: PROSPECT_OUTREACH_DRAFT_TEMPLATE_OUTCOME,
+      outreach_date: todayIsoDate(),
+      next_step: nextStep,
+      owner: user.email ?? null,
+      organization_id: ownership.organization_id,
+      created_by: ownership.created_by,
+      updated_by: ownership.updated_by,
+      assigned_to: ownership.assigned_to
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !insertedOutreach) {
+    return { ok: false, error: "Could not save the outreach draft." };
+  }
+
+  await recordAuditEvent(supabase, {
+    organizationId: ownership.organization_id,
+    actorUserId: user.id,
+    action: AUDIT_ACTIONS.prospectCandidateOutreachDraftSave,
+    targetTable: "prospect_candidates",
+    recordId: candidate.id,
+    metadata: {
+      job_id: candidate.job_id,
+      school_id: candidate.promoted_school_id,
+      outreach_id: insertedOutreach.id,
+      draft_length: validatedDraft.draft.length
+    }
+  });
+
+  await recordAuditEvent(supabase, {
+    organizationId: ownership.organization_id,
+    actorUserId: user.id,
+    action: AUDIT_ACTIONS.outreachCreate,
+    targetTable: "outreach",
+    recordId: insertedOutreach.id,
+    metadata: {
+      school_id: candidate.promoted_school_id,
+      channel: PROSPECT_OUTREACH_DRAFT_TEMPLATE_CHANNEL,
+      outreach_date: todayIsoDate(),
+      source: "prospect_candidate_outreach_draft_save",
+      candidate_id: candidate.id
+    }
+  });
+
+  revalidateProspectReviewViews(candidate.job_id, candidate.promoted_school_id);
+
+  return {
+    ok: true,
+    outreachId: insertedOutreach.id,
+    schoolId: candidate.promoted_school_id,
+    message: "Outreach draft saved to the CRM. Review it on the school record before sending."
   };
 }

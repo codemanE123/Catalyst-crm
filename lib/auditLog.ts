@@ -18,6 +18,7 @@ export const AUDIT_ACTIONS = {
   prospectCandidateReject: "prospect_candidate.reject",
   prospectCandidateEnrich: "prospect_candidate.enrich",
   prospectCandidateOutreachDraft: "prospect_candidate.outreach_draft",
+  prospectCandidateOutreachDraftSave: "prospect_candidate.outreach_draft_save",
   universityResearchRun: "university_research.run",
   universityResearchSave: "university_research.save",
   membershipRoleChange: "membership.role_change",

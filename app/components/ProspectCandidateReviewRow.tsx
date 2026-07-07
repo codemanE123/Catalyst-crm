@@ -5,7 +5,8 @@ import ProspectOutreachDraftPanel from "@/app/components/ProspectOutreachDraftPa
 import type {
   ProspectCandidateActionResult,
   ProspectCandidateEnrichResult,
-  ProspectOutreachDraftResult
+  ProspectOutreachDraftResult,
+  ProspectOutreachDraftSaveResult
 } from "@/lib/actions/prospectCandidates";
 import {
   PROSPECT_CANDIDATE_STATUS_LABELS,
@@ -41,7 +42,8 @@ export default function ProspectCandidateReviewRow({
   approveAction,
   rejectAction,
   enrichAction,
-  generateDraftAction
+  generateDraftAction,
+  saveDraftAction
 }: {
   candidate: ProspectCandidate;
   jobId: string;
@@ -55,6 +57,10 @@ export default function ProspectCandidateReviewRow({
   rejectAction: (formData: FormData) => Promise<ProspectCandidateActionResult>;
   enrichAction: (candidateId: string) => Promise<ProspectCandidateEnrichResult>;
   generateDraftAction: (candidateId: string) => Promise<ProspectOutreachDraftResult>;
+  saveDraftAction: (
+    candidateId: string,
+    draftText: string
+  ) => Promise<ProspectOutreachDraftSaveResult>;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -148,6 +154,10 @@ export default function ProspectCandidateReviewRow({
   const canGenerateOutreachDraft =
     canReview &&
     (candidate.status === "pending_review" || candidate.status === "approved");
+  const canSaveOutreachDraft =
+    canReview &&
+    candidate.status === "approved" &&
+    Boolean(candidate.promoted_school_id);
 
   return (
     <tr>
@@ -204,11 +214,15 @@ export default function ProspectCandidateReviewRow({
         <ProspectOutreachDraftPanel
           actionsEnabled={actionsEnabled}
           canGenerate={canGenerateOutreachDraft}
+          canSaveToOutreach={canSaveOutreachDraft}
           candidateId={candidate.id}
           candidateName={candidate.name}
+          candidateStatus={candidate.status}
           generateDraftAction={generateDraftAction}
           outreachDraftDisabledReason={outreachDraftDisabledReason}
           outreachDraftEnabled={outreachDraftEnabled}
+          promotedSchoolId={candidate.promoted_school_id}
+          saveDraftAction={saveDraftAction}
         />
       </td>
       <td className="px-3 py-3">
