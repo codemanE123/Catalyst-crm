@@ -65,6 +65,18 @@ export function canManageSchools(memberships: OrganizationMember[]): boolean {
   return memberships.some((membership) => hasRole(membership, MUTATION_ROLES));
 }
 
+export function canViewProspectGeneration(
+  memberships: OrganizationMember[]
+): boolean {
+  return memberships.length > 0 || isSuperAdmin(memberships);
+}
+
+export function canEnqueueProspectGeneration(
+  memberships: OrganizationMember[]
+): boolean {
+  return canManageSchools(memberships);
+}
+
 export async function getMembershipsForUser(
   supabase: SupabaseClient,
   userId: string

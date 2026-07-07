@@ -10,6 +10,7 @@ export const AUDIT_ACTIONS = {
   schoolUpdate: "school.update",
   contactCreate: "contact.create",
   contactUpdate: "contact.update",
+  prospectJobCreate: "prospect.job_create",
   universityResearchRun: "university_research.run",
   universityResearchSave: "university_research.save",
   membershipRoleChange: "membership.role_change",

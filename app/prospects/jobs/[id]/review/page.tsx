@@ -1,0 +1,60 @@
+import { notFound, redirect } from "next/navigation";
+
+import ProspectReviewQueue from "@/app/components/ProspectReviewQueue";
+import {
+  canViewProspectGeneration,
+  getMembershipsForUser
+} from "@/lib/authz";
+import {
+  fetchProspectCandidatesForJob,
+  fetchProspectGenerationJob
+} from "@/lib/prospectGenerationData";
+import { getRecordOwnershipFields } from "@/lib/supabase";
+import { getServerSupabaseClient, requireUser } from "@/lib/supabaseServer";
+
+export const dynamic = "force-dynamic";
+
+export default async function ProspectReviewPage({
+  params
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const user = await requireUser();
+
+  if (!user) {
+    redirect(`/login?next=/prospects/jobs/${id}/review`);
+  }
+
+  const supabase = await getServerSupabaseClient();
+  const memberships = supabase
+    ? await getMembershipsForUser(supabase, user.id)
+    : [];
+
+  if (!canViewProspectGeneration(memberships)) {
+    redirect("/");
+  }
+
+  const ownership = await getRecordOwnershipFields();
+  const organizationId = ownership?.organization_id ?? "sample-org";
+  const job = await fetchProspectGenerationJob(organizationId, id);
+
+  if (!job) {
+    notFound();
+  }
+
+  if (job.status !== "completed") {
+    redirect("/prospects/generate");
+  }
+
+  const { candidates, source } = await fetchProspectCandidatesForJob(
+    organizationId,
+    id
+  );
+
+  return (
+    <main className="mx-auto max-w-7xl px-6 py-8">
+      <ProspectReviewQueue candidates={candidates} job={job} source={source} />
+    </main>
+  );
+}

@@ -1,4 +1,8 @@
-import { requireUser } from "@/lib/supabaseServer";
+import { canViewProspectGeneration, getMembershipsForUser } from "@/lib/authz";
+import {
+  getServerSupabaseClient,
+  requireUser
+} from "@/lib/supabaseServer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import GlobalSearch from "./components/GlobalSearch";
@@ -15,6 +19,10 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const user = await requireUser();
+  const supabase = await getServerSupabaseClient();
+  const memberships =
+    user && supabase ? await getMembershipsForUser(supabase, user.id) : [];
+  const showProspectsNav = user && canViewProspectGeneration(memberships);
 
   return (
     <html lang="en">
@@ -31,6 +39,15 @@ export default async function RootLayout({
             ) : (
               <div className="flex-1" />
             )}
+            {showProspectsNav ? (
+              <Link
+                className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
+                href="/prospects/generate"
+                prefetch={false}
+              >
+                Generate prospects
+              </Link>
+            ) : null}
             {user ? (
               <a
                 className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
