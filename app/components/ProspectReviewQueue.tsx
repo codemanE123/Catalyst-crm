@@ -7,6 +7,8 @@ import type {
   ProspectOutreachDraftResult,
   ProspectOutreachDraftSaveResult
 } from "@/lib/actions/prospectCandidates";
+import type { ContactDiscoveryActionResult } from "@/lib/actions/contactDiscovery";
+import type { ProspectContactRecommendation } from "@/lib/contactDiscovery/types";
 import {
   summarizeProspectJobInput,
   type ProspectCandidate,
@@ -27,7 +29,9 @@ export default function ProspectReviewQueue({
   rejectAction,
   enrichAction,
   generateDraftAction,
-  saveDraftAction
+  saveDraftAction,
+  contactRecommendationsByCandidateId,
+  discoverContactRolesAction
 }: {
   job: ProspectGenerationJob;
   candidates: ProspectCandidate[];
@@ -45,6 +49,8 @@ export default function ProspectReviewQueue({
     candidateId: string,
     draftText: string
   ) => Promise<ProspectOutreachDraftSaveResult>;
+  contactRecommendationsByCandidateId: Record<string, ProspectContactRecommendation[]>;
+  discoverContactRolesAction: (candidateId: string) => Promise<ContactDiscoveryActionResult>;
 }) {
   const pendingCount = candidates.filter(
     (candidate) => candidate.status === "pending_review"
@@ -111,7 +117,7 @@ export default function ProspectReviewQueue({
           </p>
         ) : (
           <div className="mt-6 overflow-x-auto">
-            <table className="min-w-[1500px] w-full text-left text-sm">
+            <table className="min-w-[1700px] w-full text-left text-sm">
               <thead className="border-b border-slate-200 text-slate-600">
                 <tr>
                   <th className="px-3 py-2 font-medium">School</th>
@@ -121,6 +127,7 @@ export default function ProspectReviewQueue({
                   <th className="px-3 py-2 font-medium">Confidence</th>
                   <th className="px-3 py-2 font-medium">Source rationale</th>
                   <th className="px-3 py-2 font-medium">AI enrichment review</th>
+                  <th className="px-3 py-2 font-medium">Recommended contact roles</th>
                   <th className="px-3 py-2 font-medium">Outreach draft</th>
                   <th className="px-3 py-2 font-medium">Review status</th>
                   <th className="px-3 py-2 font-medium">Actions</th>
@@ -134,6 +141,10 @@ export default function ProspectReviewQueue({
                     approveAction={approveAction}
                     canReview={canReview}
                     candidate={candidate}
+                    contactRecommendations={
+                      contactRecommendationsByCandidateId[candidate.id] ?? []
+                    }
+                    discoverContactRolesAction={discoverContactRolesAction}
                     enrichAction={enrichAction}
                     generateDraftAction={generateDraftAction}
                     jobId={job.id}

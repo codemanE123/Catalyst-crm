@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   AGENT_AUDIT_ACTIONS,
   AgentOrchestrator,
+  createAgentHandlerRegistry,
   InMemoryAgentExecutionStore,
   PROSPECT_AGENT_PIPELINE,
   type AgentAuditEventInput,
@@ -224,7 +225,7 @@ describe("AgentOrchestrator", () => {
     }
   });
 
-  it("marks future agents as failed until implemented", async () => {
+  it("marks legacy future contact discovery agent as failed until migrated", async () => {
     await orchestrator.queueAgent({
       organizationId,
       actorUserId,
@@ -240,6 +241,41 @@ describe("AgentOrchestrator", () => {
     if (run.ok && run.ran) {
       expect(run.execution.status).toBe("failed");
       expect(run.execution.error_message).toContain("not implemented");
+    }
+  });
+
+  it("runs ContactDiscoveryAgent when handler dependency is provided", async () => {
+    const runContactDiscovery = vi.fn(async () => ({
+      ok: true as const,
+      metadata: { recommendation_count: 2 }
+    }));
+
+    const contactOrchestrator = new AgentOrchestrator(
+      store,
+      createAgentHandlerRegistry({ runContactDiscovery }),
+      async (event) => {
+        auditEvents.push(event);
+      }
+    );
+
+    await contactOrchestrator.queueAgent({
+      organizationId,
+      actorUserId,
+      agentName: "ContactDiscoveryAgent",
+      targetType: "prospect_candidate",
+      targetId: "candidate-1"
+    });
+
+    const run = await contactOrchestrator.runNextAgent({
+      organizationId,
+      actorUserId
+    });
+
+    expect(run.ok).toBe(true);
+
+    if (run.ok && run.ran) {
+      expect(run.execution.status).toBe("completed");
+      expect(runContactDiscovery).toHaveBeenCalled();
     }
   });
 

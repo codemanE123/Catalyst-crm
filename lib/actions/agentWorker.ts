@@ -4,6 +4,7 @@ import {
   AGENT_WORKER_ROLES,
   requireRole
 } from "@/lib/authz";
+import { createContactDiscoveryHandlerDependency } from "@/lib/actions/contactDiscovery";
 import { createAgentWorkerFromSupabase } from "@/lib/agents/worker";
 import type { ProcessNextAgentWorkerResult } from "@/lib/agents/worker";
 import { getRecordOwnershipFields } from "@/lib/supabase";
@@ -56,7 +57,8 @@ export async function processNextAgentExecution(): Promise<ProcessNextAgentWorke
     };
   }
 
-  const worker = createAgentWorkerFromSupabase(supabase);
+  const handlerDependencies = await createContactDiscoveryHandlerDependency(supabase);
+  const worker = createAgentWorkerFromSupabase(supabase, { handlerDependencies });
 
   return worker.processNext({
     organizationId: ownership.organization_id,

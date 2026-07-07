@@ -18,6 +18,8 @@ describe("agent types helpers", () => {
 
   it("identifies future extension agents", () => {
     expect(isFutureAgent("FutureMeetingPrepAgent")).toBe(true);
+    expect(isFutureAgent("FutureContactDiscoveryAgent")).toBe(false);
+    expect(isFutureAgent("ContactDiscoveryAgent")).toBe(false);
     expect(isFutureAgent("ProspectGenerationAgent")).toBe(false);
   });
 

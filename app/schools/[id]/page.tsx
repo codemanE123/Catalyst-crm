@@ -28,6 +28,9 @@ import Link from "next/link";
 import OutreachLogForm from "@/app/components/OutreachLogForm";
 import FollowUpPanel from "@/app/components/FollowUpPanel";
 import ContactForm from "@/app/components/ContactForm";
+import SchoolRecommendedContactRolesSection from "@/app/components/SchoolRecommendedContactRolesSection";
+import { runContactDiscoveryForSchool } from "@/lib/actions/contactDiscovery";
+import { fetchContactRecommendationsForTarget } from "@/lib/contactDiscovery/execute";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +58,19 @@ export default async function SchoolProfile({
 
   const canMutateSchool = await userCanMutateSchool(id);
   const openFollowUps = await getOpenFollowUpsForSchool(id);
+  const supabase = await getServerSupabaseClient();
+  const schoolOrganizationId = supabase
+    ? await getSchoolOrganizationId(supabase, id)
+    : null;
+  const contactRecommendations =
+    supabase && schoolOrganizationId && source === "supabase"
+      ? await fetchContactRecommendationsForTarget(
+          supabase,
+          schoolOrganizationId,
+          "school",
+          id
+        )
+      : [];
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950 lg:px-10">
@@ -107,6 +123,14 @@ export default async function SchoolProfile({
         <section className="grid gap-8 xl:grid-cols-[1fr_0.75fr]">
           <div className="flex flex-col gap-8">
             <UniversityProfilePanel school={school} />
+            <SchoolRecommendedContactRolesSection
+              actionsEnabled={source === "supabase"}
+              canDiscover={canMutateSchool}
+              discoverAction={runContactDiscoveryForSchool}
+              recommendations={contactRecommendations}
+              schoolId={school.id}
+              schoolName={school.name}
+            />
             <SchoolNotes school={school} />
             {canMutateSchool ? (
               <ContactForm

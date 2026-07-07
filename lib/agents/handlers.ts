@@ -8,7 +8,6 @@ import type {
   AgentExecutorResult,
   AgentName
 } from "./types";
-import { isFutureAgent } from "./types";
 
 export type AgentHandlerDependencies = {
   processProspectGenerationJob?: (input: {
@@ -27,6 +26,13 @@ export type AgentHandlerDependencies = {
     organizationId: string;
     actorUserId: string;
     env?: NodeJS.ProcessEnv;
+  }) => Promise<AgentExecutorResult>;
+  runContactDiscovery?: (input: {
+    organizationId: string;
+    actorUserId: string;
+    targetType: "prospect_candidate" | "school";
+    targetId: string;
+    agentExecutionId?: string | null;
   }) => Promise<AgentExecutorResult>;
 };
 
@@ -158,6 +164,44 @@ function defaultOutreachDraftHandler(
   });
 }
 
+function defaultContactDiscoveryHandler(
+  execution: AgentExecution,
+  context: AgentExecutorContext,
+  deps: AgentHandlerDependencies
+): Promise<AgentExecutorResult> {
+  const allowedTargetTypes = new Set(["prospect_candidate", "school"]);
+
+  if (!allowedTargetTypes.has(execution.target_type)) {
+    return Promise.resolve(
+      invalidTargetResult(
+        "ContactDiscoveryAgent",
+        "prospect_candidate or school",
+        execution.target_type
+      )
+    );
+  }
+
+  if (deps.runContactDiscovery) {
+    return deps.runContactDiscovery({
+      organizationId: execution.organization_id,
+      actorUserId: context.actorUserId,
+      targetType: execution.target_type as "prospect_candidate" | "school",
+      targetId: execution.target_id,
+      agentExecutionId: execution.id
+    });
+  }
+
+  return Promise.resolve({
+    ok: true,
+    metadata: {
+      mode: "worker_stub",
+      agent_name: "ContactDiscoveryAgent",
+      target_id: execution.target_id,
+      target_type: execution.target_type
+    }
+  });
+}
+
 export function createAgentHandlerRegistry(
   deps: AgentHandlerDependencies = {}
 ): Map<AgentName, AgentExecutor> {
@@ -172,10 +216,11 @@ export function createAgentHandlerRegistry(
   registry.set("OutreachDraftAgent", (execution, context) =>
     defaultOutreachDraftHandler(execution, context, deps)
   );
-  registry.set("FutureContactDiscoveryAgent", async (execution) =>
-    isFutureAgent(execution.agent_name)
-      ? futureAgentResult("FutureContactDiscoveryAgent")
-      : futureAgentResult("FutureContactDiscoveryAgent")
+  registry.set("ContactDiscoveryAgent", (execution, context) =>
+    defaultContactDiscoveryHandler(execution, context, deps)
+  );
+  registry.set("FutureContactDiscoveryAgent", async () =>
+    futureAgentResult("FutureContactDiscoveryAgent")
   );
   registry.set("FutureMeetingPrepAgent", async () =>
     futureAgentResult("FutureMeetingPrepAgent")

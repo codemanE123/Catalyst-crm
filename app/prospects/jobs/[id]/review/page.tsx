@@ -9,6 +9,10 @@ import {
   saveProspectOutreachDraft
 } from "@/lib/actions/prospectCandidates";
 import {
+  runContactDiscoveryForCandidate
+} from "@/lib/actions/contactDiscovery";
+import { fetchContactRecommendationsForCandidates } from "@/lib/contactDiscovery/execute";
+import {
   canEnqueueProspectGeneration,
   canViewProspectGeneration,
   getMembershipsForUser
@@ -63,6 +67,18 @@ export default async function ProspectReviewPage({
   );
   const llmStatus = getLlmEnrichmentStatus();
   const outreachDraftStatus = getProspectOutreachDraftStatus();
+  const contactRecommendationsByCandidateId =
+    supabase && source === "supabase"
+      ? Object.fromEntries(
+          (
+            await fetchContactRecommendationsForCandidates(
+              supabase,
+              organizationId,
+              candidates.map((candidate) => candidate.id)
+            )
+          ).entries()
+        )
+      : {};
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
@@ -70,6 +86,8 @@ export default async function ProspectReviewPage({
         approveAction={approveProspectCandidate}
         canReview={canEnqueueProspectGeneration(memberships)}
         candidates={candidates}
+        contactRecommendationsByCandidateId={contactRecommendationsByCandidateId}
+        discoverContactRolesAction={runContactDiscoveryForCandidate}
         enrichAction={enrichProspectCandidate}
         generateDraftAction={generateProspectOutreachDraft}
         job={job}

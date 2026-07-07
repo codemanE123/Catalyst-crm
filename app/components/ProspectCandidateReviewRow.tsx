@@ -2,12 +2,15 @@
 
 import ProspectEnrichmentReviewPanel from "@/app/components/ProspectEnrichmentReviewPanel";
 import ProspectOutreachDraftPanel from "@/app/components/ProspectOutreachDraftPanel";
+import RecommendedContactRolesPanel from "@/app/components/RecommendedContactRolesPanel";
+import type { ContactDiscoveryActionResult } from "@/lib/actions/contactDiscovery";
 import type {
   ProspectCandidateActionResult,
   ProspectCandidateEnrichResult,
   ProspectOutreachDraftResult,
   ProspectOutreachDraftSaveResult
 } from "@/lib/actions/prospectCandidates";
+import type { ProspectContactRecommendation } from "@/lib/contactDiscovery/types";
 import {
   PROSPECT_CANDIDATE_STATUS_LABELS,
   type ProspectCandidate,
@@ -43,7 +46,9 @@ export default function ProspectCandidateReviewRow({
   rejectAction,
   enrichAction,
   generateDraftAction,
-  saveDraftAction
+  saveDraftAction,
+  contactRecommendations,
+  discoverContactRolesAction
 }: {
   candidate: ProspectCandidate;
   jobId: string;
@@ -61,6 +66,8 @@ export default function ProspectCandidateReviewRow({
     candidateId: string,
     draftText: string
   ) => Promise<ProspectOutreachDraftSaveResult>;
+  contactRecommendations: ProspectContactRecommendation[];
+  discoverContactRolesAction: (candidateId: string) => Promise<ContactDiscoveryActionResult>;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -208,6 +215,15 @@ export default function ProspectCandidateReviewRow({
           isEnriching={isEnriching}
           llmEnrichmentDisabledReason={llmEnrichmentDisabledReason}
           llmEnrichmentEnabled={llmEnrichmentEnabled}
+        />
+      </td>
+      <td className="px-3 py-3 align-top text-slate-700">
+        <RecommendedContactRolesPanel
+          actionsEnabled={actionsEnabled}
+          canDiscover={canReview}
+          discoverAction={() => discoverContactRolesAction(candidate.id)}
+          recommendations={contactRecommendations}
+          targetLabel={candidate.name}
         />
       </td>
       <td className="px-3 py-3 align-top text-slate-700">
