@@ -57,6 +57,14 @@ export function shouldRedactRestrictedFields(
   return membership?.role === "read_only";
 }
 
+export function canManageSchools(memberships: OrganizationMember[]): boolean {
+  if (isSuperAdmin(memberships)) {
+    return true;
+  }
+
+  return memberships.some((membership) => hasRole(membership, MUTATION_ROLES));
+}
+
 export async function getMembershipsForUser(
   supabase: SupabaseClient,
   userId: string

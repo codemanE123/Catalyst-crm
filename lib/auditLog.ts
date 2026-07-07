@@ -6,6 +6,7 @@ export const AUDIT_ACTIONS = {
   followUpCreate: "follow_up.create",
   followUpComplete: "follow_up.complete",
   schoolCreate: "school.create",
+  schoolImport: "school.import",
   schoolUpdate: "school.update",
   contactCreate: "contact.create",
   contactUpdate: "contact.update",

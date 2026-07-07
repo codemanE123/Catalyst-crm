@@ -6,10 +6,12 @@ import {
 } from "@/lib/supabase";
 import { createSchool, updateSchool } from "@/lib/actions/schools";
 import {
-  getMembershipsForUser,
-  hasRole,
-  isSuperAdmin,
-  MUTATION_ROLES
+  importSchoolsFromCsv,
+  previewSchoolImport
+} from "@/lib/actions/schoolImport";
+import {
+  canManageSchools,
+  getMembershipsForUser
 } from "@/lib/authz";
 import {
   getServerSupabaseClient,
@@ -18,6 +20,7 @@ import {
 import DiscoveryInterviewForm from "./components/DiscoveryInterviewForm";
 import OutreachEmailGenerator from "./components/OutreachEmailGenerator";
 import SchoolForm from "./components/SchoolForm";
+import SchoolImport from "./components/SchoolImport";
 
 export const dynamic = "force-dynamic";
 
@@ -64,11 +67,17 @@ export default async function Dashboard() {
         <CeoDashboard metrics={ceoMetrics} />
 
         {canManageSchools ? (
-          <SchoolForm
-            schools={schools}
-            createAction={createSchool}
-            updateAction={updateSchool}
-          />
+          <>
+            <SchoolForm
+              schools={schools}
+              createAction={createSchool}
+              updateAction={updateSchool}
+            />
+            <SchoolImport
+              previewAction={previewSchoolImport}
+              importAction={importSchoolsFromCsv}
+            />
+          </>
         ) : null}
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -141,12 +150,7 @@ async function userCanManageSchools(): Promise<boolean> {
   }
 
   const memberships = await getMembershipsForUser(supabase, user.id);
-
-  if (isSuperAdmin(memberships)) {
-    return true;
-  }
-
-  return memberships.some((membership) => hasRole(membership, MUTATION_ROLES));
+  return canManageSchools(memberships);
 }
 
 function MetricCard({ label, value }: { label: string; value: number }) {

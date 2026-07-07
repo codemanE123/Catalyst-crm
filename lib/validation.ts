@@ -410,7 +410,31 @@ function parseSchoolMutationForm(formData: FormData) {
 export function validateCreateSchool(
   formData: FormData
 ): ValidationResult<CreateSchoolInput> {
-  const parsed = createSchoolSchema.safeParse(parseSchoolMutationForm(formData));
+  return validateCreateSchoolInput(parseSchoolMutationForm(formData));
+}
+
+export function validateCreateSchoolInput(
+  input: {
+    name?: string;
+    website?: string;
+    status?: string;
+    owner?: string;
+    next_step?: string;
+    notes?: string;
+    assigned_to?: string;
+    assign_to_me?: boolean;
+  }
+): ValidationResult<CreateSchoolInput> {
+  const parsed = createSchoolSchema.safeParse({
+    name: input.name ?? "",
+    website: input.website ?? "",
+    status: input.status || "Prospect",
+    owner: input.owner ?? "",
+    next_step: input.next_step ?? "",
+    notes: input.notes ?? "",
+    assigned_to: input.assigned_to ?? "",
+    assign_to_me: input.assign_to_me ?? false
+  });
 
   if (!parsed.success) {
     return { success: false, error: formatZodError(parsed.error) };
