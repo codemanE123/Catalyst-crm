@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { executeContactDiscovery } from "@/lib/contactDiscovery/execute";
 import type { ProspectContactRecommendation } from "@/lib/contactDiscovery/types";
+import { assertRealProviderPilotAccess } from "@/lib/agents/pilot";
 import { MUTATION_ROLES, requireRole } from "@/lib/authz";
 import { getRecordOwnershipFields } from "@/lib/supabase";
 import {
@@ -81,6 +82,17 @@ export async function runContactDiscoveryForCandidate(
     return { ok: false, error: context.error };
   }
 
+  const pilot = await assertRealProviderPilotAccess({
+    supabase: context.supabase,
+    organizationId: context.organizationId,
+    actorUserId: context.user.id,
+    agentName: "ContactDiscoveryAgent"
+  });
+
+  if (!pilot.ok) {
+    return { ok: false, error: pilot.error };
+  }
+
   const trimmedId = candidateId.trim();
 
   if (!trimmedId) {
@@ -115,6 +127,17 @@ export async function runContactDiscoveryForSchool(
 
   if (!context.ok) {
     return { ok: false, error: context.error };
+  }
+
+  const pilot = await assertRealProviderPilotAccess({
+    supabase: context.supabase,
+    organizationId: context.organizationId,
+    actorUserId: context.user.id,
+    agentName: "ContactDiscoveryAgent"
+  });
+
+  if (!pilot.ok) {
+    return { ok: false, error: pilot.error };
   }
 
   const trimmedId = schoolId.trim();

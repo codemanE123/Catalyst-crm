@@ -34,6 +34,14 @@ vi.mock("@/lib/meetingPrep/execute", () => ({
   executeMeetingPrep: (...args: unknown[]) => mockExecuteMeetingPrep(...args)
 }));
 
+vi.mock("@/lib/agents/pilot", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/agents/pilot")>();
+  return {
+    ...actual,
+    assertRealProviderPilotAccess: vi.fn(async () => ({ ok: true }))
+  };
+});
+
 describe("runMeetingPrepForSchool", () => {
   beforeEach(() => {
     vi.resetModules();

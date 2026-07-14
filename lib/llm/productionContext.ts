@@ -31,6 +31,10 @@ import type { AgentName } from "@/lib/agents/types";
 import type { AgentUsageStore } from "@/lib/agents/usage";
 import { startOfUtcDay } from "@/lib/agentOperations";
 import { startOfUtcMonth } from "@/lib/agents/usage";
+import {
+  createPilotGateResolverFromSupabase,
+  type PilotReasonCode
+} from "@/lib/agents/pilot";
 
 import { DEFAULT_OPENAI_ENRICHMENT_MODEL } from "./openaiProvider";
 
@@ -51,7 +55,8 @@ export type LlmProductionGateReasonCode =
   | "daily_budget_limit"
   | "monthly_budget_limit"
   | "chain_depth_exceeded"
-  | "human_review_required_disabled";
+  | "human_review_required_disabled"
+  | PilotReasonCode;
 
 export type LlmProductionContext = {
   agentName: AgentName;
@@ -85,7 +90,22 @@ const USER_SAFE: Record<LlmProductionGateReasonCode, string> = {
   monthly_budget_limit: "Organization AI budget limit reached.",
   chain_depth_exceeded: "This agent action is temporarily unavailable.",
   human_review_required_disabled:
-    "Human review requirements must remain enabled before LLM drafts can run."
+    "Human review requirements must remain enabled before LLM drafts can run.",
+  pilot_kill_switch:
+    "Agent pilot has been emergency-stopped. Contact an administrator.",
+  pilot_disabled:
+    "Production agent pilot is disabled. Real provider execution is not available.",
+  pilot_organization_not_allowlisted:
+    "This organization is not on the production agent pilot allowlist.",
+  pilot_user_not_allowlisted:
+    "Your account is not on the production agent pilot allowlist.",
+  pilot_agent_not_permitted:
+    "This agent is not permitted during the limited production pilot.",
+  pilot_org_cap: "Pilot organization capacity has been reached.",
+  pilot_user_cap: "Pilot user capacity has been reached.",
+  pilot_daily_jobs_limit: "Daily pilot job limit has been reached.",
+  pilot_daily_spend_limit: "Daily pilot spend limit has been reached.",
+  pilot_batch_limit: "Requested candidate batch exceeds the pilot maximum."
 };
 
 export function isApprovedOpenAiModel(model: string): model is ApprovedOpenAiModel {
@@ -252,6 +272,24 @@ export async function resolveLlmProductionContextFromSupabase(params: {
   env?: NodeJS.ProcessEnv;
 }): Promise<LlmProductionGateResult> {
   const env = params.env ?? process.env;
+
+  const pilotGate = createPilotGateResolverFromSupabase(params.supabase);
+  const pilot = await pilotGate({
+    organizationId: params.organizationId,
+    actorUserId: params.actorUserId,
+    agentName: params.agentName,
+    env
+  });
+
+  if (!pilot.allowed) {
+    const code = pilot.reason_code as LlmProductionGateReasonCode;
+    return {
+      ok: false,
+      reason_code: code,
+      reason: pilot.user_safe_message,
+      user_safe_message: pilot.user_safe_message
+    };
+  }
 
   const [policy, promptStamp, certification, llmCallsToday, spendToday, spendMonth] =
     await Promise.all([

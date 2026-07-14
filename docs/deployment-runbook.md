@@ -150,6 +150,7 @@ Apply on the **target Supabase project** before relying on that environment. Fil
 | — | `20260714160000_agent_usage_events_and_chain_depth.sql` | `agent_usage_events` + `chain_depth` + org RLS |
 | — | `20260714170000_approval_assignments_and_review_statuses.sql` | Approval assignments + expanded review statuses |
 | — | `20260714180000_agent_evaluations.sql` | Agent quality evaluations + org RLS |
+| — | `20260714230000_agent_pilot_controls.sql` | Limited production pilot settings + allowlists |
 
 **New migration discipline:** When adding migrations after initial staging setup, apply to staging first, run smoke tests, then production. Apply every file under `supabase/migrations/` in timestamp order on the target project.
 
@@ -282,6 +283,34 @@ No new public env vars. Route: `/approvals`. See `docs/human-approval-center.md`
 | `AGENT_MAX_PROMPT_CHARS` | `24000` | Max serialized LLM input size |
 | `AGENT_MAX_OUTPUT_CHARS` | `8000` | Max generated output size checks |
 | `AGENT_MAX_ATTEMPTS` | `3` | Max automatic retries (unchanged from 4.7) |
+
+### 6.6f Limited production agent pilot (Phase 5.5)
+
+Apply migration `20260714230000_agent_pilot_controls.sql` before enabling real-provider pilot controls. Defaults: **pilot disabled**, empty allowlists, autonomy features remain hard-off.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AGENT_PILOT_ENABLED` | `false` | Env fallback when DB settings row is unavailable (still deny-by-default) |
+| `AGENT_PILOT_KILL_SWITCH` | `false` | Emergency stop — when `true`, blocks all real provider pilot execution even if DB pilot is enabled |
+| `AGENT_PILOT_ORG_ALLOWLIST` | _(empty)_ | Comma-separated org UUIDs (env fallback only) |
+| `AGENT_PILOT_USER_ALLOWLIST` | _(empty)_ | Comma-separated user UUIDs (env fallback only) |
+| `AGENT_PILOT_MAX_ORGANIZATIONS` | `3` | Max allowlisted organizations |
+| `AGENT_PILOT_MAX_USERS` | `15` | Max allowlisted users |
+| `AGENT_PILOT_MAX_DAILY_JOBS` | `50` | Max agent jobs / UTC day across pilot orgs |
+| `AGENT_PILOT_MAX_DAILY_SPEND_USD` | `25` | Max estimated spend / UTC day across pilot orgs |
+| `AGENT_PILOT_MAX_CANDIDATE_BATCH_SIZE` | `25` | Cap for Scorecard/prospect batch size in pilot |
+
+**Permitted during pilot:** College Scorecard prospect generation, prospect enrichment, outreach draft generation.
+
+**Kept disabled:** automatic email sending, automatic prospect approval, automatic proposal delivery, autonomous contact creation.
+
+**Ops:** Super admins manage DB allowlists / enablement / kill switch from `/agents` (pilot status panel). Audits: `agent_pilot.enable`, `agent_pilot.disable`, `agent_pilot.kill_switch_enable`, `agent_pilot.kill_switch_disable`, `agent_pilot.org_allowlist_*`, `agent_pilot.user_allowlist_*`, `agent_pilot.access_denied`.
+
+**Incident emergency stop (preferred order):**
+
+1. Flip kill switch on `/agents` (or set `AGENT_PILOT_KILL_SWITCH=true` and redeploy).
+2. Optionally set `AGENT_FEATURE_ENABLED=false` and `LLM_ENRICHMENT_ENABLED=false` for deeper containment.
+3. Record incident id in the kill-switch audit metadata notes / timeline.
 
 **Budget calculation:** Estimated USD = `(input_tokens/1e6)*input_price + (output_tokens/1e6)*output_price` from `lib/llm/pricing.ts`. Unknown models or missing token counts → `estimated_cost_usd = null` (not invented). Limits use summed non-null estimates for the UTC day/month windows.
 

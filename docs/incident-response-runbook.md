@@ -297,6 +297,11 @@ Append-only table; **do not delete** rows during investigation.
 | `agent.usage_limit_reached` | Hourly/concurrency/LLM call limit hit |
 | `agent.budget_limit_reached` | Daily or monthly estimated spend limit hit |
 | `agent.chain_depth_exceeded` | Agent chain deeper than `AGENT_MAX_CHAIN_DEPTH` |
+| `agent_pilot.enable` / `agent_pilot.disable` | Super admin toggled limited production pilot |
+| `agent_pilot.kill_switch_enable` / `agent_pilot.kill_switch_disable` | Emergency pilot stop toggled |
+| `agent_pilot.org_allowlist_enable` / `disable` | Org added/removed from pilot allowlist |
+| `agent_pilot.user_allowlist_enable` / `disable` | User added/removed from pilot allowlist |
+| `agent_pilot.access_denied` | Actor/org/agent blocked by pilot controls |
 
 ### 14.2.1 Agent cron worker incidents
 
@@ -317,6 +322,16 @@ High-risk agent policy changes (disabling human review, private CRM context to L
 2. Query `agent_policy_break_glass` for grants past `expires_at` and mark `expired_at` / audit `agent_policy.break_glass_expire`.
 3. Do **not** enable `allow_auto_send_email` / `allow_auto_send_proposals` / `allow_auto_approve_prospects` even under incident pressure — product code continues to block autonomous external actions.
 4. Record policy_set_id / resolved_policy_hash from affected `agent_executions.metadata` in the incident timeline (no prompts or secrets).
+
+### 14.2.3 Limited production pilot emergency stop (Phase 5.5)
+
+If real provider spend, abuse, or unsafe agent output is detected among pilot allowlisted orgs:
+
+1. **Immediate:** Enable the pilot kill switch on `/agents` (super_admin) or set `AGENT_PILOT_KILL_SWITCH=true` and redeploy. This blocks Scorecard generation, enrichment, and outreach drafts for all orgs.
+2. **Deep containment (optional):** Set `AGENT_FEATURE_ENABLED=false`, `LLM_ENRICHMENT_ENABLED=false`, and pause the agent cron if needed.
+3. **Narrow:** Disable the affected org/user on the pilot allowlist (`agent_pilot.org_allowlist_disable` / `user_allowlist_disable`) rather than re-enabling the global kill switch if the issue is isolated.
+4. Confirm autonomy remains disabled (no auto-send / auto-approve / auto-proposal delivery / autonomous contact creation).
+5. Capture allowlist state, kill-switch audit rows, and spend totals for the UTC day in the incident record.
 
 ### 14.3 Investigation queries (Supabase SQL Editor)
 

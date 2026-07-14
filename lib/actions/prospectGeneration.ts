@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 
 import { AUDIT_ACTIONS, recordAuditEvent } from "@/lib/auditLog";
 import { MUTATION_ROLES, requireRole } from "@/lib/authz";
+import { assertRealProviderPilotAccess } from "@/lib/agents/pilot";
 import { recordLlmUsageEvent } from "@/lib/agents/usage";
 import { SupabaseAgentUsageStore } from "@/lib/agents/usageStore";
 import {
@@ -176,6 +177,18 @@ export async function createProspectGenerationJob(
   const { supabase, user, ownership } = context;
   const input: ProspectGenerationInput = parsed.input;
 
+  const pilot = await assertRealProviderPilotAccess({
+    supabase,
+    organizationId: ownership.organization_id,
+    actorUserId: user.id,
+    agentName: "ProspectGenerationAgent",
+    candidateBatchSize: input.maxResults
+  });
+
+  if (!pilot.ok) {
+    return { ok: false, error: pilot.error };
+  }
+
   const { data, error } = await supabase
     .from("prospect_generation_jobs")
     .insert({
@@ -246,6 +259,18 @@ export async function processProspectGenerationJob(
       ok: false,
       error: "Only queued jobs can generate candidates."
     };
+  }
+
+  const pilot = await assertRealProviderPilotAccess({
+    supabase,
+    organizationId: ownership.organization_id,
+    actorUserId: user.id,
+    agentName: "ProspectGenerationAgent",
+    candidateBatchSize: job.input.maxResults
+  });
+
+  if (!pilot.ok) {
+    return { ok: false, error: pilot.error };
   }
 
   const started = await markJobRunning(supabase, jobId, ownership.organization_id);

@@ -8,6 +8,7 @@ import {
   AgentOrchestrator,
   type RunNextAgentResult
 } from "./orchestrator";
+import { createPilotGateResolverFromSupabase } from "./pilot/gate";
 import { resolvePromptStampFromSupabase } from "./prompts/supabase";
 import {
   resolveAgentPolicyFromSupabase,
@@ -101,6 +102,7 @@ export function createAgentOrchestrator(
     resolvePromptStamp?: import("./orchestrator").PromptStampResolver;
     resolvePolicyStamp?: import("./orchestrator").PolicyStampResolver;
     resolveCertification?: import("./orchestrator").CertificationGateResolver;
+    resolvePilotGate?: import("./orchestrator").PilotGateResolver;
   }
 ): AgentOrchestrator {
   const handlers = createAgentHandlerRegistry(options?.handlerDependencies ?? {});
@@ -112,7 +114,8 @@ export function createAgentOrchestrator(
     options?.usageStore,
     options?.resolvePromptStamp,
     options?.resolvePolicyStamp,
-    options?.resolveCertification
+    options?.resolveCertification,
+    options?.resolvePilotGate
   );
 }
 
@@ -125,6 +128,7 @@ export function createAgentWorkerFromStore(
     resolvePromptStamp?: import("./orchestrator").PromptStampResolver;
     resolvePolicyStamp?: import("./orchestrator").PolicyStampResolver;
     resolveCertification?: import("./orchestrator").CertificationGateResolver;
+    resolvePilotGate?: import("./orchestrator").PilotGateResolver;
   }
 ): AgentWorker {
   return new AgentWorker(createAgentOrchestrator(store, options));
@@ -171,7 +175,8 @@ export function createGatedAgentOrchestratorFromSupabase(
         organizationId: input.organizationId,
         agentName: input.agentName,
         environment: input.environment
-      })
+      }),
+    resolvePilotGate: createPilotGateResolverFromSupabase(supabase)
   });
 }
 

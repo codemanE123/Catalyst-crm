@@ -6,9 +6,11 @@ import {
   canAccessAgentOrganization,
   canManageAgentOrganization,
   canManageAgentExecutions,
+  canManageAgentPilot,
   canViewAgentOperations,
   getAccessibleAgentOrganizationIds,
-  getMembershipsForUser
+  getMembershipsForUser,
+  isSuperAdmin
 } from "@/lib/authz";
 import {
   fetchAgentOperationsExecutions,
@@ -25,6 +27,12 @@ import {
   type AgentEvaluation,
   type AgentQualityDashboardMetrics
 } from "@/lib/agents/evaluation";
+import {
+  buildAgentPilotStatusSummary,
+  loadAgentPilotRuntimeState,
+  loadAgentPilotUsageSnapshot,
+  type AgentPilotStatusSummary
+} from "@/lib/agents/pilot";
 import {
   AgentOrchestrator,
   type CancelAgentResult,
@@ -124,6 +132,8 @@ export async function loadAgentOperationsDashboard(input: {
       isSuperAdmin: boolean;
       organizations: { id: string; name: string }[];
       readinessCertifications: AgentReadinessCertification[];
+      pilotStatus: AgentPilotStatusSummary;
+      canManagePilot: boolean;
     }
   | { ok: false; error: string }
 > {
@@ -228,6 +238,17 @@ export async function loadAgentOperationsDashboard(input: {
     mapCertification(row as Record<string, unknown>)
   );
 
+  const pilotState = await loadAgentPilotRuntimeState({
+    supabase: context.supabase
+  });
+  const pilotOrgIds = pilotState.organizations
+    .filter((entry) => entry.status === "enabled")
+    .map((entry) => entry.organization_id);
+  const pilotUsage = await loadAgentPilotUsageSnapshot({
+    supabase: context.supabase,
+    organizationIds: pilotOrgIds
+  });
+
   return {
     ok: true,
     metrics,
@@ -239,9 +260,14 @@ export async function loadAgentOperationsDashboard(input: {
     page,
     pageSize: PAGE_SIZE,
     canManage: context.canManage,
-    isSuperAdmin: context.accessibleOrganizationIds === null,
+    isSuperAdmin: isSuperAdmin(context.memberships),
     organizations: executions.organizations,
-    readinessCertifications
+    readinessCertifications,
+    pilotStatus: buildAgentPilotStatusSummary({
+      state: pilotState,
+      usage: pilotUsage
+    }),
+    canManagePilot: canManageAgentPilot(context.memberships)
   };
 }
 

@@ -213,6 +213,13 @@ export function canManagePolicyScope(
   return canManagePromptScope(memberships, organizationId);
 }
 
+/** Super_admin only for production pilot enablement and kill switch. */
+export function canManageAgentPilot(
+  memberships: OrganizationMember[]
+): boolean {
+  return isSuperAdmin(memberships);
+}
+
 /** Break-glass high-risk policy changes: super_admin only. */
 export function canUsePolicyBreakGlass(
   memberships: OrganizationMember[]

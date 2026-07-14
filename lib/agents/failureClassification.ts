@@ -77,6 +77,16 @@ export function classifyAgentFailure(
     code === "model_not_approved" ||
     code === "provider_disabled" ||
     code === "human_review_required_disabled" ||
+    code === "pilot_kill_switch" ||
+    code === "pilot_disabled" ||
+    code === "pilot_organization_not_allowlisted" ||
+    code === "pilot_user_not_allowlisted" ||
+    code === "pilot_agent_not_permitted" ||
+    code === "pilot_org_cap" ||
+    code === "pilot_user_cap" ||
+    code === "pilot_daily_jobs_limit" ||
+    code === "pilot_daily_spend_limit" ||
+    code === "pilot_batch_limit" ||
     PERMANENT_PATTERNS.some((pattern) => pattern.test(message))
   ) {
     return "permanent";

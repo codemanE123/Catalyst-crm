@@ -10,7 +10,17 @@ export const AGENT_POLICY_REASON_CODES = [
   "invalid_configuration",
   "chain_depth_exceeded",
   "candidate_batch_limit",
-  "certification_denied"
+  "certification_denied",
+  "pilot_kill_switch",
+  "pilot_disabled",
+  "pilot_organization_not_allowlisted",
+  "pilot_user_not_allowlisted",
+  "pilot_agent_not_permitted",
+  "pilot_org_cap",
+  "pilot_user_cap",
+  "pilot_daily_jobs_limit",
+  "pilot_daily_spend_limit",
+  "pilot_batch_limit"
 ] as const;
 
 export type AgentPolicyReasonCode = (typeof AGENT_POLICY_REASON_CODES)[number];
@@ -39,7 +49,22 @@ export const POLICY_USER_SAFE_MESSAGES: Record<AgentPolicyReasonCode, string> = 
   chain_depth_exceeded: "This agent action is temporarily unavailable.",
   candidate_batch_limit: "Requested candidate batch exceeds the allowed size.",
   certification_denied:
-    "This agent is not certified for the current environment. Contact an administrator."
+    "This agent is not certified for the current environment. Contact an administrator.",
+  pilot_kill_switch:
+    "Agent pilot has been emergency-stopped. Contact an administrator.",
+  pilot_disabled:
+    "Production agent pilot is disabled. Real provider execution is not available.",
+  pilot_organization_not_allowlisted:
+    "This organization is not on the production agent pilot allowlist.",
+  pilot_user_not_allowlisted:
+    "Your account is not on the production agent pilot allowlist.",
+  pilot_agent_not_permitted:
+    "This agent is not permitted during the limited production pilot.",
+  pilot_org_cap: "Pilot organization capacity has been reached.",
+  pilot_user_cap: "Pilot user capacity has been reached.",
+  pilot_daily_jobs_limit: "Daily pilot job limit has been reached.",
+  pilot_daily_spend_limit: "Daily pilot spend limit has been reached.",
+  pilot_batch_limit: "Requested candidate batch exceeds the pilot maximum."
 };
 
 export function denyAgentPolicy(

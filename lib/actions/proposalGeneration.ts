@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { MUTATION_ROLES, requireRole } from "@/lib/authz";
+import { assertRealProviderPilotAccess } from "@/lib/agents/pilot";
 import { executeProposalGeneration } from "@/lib/proposalGeneration/execute";
 import type { ProposalDraft } from "@/lib/proposalGeneration/types";
 import { getRecordOwnershipFields } from "@/lib/supabase";
@@ -81,6 +82,17 @@ export async function runProposalGenerationForCandidate(
     return { ok: false, error: context.error };
   }
 
+  const pilot = await assertRealProviderPilotAccess({
+    supabase: context.supabase,
+    organizationId: context.organizationId,
+    actorUserId: context.user.id,
+    agentName: "ProposalGenerationAgent"
+  });
+
+  if (!pilot.ok) {
+    return { ok: false, error: pilot.error };
+  }
+
   const trimmedId = candidateId.trim();
 
   if (!trimmedId) {
@@ -119,6 +131,17 @@ export async function runProposalGenerationForSchool(
 
   if (!context.ok) {
     return { ok: false, error: context.error };
+  }
+
+  const pilot = await assertRealProviderPilotAccess({
+    supabase: context.supabase,
+    organizationId: context.organizationId,
+    actorUserId: context.user.id,
+    agentName: "ProposalGenerationAgent"
+  });
+
+  if (!pilot.ok) {
+    return { ok: false, error: pilot.error };
   }
 
   const trimmedId = schoolId.trim();

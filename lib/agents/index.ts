@@ -141,3 +141,4 @@ export * from "./rollouts";
 export * from "./schemas";
 export * from "./policies";
 export * from "./readiness";
+export * from "./pilot";

@@ -38,6 +38,7 @@ import {
   type AgentReadinessCertification
 } from "./readiness";
 import { resolveReadinessEnvironment } from "./readiness/supabase";
+import type { PilotGateResolver } from "./pilot/gate";
 
 export type AgentAuditEventInput = {
   organizationId: string;
@@ -72,6 +73,8 @@ export type CertificationGateResolver = (input: {
   agentName: AgentName;
   environment: "staging" | "production";
 }) => Promise<AgentReadinessCertification | null>;
+
+export type { PilotGateResolver } from "./pilot/gate";
 
 export const AGENT_AUDIT_ACTIONS = {
   queue: "agent.queue",
@@ -133,7 +136,8 @@ export class AgentOrchestrator {
     private readonly usageStore?: AgentUsageStore,
     private readonly resolvePromptStamp?: PromptStampResolver,
     private readonly resolvePolicyStamp?: PolicyStampResolver,
-    private readonly resolveCertification?: CertificationGateResolver
+    private readonly resolveCertification?: CertificationGateResolver,
+    private readonly resolvePilotGate?: PilotGateResolver
   ) {
     this.executors = executors ?? createAgentHandlerRegistry();
   }
@@ -214,6 +218,36 @@ export class AgentOrchestrator {
 
     if (!circular.ok) {
       return { ok: false, error: circular.error, reason_code: "invalid_configuration" };
+    }
+
+    if (this.resolvePilotGate) {
+      const pilot = await this.resolvePilotGate({
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        agentName: input.agentName,
+        candidateBatchSize:
+          typeof input.metadata?.max_results === "number"
+            ? input.metadata.max_results
+            : null
+      });
+
+      if (!pilot.allowed) {
+        await this.recordPolicyDenial({
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          executionId: null,
+          agentName: input.agentName,
+          targetType: input.targetType,
+          targetId: input.targetId,
+          decision: pilot
+        });
+
+        return {
+          ok: false,
+          error: pilot.user_safe_message,
+          reason_code: pilot.reason_code
+        };
+      }
     }
 
     let chainDepth = 1;
@@ -455,6 +489,40 @@ export class AgentOrchestrator {
     const startedAt = running.started_at
       ? Date.parse(running.started_at)
       : Date.now();
+
+    if (this.resolvePilotGate) {
+      const pilot = await this.resolvePilotGate({
+        organizationId: running.organization_id,
+        actorUserId: params.actorUserId,
+        agentName: running.agent_name,
+        env: params.env
+      });
+
+      if (!pilot.allowed) {
+        await this.recordPolicyDenial({
+          organizationId: running.organization_id,
+          actorUserId: params.actorUserId,
+          executionId: running.id,
+          agentName: running.agent_name,
+          targetType: running.target_type,
+          targetId: running.target_id,
+          decision: pilot
+        });
+
+        const completedAt = Date.now();
+        return this.finalizeFailure(running, {
+          actorUserId: params.actorUserId,
+          errorMessage: pilot.user_safe_message,
+          errorCode: pilot.reason_code,
+          metadata: {
+            pilot_denied: true,
+            reason_code: pilot.reason_code
+          },
+          durationMs: completedAt - startedAt,
+          completedAt
+        });
+      }
+    }
 
     const policyFlatFromStamp: Record<string, unknown> | null =
       typeof running.metadata.policy_max_executions_per_hour === "number" ||

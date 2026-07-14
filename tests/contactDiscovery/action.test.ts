@@ -34,6 +34,14 @@ vi.mock("@/lib/contactDiscovery/execute", () => ({
   executeContactDiscovery: (...args: unknown[]) => mockExecuteContactDiscovery(...args)
 }));
 
+vi.mock("@/lib/agents/pilot", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/agents/pilot")>();
+  return {
+    ...actual,
+    assertRealProviderPilotAccess: vi.fn(async () => ({ ok: true }))
+  };
+});
+
 describe("runContactDiscoveryForCandidate", () => {
   beforeEach(() => {
     vi.resetModules();

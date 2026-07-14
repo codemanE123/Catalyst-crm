@@ -40,6 +40,14 @@ vi.mock("@/lib/auditLog", () => ({
   recordAuditEvent: (...args: unknown[]) => mockRecordAuditEvent(...args)
 }));
 
+vi.mock("@/lib/agents/pilot", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/agents/pilot")>();
+  return {
+    ...actual,
+    assertRealProviderPilotAccess: vi.fn(async () => ({ ok: true }))
+  };
+});
+
 vi.mock("@/lib/prospectSources", () => ({
   generateProspectCandidatesForJob: (...args: unknown[]) =>
     mockGenerateProspectCandidatesForJob(...args)
