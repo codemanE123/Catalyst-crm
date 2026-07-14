@@ -266,6 +266,20 @@ No new public env vars. Route: `/approvals`. See `docs/human-approval-center.md`
 
 Apply migration `20260714180000_agent_evaluations.sql`. See `docs/agent-quality-evaluation.md`.
 
+### 6.6c Agent prompt versioning and rollouts (Phase 4.11)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AGENT_PROMPT_MAX_TEMPLATE_CHARS` | `24000` | Max combined system + user template length |
+| `AGENT_PROMPT_MAX_OUTPUT_TOKENS` | `4000` | Upper bound for prompt version `max_output_tokens` |
+| `AGENT_ROLLOUT_DEFAULT_PERCENTAGE` | `0` | Default treatment % for new percentage rollouts (`0/10/25/50/100`) |
+| `AGENT_ROLLOUT_ASSIGNMENT_KEY` | `organization_id` | Deterministic bucket key (`organization_id`, `user_id`, or `target_id`) |
+| `AGENT_PROMPT_REQUIRE_SAFETY_POLICY` | `true` | Require `safety_policy_version` before activation |
+| `AGENT_PROMPT_REQUIRE_SCHEMA_VERSION` | `true` | Require registered `output_schema_version` |
+| `AGENT_PROMPT_ACTIVATION_MIN_QUALITY` | `3` | Min average quality (1–5) when evaluation data exists |
+
+Apply migration `20260714190000_agent_prompt_versions_and_rollouts.sql`. Admin UI: `/agents/prompts`, `/agents/rollouts`. See `docs/agent-prompt-versioning.md`.
+
 ### 6.7 Future variables
 
 | Variable | Task | Purpose |

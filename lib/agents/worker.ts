@@ -8,6 +8,7 @@ import {
   AgentOrchestrator,
   type RunNextAgentResult
 } from "./orchestrator";
+import { resolvePromptStampFromSupabase } from "./prompts/supabase";
 import type { AgentExecutionStore } from "./store";
 import {
   createSupabaseAgentAuditRecorder,
@@ -92,6 +93,7 @@ export function createAgentOrchestrator(
     handlerDependencies?: AgentHandlerDependencies;
     auditRecorder?: import("./orchestrator").AgentAuditRecorder;
     usageStore?: import("./usage").AgentUsageStore;
+    resolvePromptStamp?: import("./orchestrator").PromptStampResolver;
   }
 ): AgentOrchestrator {
   const handlers = createAgentHandlerRegistry(options?.handlerDependencies ?? {});
@@ -100,7 +102,8 @@ export function createAgentOrchestrator(
     store,
     handlers,
     options?.auditRecorder,
-    options?.usageStore
+    options?.usageStore,
+    options?.resolvePromptStamp
   );
 }
 
@@ -110,6 +113,7 @@ export function createAgentWorkerFromStore(
     handlerDependencies?: AgentHandlerDependencies;
     auditRecorder?: import("./orchestrator").AgentAuditRecorder;
     usageStore?: import("./usage").AgentUsageStore;
+    resolvePromptStamp?: import("./orchestrator").PromptStampResolver;
   }
 ): AgentWorker {
   return new AgentWorker(createAgentOrchestrator(store, options));
@@ -125,6 +129,15 @@ export function createAgentWorkerFromSupabase(
   return createAgentWorkerFromStore(new SupabaseAgentExecutionStore(supabase), {
     handlerDependencies: options?.handlerDependencies,
     auditRecorder: createSupabaseAgentAuditRecorder(supabase, recordAuditEvent),
-    usageStore: options?.usageStore
+    usageStore: options?.usageStore,
+    resolvePromptStamp: async (input) =>
+      resolvePromptStampFromSupabase({
+        supabase,
+        agentName: input.agentName,
+        organizationId: input.organizationId,
+        userId: input.actorUserId,
+        targetId: input.targetId,
+        existing: input.existingMetadata ?? null
+      })
   });
 }

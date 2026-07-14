@@ -1,7 +1,7 @@
 # Catalyst CRM — Phase 3 Agentic Architecture
 
-**Status:** Design only (no application code)  
-**Date:** July 6, 2026  
+**Status:** Design baseline plus Phase 4 implementation (orchestrator, worker, approvals, quality, prompt versioning)  
+**Date:** July 14, 2026  
 **Audience:** Engineering, product, security, pilot operations  
 **Prerequisite:** Phase 2 Pilot Launch Track complete (`v0.4-pilot-ready` baseline)
 
@@ -10,6 +10,8 @@
 - `docs/ai-safety-audit.md`
 - `docs/data-privacy-audit.md`
 - `docs/supabase-rls-audit.md`
+- `docs/agent-prompt-versioning.md` (Phase 4.11 prompt registry and rollouts)
+- `docs/agent-quality-evaluation.md` (Phase 4.10)
 - `lib/universityResearch.ts` (legacy synchronous research — superseded by this design)
 
 ---
@@ -811,6 +813,11 @@ Phase 3 ships in four increments. Each phase has a gate before the next begins.
 - Autonomous email send or outreach logging
 - Cross-tenant prospect sharing
 - Training custom models on customer CRM data without explicit contract
+- Auto-promote prompt treatment variants (Phase 4.11 requires manual promote)
+
+### Phase 4.11 — Prompt versioning (implemented)
+
+See `docs/agent-prompt-versioning.md`. Agents resolve stamped `prompt_version_id` / `experiment_variant` through the existing orchestrator queue path. Prompt registry and rollouts live under `/agents/prompts` and `/agents/rollouts` with org-scoped RLS.
 
 ---
 

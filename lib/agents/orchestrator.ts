@@ -27,6 +27,7 @@ import type {
   QueueAgentChainInput,
   QueueAgentInput
 } from "./types";
+import type { PromptExecutionStamp } from "./prompts/types";
 
 export type AgentAuditEventInput = {
   organizationId: string;
@@ -37,6 +38,15 @@ export type AgentAuditEventInput = {
 };
 
 export type AgentAuditRecorder = (event: AgentAuditEventInput) => Promise<void>;
+
+export type PromptStampResolver = (input: {
+  organizationId: string;
+  agentName: AgentName;
+  targetType: string;
+  targetId: string;
+  actorUserId: string;
+  existingMetadata?: QueueAgentInput["metadata"];
+}) => Promise<PromptExecutionStamp | null>;
 
 export const AGENT_AUDIT_ACTIONS = {
   queue: "agent.queue",
@@ -95,7 +105,8 @@ export class AgentOrchestrator {
     private readonly store: AgentExecutionStore,
     executors?: Map<AgentName, AgentExecutor>,
     private readonly audit?: AgentAuditRecorder,
-    private readonly usageStore?: AgentUsageStore
+    private readonly usageStore?: AgentUsageStore,
+    private readonly resolvePromptStamp?: PromptStampResolver
   ) {
     this.executors = executors ?? createAgentHandlerRegistry();
   }
@@ -221,6 +232,21 @@ export class AgentOrchestrator {
       };
     }
 
+    const baseMetadata = { ...(input.metadata ?? {}) };
+    if (!baseMetadata.prompt_version_id && this.resolvePromptStamp) {
+      const stamp = await this.resolvePromptStamp({
+        organizationId: input.organizationId,
+        agentName: input.agentName,
+        targetType: input.targetType,
+        targetId: input.targetId,
+        actorUserId: input.actorUserId,
+        existingMetadata: input.metadata
+      });
+      if (stamp) {
+        Object.assign(baseMetadata, stamp);
+      }
+    }
+
     const execution = await this.store.insert({
       organization_id: input.organizationId,
       agent_name: input.agentName,
@@ -229,7 +255,7 @@ export class AgentOrchestrator {
       status: "queued",
       depends_on_execution_id: input.dependsOnExecutionId ?? null,
       chain_depth: chainDepth,
-      metadata: input.metadata ?? {}
+      metadata: baseMetadata
     });
 
     await this.recordAudit({
@@ -242,7 +268,23 @@ export class AgentOrchestrator {
         target_type: execution.target_type,
         target_id: execution.target_id,
         depends_on_execution_id: execution.depends_on_execution_id,
-        chain_depth: execution.chain_depth
+        chain_depth: execution.chain_depth,
+        prompt_key:
+          typeof execution.metadata.prompt_key === "string"
+            ? execution.metadata.prompt_key
+            : null,
+        prompt_version:
+          typeof execution.metadata.prompt_version === "string"
+            ? execution.metadata.prompt_version
+            : null,
+        rollout_id:
+          typeof execution.metadata.rollout_id === "string"
+            ? execution.metadata.rollout_id
+            : null,
+        experiment_variant:
+          typeof execution.metadata.experiment_variant === "string"
+            ? execution.metadata.experiment_variant
+            : null
       }
     });
 
@@ -403,7 +445,10 @@ export class AgentOrchestrator {
       error_message: null,
       last_error_code: null,
       next_retry_at: null,
-      metadata: result.metadata
+      metadata: {
+        ...running.metadata,
+        ...(result.metadata ?? {})
+      }
     });
 
     if (!completed) {
@@ -417,7 +462,15 @@ export class AgentOrchestrator {
       recordId: completed.id,
       metadata: {
         agent_name: completed.agent_name,
-        duration_ms: completed.duration_ms ?? durationMs
+        duration_ms: completed.duration_ms ?? durationMs,
+        prompt_version_id:
+          typeof completed.metadata.prompt_version_id === "string"
+            ? completed.metadata.prompt_version_id
+            : null,
+        experiment_variant:
+          typeof completed.metadata.experiment_variant === "string"
+            ? completed.metadata.experiment_variant
+            : null
       }
     });
 
@@ -451,7 +504,10 @@ export class AgentOrchestrator {
         error_message: params.errorMessage,
         last_error_code: decision.failureClass,
         next_retry_at: decision.nextRetryAt,
-        metadata: params.metadata
+        metadata: {
+          ...running.metadata,
+          ...(params.metadata ?? {})
+        }
       });
 
       if (!scheduled) {
@@ -482,7 +538,10 @@ export class AgentOrchestrator {
       error_message: params.errorMessage,
       last_error_code: decision.failureClass,
       next_retry_at: null,
-      metadata: params.metadata
+      metadata: {
+        ...running.metadata,
+        ...(params.metadata ?? {})
+      }
     });
 
     if (!failed) {

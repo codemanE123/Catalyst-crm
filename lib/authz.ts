@@ -145,6 +145,46 @@ export function canManageAgentOrganization(
   );
 }
 
+/** Sales+ may read active prompt metadata; read_only denied. */
+export function canViewPromptRegistry(
+  memberships: OrganizationMember[]
+): boolean {
+  return canViewAgentOperations(memberships);
+}
+
+/** Org admins manage org-scoped drafts/rollouts; super_admin may as well. */
+export function canManageOrgPrompts(
+  memberships: OrganizationMember[],
+  organizationId: string
+): boolean {
+  if (isSuperAdmin(memberships)) {
+    return true;
+  }
+
+  return memberships.some(
+    (membership) =>
+      membership.organization_id === organizationId &&
+      membership.role === "admin"
+  );
+}
+
+/** Only super_admin manages global (organization_id null) prompts/rollouts. */
+export function canManageGlobalPrompts(
+  memberships: OrganizationMember[]
+): boolean {
+  return isSuperAdmin(memberships);
+}
+
+export function canManagePromptScope(
+  memberships: OrganizationMember[],
+  organizationId: string | null
+): boolean {
+  if (organizationId == null) {
+    return canManageGlobalPrompts(memberships);
+  }
+  return canManageOrgPrompts(memberships, organizationId);
+}
+
 export function getAccessibleAgentOrganizationIds(
   memberships: OrganizationMember[]
 ): string[] | null {

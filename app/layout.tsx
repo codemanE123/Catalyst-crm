@@ -81,13 +81,29 @@ export default async function RootLayout({
               </Link>
             ) : null}
             {showAgentsNav ? (
-              <Link
-                className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
-                href="/agents"
-                prefetch={false}
-              >
-                Agents
-              </Link>
+              <>
+                <Link
+                  className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
+                  href="/agents"
+                  prefetch={false}
+                >
+                  Agents
+                </Link>
+                <Link
+                  className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
+                  href="/agents/prompts"
+                  prefetch={false}
+                >
+                  Prompts
+                </Link>
+                <Link
+                  className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
+                  href="/agents/rollouts"
+                  prefetch={false}
+                >
+                  Rollouts
+                </Link>
+              </>
             ) : null}
             {user ? (
               <a

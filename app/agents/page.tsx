@@ -101,6 +101,14 @@ export default async function AgentsOperationsPage({ searchParams }: AgentsPageP
               prep, and proposal generation activity. Operator actions stay within organization
               scope and are audited.
             </p>
+            <div className="mt-3 flex gap-4 text-sm">
+              <Link className="font-semibold text-cyan-700 hover:text-cyan-900" href="/agents/prompts">
+                Prompt registry
+              </Link>
+              <Link className="font-semibold text-cyan-700 hover:text-cyan-900" href="/agents/rollouts">
+                Rollouts
+              </Link>
+            </div>
           </div>
           {!dashboard.canManage ? (
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
