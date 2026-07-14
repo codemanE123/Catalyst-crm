@@ -9,6 +9,10 @@ import {
   type RunNextAgentResult
 } from "./orchestrator";
 import { resolvePromptStampFromSupabase } from "./prompts/supabase";
+import {
+  resolveAgentPolicyFromSupabase,
+  resolvePolicyStampFromSupabase
+} from "./policies/supabase";
 import type { AgentExecutionStore } from "./store";
 import {
   createSupabaseAgentAuditRecorder,
@@ -94,6 +98,7 @@ export function createAgentOrchestrator(
     auditRecorder?: import("./orchestrator").AgentAuditRecorder;
     usageStore?: import("./usage").AgentUsageStore;
     resolvePromptStamp?: import("./orchestrator").PromptStampResolver;
+    resolvePolicyStamp?: import("./orchestrator").PolicyStampResolver;
   }
 ): AgentOrchestrator {
   const handlers = createAgentHandlerRegistry(options?.handlerDependencies ?? {});
@@ -103,7 +108,8 @@ export function createAgentOrchestrator(
     handlers,
     options?.auditRecorder,
     options?.usageStore,
-    options?.resolvePromptStamp
+    options?.resolvePromptStamp,
+    options?.resolvePolicyStamp
   );
 }
 
@@ -114,6 +120,7 @@ export function createAgentWorkerFromStore(
     auditRecorder?: import("./orchestrator").AgentAuditRecorder;
     usageStore?: import("./usage").AgentUsageStore;
     resolvePromptStamp?: import("./orchestrator").PromptStampResolver;
+    resolvePolicyStamp?: import("./orchestrator").PolicyStampResolver;
   }
 ): AgentWorker {
   return new AgentWorker(createAgentOrchestrator(store, options));
@@ -138,6 +145,21 @@ export function createAgentWorkerFromSupabase(
         userId: input.actorUserId,
         targetId: input.targetId,
         existing: input.existingMetadata ?? null
-      })
+      }),
+    resolvePolicyStamp: async (input) => {
+      const stamp = await resolvePolicyStampFromSupabase({
+        supabase,
+        organizationId: input.organizationId,
+        existing: input.existingMetadata ?? null
+      });
+      if (!stamp) {
+        return null;
+      }
+      const resolved = await resolveAgentPolicyFromSupabase({
+        supabase,
+        organizationId: input.organizationId
+      });
+      return { stamp, flat: resolved.flat };
+    }
   });
 }

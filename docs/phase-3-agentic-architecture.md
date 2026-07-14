@@ -11,6 +11,7 @@
 - `docs/data-privacy-audit.md`
 - `docs/supabase-rls-audit.md`
 - `docs/agent-prompt-versioning.md` (Phase 4.11 prompt registry and rollouts)
+- `docs/agent-policy-management.md` (Phase 4.12 policy console)
 - `docs/agent-quality-evaluation.md` (Phase 4.10)
 - `lib/universityResearch.ts` (legacy synchronous research — superseded by this design)
 
@@ -818,6 +819,10 @@ Phase 3 ships in four increments. Each phase has a gate before the next begins.
 ### Phase 4.11 — Prompt versioning (implemented)
 
 See `docs/agent-prompt-versioning.md`. Agents resolve stamped `prompt_version_id` / `experiment_variant` through the existing orchestrator queue path. Prompt registry and rollouts live under `/agents/prompts` and `/agents/rollouts` with org-scoped RLS.
+
+### Phase 4.12 — Policy management console (implemented)
+
+See `docs/agent-policy-management.md`. Organization/global policy sets resolve over system defaults and stamp `policy_set_id` / limits onto executions. Admin UI: `/agents/policies`. Break-glass is super_admin-only with expiry and audit.
 
 ---
 

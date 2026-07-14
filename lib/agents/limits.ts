@@ -89,9 +89,10 @@ export type AgentSafetyLimits = {
 };
 
 export function resolveAgentSafetyLimits(
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  overrides?: Partial<AgentSafetyLimits>
 ): AgentSafetyLimits {
-  return {
+  const base: AgentSafetyLimits = {
     maxExecutionsPerHour: parsePositiveInt(
       env[AGENT_LIMIT_ENV.maxExecutionsPerHour],
       DEFAULT_AGENT_LIMITS.maxExecutionsPerHour,
@@ -151,6 +152,65 @@ export function resolveAgentSafetyLimits(
       env[AGENT_LIMIT_ENV.featureEnabled],
       DEFAULT_AGENT_LIMITS.featureEnabled
     )
+  };
+
+  if (!overrides) {
+    return base;
+  }
+
+  return { ...base, ...overrides };
+}
+
+/**
+ * Apply Phase 4.12 resolved policy flat values onto safety limits.
+ * Org DB policy wins for operational limits; autonomy remains enforced elsewhere.
+ */
+export function applyResolvedPolicyToSafetyLimits(
+  limits: AgentSafetyLimits,
+  flat: Record<string, unknown> | null | undefined
+): AgentSafetyLimits {
+  if (!flat) {
+    return limits;
+  }
+
+  return {
+    ...limits,
+    maxExecutionsPerHour:
+      typeof flat.max_agent_executions_per_hour === "number"
+        ? flat.max_agent_executions_per_hour
+        : limits.maxExecutionsPerHour,
+    maxLlmCallsPerDay:
+      typeof flat.max_llm_calls_per_day === "number"
+        ? flat.max_llm_calls_per_day
+        : limits.maxLlmCallsPerDay,
+    dailyBudgetUsd:
+      typeof flat.daily_budget_usd === "number"
+        ? flat.daily_budget_usd
+        : limits.dailyBudgetUsd,
+    monthlyBudgetUsd:
+      typeof flat.monthly_budget_usd === "number"
+        ? flat.monthly_budget_usd
+        : limits.monthlyBudgetUsd,
+    maxConcurrentExecutions:
+      typeof flat.max_concurrent_executions === "number"
+        ? flat.max_concurrent_executions
+        : limits.maxConcurrentExecutions,
+    maxCandidateBatchSize:
+      typeof flat.max_candidate_batch_size === "number"
+        ? flat.max_candidate_batch_size
+        : limits.maxCandidateBatchSize,
+    maxChainDepth:
+      typeof flat.max_chain_depth === "number"
+        ? flat.max_chain_depth
+        : limits.maxChainDepth,
+    maxAutomaticRetries:
+      typeof flat.max_retry_attempts === "number"
+        ? flat.max_retry_attempts
+        : limits.maxAutomaticRetries,
+    featureEnabled:
+      typeof flat.automated_worker_enabled === "boolean"
+        ? flat.automated_worker_enabled
+        : limits.featureEnabled
   };
 }
 

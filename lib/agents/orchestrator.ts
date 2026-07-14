@@ -28,6 +28,11 @@ import type {
   QueueAgentInput
 } from "./types";
 import type { PromptExecutionStamp } from "./prompts/types";
+import type { PolicyExecutionStamp } from "./policies/types";
+import {
+  applyResolvedPolicyToSafetyLimits,
+  resolveAgentSafetyLimits
+} from "./limits";
 
 export type AgentAuditEventInput = {
   organizationId: string;
@@ -47,6 +52,15 @@ export type PromptStampResolver = (input: {
   actorUserId: string;
   existingMetadata?: QueueAgentInput["metadata"];
 }) => Promise<PromptExecutionStamp | null>;
+
+export type PolicyStampResolver = (input: {
+  organizationId: string;
+  actorUserId: string;
+  existingMetadata?: QueueAgentInput["metadata"];
+}) => Promise<{
+  stamp: PolicyExecutionStamp;
+  flat?: Record<string, unknown>;
+} | null>;
 
 export const AGENT_AUDIT_ACTIONS = {
   queue: "agent.queue",
@@ -106,7 +120,8 @@ export class AgentOrchestrator {
     executors?: Map<AgentName, AgentExecutor>,
     private readonly audit?: AgentAuditRecorder,
     private readonly usageStore?: AgentUsageStore,
-    private readonly resolvePromptStamp?: PromptStampResolver
+    private readonly resolvePromptStamp?: PromptStampResolver,
+    private readonly resolvePolicyStamp?: PolicyStampResolver
   ) {
     this.executors = executors ?? createAgentHandlerRegistry();
   }
@@ -153,11 +168,17 @@ export class AgentOrchestrator {
     candidateBatchSize?: number;
     env?: NodeJS.ProcessEnv;
     includeSelfInRunning?: boolean;
+    policyFlat?: Record<string, unknown> | null;
   }): Promise<AgentPolicyDecision> {
     const usage = await this.loadUsageSnapshot(params.organizationId);
     const runningCount = params.includeSelfInRunning
       ? usage.runningCount
       : Math.max(0, usage.runningCount);
+
+    const limits = applyResolvedPolicyToSafetyLimits(
+      resolveAgentSafetyLimits(params.env),
+      params.policyFlat
+    );
 
     return evaluateAgentPolicy({
       usage: {
@@ -167,7 +188,8 @@ export class AgentOrchestrator {
       chainDepth: params.chainDepth,
       candidateBatchSize: params.candidateBatchSize,
       checkLlmBudget: LLM_BACKED_AGENTS.has(params.agentName),
-      env: params.env
+      env: params.env,
+      limits
     });
   }
 
@@ -205,13 +227,28 @@ export class AgentOrchestrator {
         ? input.metadata.max_results
         : undefined;
 
+    let policyFlat: Record<string, unknown> | null = null;
+    let policyStamp: PolicyExecutionStamp | null = null;
+    if (this.resolvePolicyStamp) {
+      const resolved = await this.resolvePolicyStamp({
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        existingMetadata: input.metadata
+      });
+      if (resolved) {
+        policyStamp = resolved.stamp;
+        policyFlat = resolved.flat ?? null;
+      }
+    }
+
     const policy = await this.evaluatePreflight({
       organizationId: input.organizationId,
       agentName: input.agentName,
       chainDepth,
       candidateBatchSize,
       env: undefined,
-      includeSelfInRunning: false
+      includeSelfInRunning: false,
+      policyFlat
     });
 
     if (!policy.allowed) {
@@ -233,6 +270,9 @@ export class AgentOrchestrator {
     }
 
     const baseMetadata = { ...(input.metadata ?? {}) };
+    if (policyStamp && !baseMetadata.resolved_policy_hash) {
+      Object.assign(baseMetadata, policyStamp);
+    }
     if (!baseMetadata.prompt_version_id && this.resolvePromptStamp) {
       const stamp = await this.resolvePromptStamp({
         organizationId: input.organizationId,
@@ -284,6 +324,18 @@ export class AgentOrchestrator {
         experiment_variant:
           typeof execution.metadata.experiment_variant === "string"
             ? execution.metadata.experiment_variant
+            : null,
+        policy_set_id:
+          typeof execution.metadata.policy_set_id === "string"
+            ? execution.metadata.policy_set_id
+            : null,
+        policy_version:
+          typeof execution.metadata.policy_version === "string"
+            ? execution.metadata.policy_version
+            : null,
+        policy_scope:
+          typeof execution.metadata.policy_scope === "string"
+            ? execution.metadata.policy_scope
             : null
       }
     });
@@ -351,12 +403,25 @@ export class AgentOrchestrator {
       ? Date.parse(running.started_at)
       : Date.now();
 
+    const policyFlatFromStamp: Record<string, unknown> | null =
+      typeof running.metadata.policy_max_executions_per_hour === "number" ||
+      typeof running.metadata.policy_daily_budget_usd === "number"
+        ? {
+            max_agent_executions_per_hour:
+              running.metadata.policy_max_executions_per_hour,
+            daily_budget_usd: running.metadata.policy_daily_budget_usd,
+            automated_worker_enabled:
+              running.metadata.policy_feature_enabled ?? true
+          }
+        : null;
+
     const policy = await this.evaluatePreflight({
       organizationId: running.organization_id,
       agentName: running.agent_name,
       chainDepth: running.chain_depth,
       env: params.env,
-      includeSelfInRunning: true
+      includeSelfInRunning: true,
+      policyFlat: policyFlatFromStamp
     });
 
     if (!policy.allowed) {

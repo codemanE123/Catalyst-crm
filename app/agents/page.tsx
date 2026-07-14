@@ -108,6 +108,9 @@ export default async function AgentsOperationsPage({ searchParams }: AgentsPageP
               <Link className="font-semibold text-cyan-700 hover:text-cyan-900" href="/agents/rollouts">
                 Rollouts
               </Link>
+              <Link className="font-semibold text-cyan-700 hover:text-cyan-900" href="/agents/policies">
+                Policies
+              </Link>
             </div>
           </div>
           {!dashboard.canManage ? (

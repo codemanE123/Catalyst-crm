@@ -185,6 +185,41 @@ export function canManagePromptScope(
   return canManageOrgPrompts(memberships, organizationId);
 }
 
+/** Sales+ may view policy summary; read_only denied. */
+export function canViewAgentPolicies(
+  memberships: OrganizationMember[]
+): boolean {
+  return canViewAgentOperations(memberships);
+}
+
+/** Org admins manage org policy drafts; super_admin may as well. */
+export function canManageOrgPolicies(
+  memberships: OrganizationMember[],
+  organizationId: string
+): boolean {
+  return canManageOrgPrompts(memberships, organizationId);
+}
+
+export function canManageGlobalPolicies(
+  memberships: OrganizationMember[]
+): boolean {
+  return canManageGlobalPrompts(memberships);
+}
+
+export function canManagePolicyScope(
+  memberships: OrganizationMember[],
+  organizationId: string | null
+): boolean {
+  return canManagePromptScope(memberships, organizationId);
+}
+
+/** Break-glass high-risk policy changes: super_admin only. */
+export function canUsePolicyBreakGlass(
+  memberships: OrganizationMember[]
+): boolean {
+  return isSuperAdmin(memberships);
+}
+
 export function getAccessibleAgentOrganizationIds(
   memberships: OrganizationMember[]
 ): string[] | null {

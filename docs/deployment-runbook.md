@@ -280,6 +280,22 @@ Apply migration `20260714180000_agent_evaluations.sql`. See `docs/agent-quality-
 
 Apply migration `20260714190000_agent_prompt_versions_and_rollouts.sql`. Admin UI: `/agents/prompts`, `/agents/rollouts`. See `docs/agent-prompt-versioning.md`.
 
+### 6.6d Agent policy management console (Phase 4.12)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AGENT_POLICY_MANAGEMENT_ENABLED` | `true` | Feature flag for policy console readiness |
+| `AGENT_POLICY_DEFAULT_DAILY_BUDGET_USD` | `25` | Bootstrap system default daily budget |
+| `AGENT_POLICY_DEFAULT_MONTHLY_BUDGET_USD` | `250` | Bootstrap system default monthly budget |
+| `AGENT_POLICY_DEFAULT_MAX_CONCURRENCY` | `5` | Bootstrap max concurrent executions |
+| `AGENT_POLICY_BREAK_GLASS_MAX_HOURS` | `24` | Max break-glass grant duration |
+| `AGENT_POLICY_REQUIRE_APPROVAL` | `true` | Bootstrap require human review flags |
+| `AGENT_POLICY_REQUIRE_SOURCE_CITATIONS` | `true` | Bootstrap require citations |
+
+Env values bootstrap system defaults only. They **must not** silently override stricter active database safety policies. Autonomy keys remain false regardless of env.
+
+Apply migration `20260714200000_agent_policy_sets.sql`. Admin UI: `/agents/policies`. See `docs/agent-policy-management.md`.
+
 ### 6.7 Future variables
 
 | Variable | Task | Purpose |

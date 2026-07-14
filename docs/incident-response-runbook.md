@@ -295,6 +295,17 @@ If `/api/agents/process` fails repeatedly:
 3. Query `agent_executions` for stuck `running` rows older than 15 minutes — cron recovers these and audits `agent.stale_recovered`.
 4. Do **not** rotate the service role key without updating Vercel env in the same change window.
 
+### 14.2.2 Agent policy break-glass and rollback
+
+High-risk agent policy changes (disabling human review, private CRM context to LLMs, autonomy flags, citation requirements) require **super_admin break-glass** with a typed reason, confirmation phrase `BREAK GLASS`, expiration, and audit (`agent_policy.break_glass_enable`). See `docs/agent-policy-management.md`.
+
+**During incident:**
+
+1. Prefer rolling back to a prior active policy set in `/agents/policies` (`agent_policy.rollback`) over leaving an unsafe override active.
+2. Query `agent_policy_break_glass` for grants past `expires_at` and mark `expired_at` / audit `agent_policy.break_glass_expire`.
+3. Do **not** enable `allow_auto_send_email` / `allow_auto_send_proposals` / `allow_auto_approve_prospects` even under incident pressure — product code continues to block autonomous external actions.
+4. Record policy_set_id / resolved_policy_hash from affected `agent_executions.metadata` in the incident timeline (no prompts or secrets).
+
 ### 14.3 Investigation queries (Supabase SQL Editor)
 
 **Recent activity for an organization:**
