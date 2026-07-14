@@ -41,6 +41,13 @@ export type AgentHandlerDependencies = {
     targetId: string;
     agentExecutionId?: string | null;
   }) => Promise<AgentExecutorResult>;
+  runProposalGeneration?: (input: {
+    organizationId: string;
+    actorUserId: string;
+    targetType: "prospect_candidate" | "school";
+    targetId: string;
+    agentExecutionId?: string | null;
+  }) => Promise<AgentExecutorResult>;
 };
 
 function futureAgentResult(agentName: AgentName): AgentExecutorResult {
@@ -247,6 +254,44 @@ function defaultMeetingPrepHandler(
   });
 }
 
+function defaultProposalGenerationHandler(
+  execution: AgentExecution,
+  context: AgentExecutorContext,
+  deps: AgentHandlerDependencies
+): Promise<AgentExecutorResult> {
+  const allowedTargetTypes = new Set(["prospect_candidate", "school"]);
+
+  if (!allowedTargetTypes.has(execution.target_type)) {
+    return Promise.resolve(
+      invalidTargetResult(
+        "ProposalGenerationAgent",
+        "prospect_candidate or school",
+        execution.target_type
+      )
+    );
+  }
+
+  if (deps.runProposalGeneration) {
+    return deps.runProposalGeneration({
+      organizationId: execution.organization_id,
+      actorUserId: context.actorUserId,
+      targetType: execution.target_type as "prospect_candidate" | "school",
+      targetId: execution.target_id,
+      agentExecutionId: execution.id
+    });
+  }
+
+  return Promise.resolve({
+    ok: true,
+    metadata: {
+      mode: "worker_stub",
+      agent_name: "ProposalGenerationAgent",
+      target_id: execution.target_id,
+      target_type: execution.target_type
+    }
+  });
+}
+
 export function createAgentHandlerRegistry(
   deps: AgentHandlerDependencies = {}
 ): Map<AgentName, AgentExecutor> {
@@ -266,6 +311,9 @@ export function createAgentHandlerRegistry(
   );
   registry.set("MeetingPrepAgent", (execution, context) =>
     defaultMeetingPrepHandler(execution, context, deps)
+  );
+  registry.set("ProposalGenerationAgent", (execution, context) =>
+    defaultProposalGenerationHandler(execution, context, deps)
   );
   registry.set("FutureContactDiscoveryAgent", async () =>
     futureAgentResult("FutureContactDiscoveryAgent")

@@ -4,6 +4,7 @@ export const AGENT_NAMES = [
   "OutreachDraftAgent",
   "ContactDiscoveryAgent",
   "MeetingPrepAgent",
+  "ProposalGenerationAgent",
   "FutureContactDiscoveryAgent",
   "FutureMeetingPrepAgent"
 ] as const;

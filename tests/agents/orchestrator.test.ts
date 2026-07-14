@@ -333,6 +333,41 @@ describe("AgentOrchestrator", () => {
     }
   });
 
+  it("runs ProposalGenerationAgent when handler dependency is provided", async () => {
+    const runProposalGeneration = vi.fn(async () => ({
+      ok: true as const,
+      metadata: { confidence_score: 0.84 }
+    }));
+
+    const proposalOrchestrator = new AgentOrchestrator(
+      store,
+      createAgentHandlerRegistry({ runProposalGeneration }),
+      async (event) => {
+        auditEvents.push(event);
+      }
+    );
+
+    await proposalOrchestrator.queueAgent({
+      organizationId,
+      actorUserId,
+      agentName: "ProposalGenerationAgent",
+      targetType: "school",
+      targetId: "school-1"
+    });
+
+    const run = await proposalOrchestrator.runNextAgent({
+      organizationId,
+      actorUserId
+    });
+
+    expect(run.ok).toBe(true);
+
+    if (run.ok && run.ran) {
+      expect(run.execution.status).toBe("completed");
+      expect(runProposalGeneration).toHaveBeenCalled();
+    }
+  });
+
   it("does not run chained agents until dependencies complete", async () => {
     const executors = new Map<AgentName, AgentExecutor>();
     executors.set("ProspectGenerationAgent", async () => ({ ok: true }));

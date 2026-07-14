@@ -6,6 +6,7 @@ import ProspectOutreachDraftPanel from "@/app/components/ProspectOutreachDraftPa
 import RecommendedContactRolesPanel from "@/app/components/RecommendedContactRolesPanel";
 import type { ContactDiscoveryActionResult } from "@/lib/actions/contactDiscovery";
 import type { MeetingPrepActionResult } from "@/lib/actions/meetingPrep";
+import type { ProposalGenerationActionResult } from "@/lib/actions/proposalGeneration";
 import type {
   ProspectCandidateActionResult,
   ProspectCandidateEnrichResult,
@@ -14,6 +15,8 @@ import type {
 } from "@/lib/actions/prospectCandidates";
 import type { ProspectContactRecommendation } from "@/lib/contactDiscovery/types";
 import type { MeetingPrepBrief } from "@/lib/meetingPrep/types";
+import type { ProposalDraft } from "@/lib/proposalGeneration/types";
+import ProposalDraftPanel from "@/app/components/ProposalDraftPanel";
 import {
   PROSPECT_CANDIDATE_STATUS_LABELS,
   type ProspectCandidate,
@@ -53,7 +56,9 @@ export default function ProspectCandidateReviewRow({
   contactRecommendations,
   discoverContactRolesAction,
   meetingPrepBrief,
-  generateMeetingPrepAction
+  generateMeetingPrepAction,
+  proposalDraft,
+  generateProposalDraftAction
 }: {
   candidate: ProspectCandidate;
   jobId: string;
@@ -75,6 +80,10 @@ export default function ProspectCandidateReviewRow({
   discoverContactRolesAction: (candidateId: string) => Promise<ContactDiscoveryActionResult>;
   meetingPrepBrief: MeetingPrepBrief | null;
   generateMeetingPrepAction: (candidateId: string) => Promise<MeetingPrepActionResult>;
+  proposalDraft: ProposalDraft | null;
+  generateProposalDraftAction: (
+    candidateId: string
+  ) => Promise<ProposalGenerationActionResult>;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -239,6 +248,15 @@ export default function ProspectCandidateReviewRow({
           brief={meetingPrepBrief}
           canGenerate={canReview}
           generateAction={() => generateMeetingPrepAction(candidate.id)}
+          targetLabel={candidate.name}
+        />
+      </td>
+      <td className="px-3 py-3 align-top text-slate-700">
+        <ProposalDraftPanel
+          actionsEnabled={actionsEnabled}
+          canGenerate={canReview}
+          draft={proposalDraft}
+          generateAction={() => generateProposalDraftAction(candidate.id)}
           targetLabel={candidate.name}
         />
       </td>

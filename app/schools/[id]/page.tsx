@@ -34,6 +34,9 @@ import { runContactDiscoveryForSchool } from "@/lib/actions/contactDiscovery";
 import { runMeetingPrepForSchool } from "@/lib/actions/meetingPrep";
 import { fetchContactRecommendationsForTarget } from "@/lib/contactDiscovery/execute";
 import { fetchLatestMeetingPrepBrief } from "@/lib/meetingPrep/execute";
+import SchoolProposalDraftSection from "@/app/components/SchoolProposalDraftSection";
+import { runProposalGenerationForSchool } from "@/lib/actions/proposalGeneration";
+import { fetchLatestProposalDraft } from "@/lib/proposalGeneration/execute";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +80,15 @@ export default async function SchoolProfile({
   const meetingPrepBrief =
     supabase && schoolOrganizationId && source === "supabase"
       ? await fetchLatestMeetingPrepBrief(
+          supabase,
+          schoolOrganizationId,
+          "school",
+          id
+        )
+      : null;
+  const proposalDraft =
+    supabase && schoolOrganizationId && source === "supabase"
+      ? await fetchLatestProposalDraft(
           supabase,
           schoolOrganizationId,
           "school",
@@ -148,6 +160,14 @@ export default async function SchoolProfile({
               brief={meetingPrepBrief}
               canGenerate={canMutateSchool}
               generateAction={runMeetingPrepForSchool}
+              schoolId={school.id}
+              schoolName={school.name}
+            />
+            <SchoolProposalDraftSection
+              actionsEnabled={source === "supabase"}
+              canGenerate={canMutateSchool}
+              draft={proposalDraft}
+              generateAction={runProposalGenerationForSchool}
               schoolId={school.id}
               schoolName={school.name}
             />

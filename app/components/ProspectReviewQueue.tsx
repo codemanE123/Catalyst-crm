@@ -9,8 +9,10 @@ import type {
 } from "@/lib/actions/prospectCandidates";
 import type { ContactDiscoveryActionResult } from "@/lib/actions/contactDiscovery";
 import type { MeetingPrepActionResult } from "@/lib/actions/meetingPrep";
+import type { ProposalGenerationActionResult } from "@/lib/actions/proposalGeneration";
 import type { ProspectContactRecommendation } from "@/lib/contactDiscovery/types";
 import type { MeetingPrepBrief } from "@/lib/meetingPrep/types";
+import type { ProposalDraft } from "@/lib/proposalGeneration/types";
 import {
   summarizeProspectJobInput,
   type ProspectCandidate,
@@ -35,7 +37,9 @@ export default function ProspectReviewQueue({
   contactRecommendationsByCandidateId,
   discoverContactRolesAction,
   meetingPrepBriefsByCandidateId,
-  generateMeetingPrepAction
+  generateMeetingPrepAction,
+  proposalDraftsByCandidateId,
+  generateProposalDraftAction
 }: {
   job: ProspectGenerationJob;
   candidates: ProspectCandidate[];
@@ -57,6 +61,10 @@ export default function ProspectReviewQueue({
   discoverContactRolesAction: (candidateId: string) => Promise<ContactDiscoveryActionResult>;
   meetingPrepBriefsByCandidateId: Record<string, MeetingPrepBrief>;
   generateMeetingPrepAction: (candidateId: string) => Promise<MeetingPrepActionResult>;
+  proposalDraftsByCandidateId: Record<string, ProposalDraft>;
+  generateProposalDraftAction: (
+    candidateId: string
+  ) => Promise<ProposalGenerationActionResult>;
 }) {
   const pendingCount = candidates.filter(
     (candidate) => candidate.status === "pending_review"
@@ -123,7 +131,7 @@ export default function ProspectReviewQueue({
           </p>
         ) : (
           <div className="mt-6 overflow-x-auto">
-            <table className="min-w-[1900px] w-full text-left text-sm">
+            <table className="min-w-[2100px] w-full text-left text-sm">
               <thead className="border-b border-slate-200 text-slate-600">
                 <tr>
                   <th className="px-3 py-2 font-medium">School</th>
@@ -135,6 +143,7 @@ export default function ProspectReviewQueue({
                   <th className="px-3 py-2 font-medium">AI enrichment review</th>
                   <th className="px-3 py-2 font-medium">Recommended contact roles</th>
                   <th className="px-3 py-2 font-medium">Meeting prep</th>
+                  <th className="px-3 py-2 font-medium">Proposal draft</th>
                   <th className="px-3 py-2 font-medium">Outreach draft</th>
                   <th className="px-3 py-2 font-medium">Review status</th>
                   <th className="px-3 py-2 font-medium">Actions</th>
@@ -154,11 +163,13 @@ export default function ProspectReviewQueue({
                     discoverContactRolesAction={discoverContactRolesAction}
                     enrichAction={enrichAction}
                     generateMeetingPrepAction={generateMeetingPrepAction}
+                    generateProposalDraftAction={generateProposalDraftAction}
                     generateDraftAction={generateDraftAction}
                     jobId={job.id}
                     llmEnrichmentDisabledReason={llmEnrichmentDisabledReason}
                     llmEnrichmentEnabled={llmEnrichmentEnabled}
                     meetingPrepBrief={meetingPrepBriefsByCandidateId[candidate.id] ?? null}
+                    proposalDraft={proposalDraftsByCandidateId[candidate.id] ?? null}
                     outreachDraftDisabledReason={outreachDraftDisabledReason}
                     outreachDraftEnabled={outreachDraftEnabled}
                     rejectAction={rejectAction}
