@@ -15,6 +15,7 @@ import {
   createSupabaseAgentAuditRecorder,
   SupabaseAgentExecutionStore
 } from "./supabaseStore";
+import { SupabaseAgentUsageStore } from "./usageStore";
 import type { AgentExecution } from "./types";
 import type { AgentExecutionStore } from "./store";
 
@@ -144,8 +145,14 @@ export async function processAgentExecutionsFromCron(params: {
   }
 
   const store = new SupabaseAgentExecutionStore(supabase);
+  const usageStore = new SupabaseAgentUsageStore(supabase);
   const auditRecorder = createSupabaseAgentAuditRecorder(supabase, recordAuditEvent);
-  const orchestrator = new AgentOrchestrator(store, undefined, auditRecorder);
+  const orchestrator = new AgentOrchestrator(
+    store,
+    undefined,
+    auditRecorder,
+    usageStore
+  );
   const actorUserId = params.actorUserId ?? AGENT_CRON_ACTOR_USER_ID;
 
   const summary = await processAgentExecutionBatch({

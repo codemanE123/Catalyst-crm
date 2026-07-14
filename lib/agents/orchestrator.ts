@@ -1,7 +1,25 @@
+import { startOfUtcDay } from "@/lib/agentOperations";
+
 import { sanitizeAgentErrorMessage } from "./sanitize";
 import { createAgentHandlerRegistry } from "./handlers";
+import {
+  auditActionForPolicyDenial,
+  evaluateAgentPolicy,
+  type AgentPolicyDecision,
+  type AgentPolicyReasonCode
+} from "./policy";
 import { decideAgentRetry } from "./retryPolicy";
+import {
+  computeChainDepthFromParent,
+  detectCircularDependency
+} from "./safety";
 import type { AgentExecutionStore } from "./store";
+import {
+  hoursAgoIso,
+  recordLlmUsageEvent,
+  startOfUtcMonth,
+  type AgentUsageStore
+} from "./usage";
 import type {
   AgentExecution,
   AgentExecutor,
@@ -29,16 +47,20 @@ export const AGENT_AUDIT_ACTIONS = {
   cancel: "agent.cancel",
   retryScheduled: "agent.retry_scheduled",
   retryExhausted: "agent.retry_exhausted",
-  staleRecovered: "agent.stale_recovered"
+  staleRecovered: "agent.stale_recovered",
+  policyDenied: "agent.policy_denied",
+  usageLimitReached: "agent.usage_limit_reached",
+  budgetLimitReached: "agent.budget_limit_reached",
+  chainDepthExceeded: "agent.chain_depth_exceeded"
 } as const;
 
 export type QueueAgentResult =
   | { ok: true; execution: AgentExecution }
-  | { ok: false; error: string };
+  | { ok: false; error: string; reason_code?: AgentPolicyReasonCode };
 
 export type QueueAgentChainResult =
   | { ok: true; executions: AgentExecution[] }
-  | { ok: false; error: string };
+  | { ok: false; error: string; reason_code?: AgentPolicyReasonCode };
 
 export type RunNextAgentResult =
   | { ok: true; execution: AgentExecution; ran: true }
@@ -61,18 +83,96 @@ function defaultMissingAgentExecutor(agentName: AgentName): AgentExecutor {
   });
 }
 
+const LLM_BACKED_AGENTS = new Set<AgentName>([
+  "ProspectEnrichmentAgent",
+  "OutreachDraftAgent"
+]);
+
 export class AgentOrchestrator {
   private readonly executors: Map<AgentName, AgentExecutor>;
 
   constructor(
     private readonly store: AgentExecutionStore,
     executors?: Map<AgentName, AgentExecutor>,
-    private readonly audit?: AgentAuditRecorder
+    private readonly audit?: AgentAuditRecorder,
+    private readonly usageStore?: AgentUsageStore
   ) {
     this.executors = executors ?? createAgentHandlerRegistry();
   }
 
+  private async loadUsageSnapshot(
+    organizationId: string,
+    now: Date = new Date()
+  ) {
+    const [executionsLastHour, runningCount] = await Promise.all([
+      this.store.countCreatedSince(organizationId, hoursAgoIso(1, now)),
+      this.store.countByStatus(organizationId, "running")
+    ]);
+
+    if (!this.usageStore) {
+      return {
+        executionsLastHour,
+        runningCount,
+        llmCallsToday: 0,
+        estimatedSpendTodayUsd: 0,
+        estimatedSpendMonthUsd: 0
+      };
+    }
+
+    const [llmCallsToday, estimatedSpendTodayUsd, estimatedSpendMonthUsd] =
+      await Promise.all([
+        this.usageStore.countLlmCallsSince(organizationId, startOfUtcDay(now)),
+        this.usageStore.sumEstimatedCostSince(organizationId, startOfUtcDay(now)),
+        this.usageStore.sumEstimatedCostSince(organizationId, startOfUtcMonth(now))
+      ]);
+
+    return {
+      executionsLastHour,
+      runningCount,
+      llmCallsToday,
+      estimatedSpendTodayUsd,
+      estimatedSpendMonthUsd
+    };
+  }
+
+  private async evaluatePreflight(params: {
+    organizationId: string;
+    agentName: AgentName;
+    chainDepth?: number;
+    candidateBatchSize?: number;
+    env?: NodeJS.ProcessEnv;
+    includeSelfInRunning?: boolean;
+  }): Promise<AgentPolicyDecision> {
+    const usage = await this.loadUsageSnapshot(params.organizationId);
+    const runningCount = params.includeSelfInRunning
+      ? usage.runningCount
+      : Math.max(0, usage.runningCount);
+
+    return evaluateAgentPolicy({
+      usage: {
+        ...usage,
+        runningCount
+      },
+      chainDepth: params.chainDepth,
+      candidateBatchSize: params.candidateBatchSize,
+      checkLlmBudget: LLM_BACKED_AGENTS.has(params.agentName),
+      env: params.env
+    });
+  }
+
   async queueAgent(input: QueueAgentInput): Promise<QueueAgentResult> {
+    const circular = await detectCircularDependency({
+      organizationId: input.organizationId,
+      dependsOnExecutionId: input.dependsOnExecutionId,
+      findById: (id, organizationId) => this.store.findById(id, organizationId)
+    });
+
+    if (!circular.ok) {
+      return { ok: false, error: circular.error, reason_code: "invalid_configuration" };
+    }
+
+    let chainDepth = 1;
+
     if (input.dependsOnExecutionId) {
       const dependency = await this.store.findById(
         input.dependsOnExecutionId,
@@ -85,6 +185,40 @@ export class AgentOrchestrator {
           error: "Dependency execution was not found in your organization."
         };
       }
+
+      chainDepth = computeChainDepthFromParent(dependency.chain_depth);
+    }
+
+    const candidateBatchSize =
+      typeof input.metadata?.max_results === "number"
+        ? input.metadata.max_results
+        : undefined;
+
+    const policy = await this.evaluatePreflight({
+      organizationId: input.organizationId,
+      agentName: input.agentName,
+      chainDepth,
+      candidateBatchSize,
+      env: undefined,
+      includeSelfInRunning: false
+    });
+
+    if (!policy.allowed) {
+      await this.recordPolicyDenial({
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        executionId: null,
+        agentName: input.agentName,
+        targetType: input.targetType,
+        targetId: input.targetId,
+        decision: policy
+      });
+
+      return {
+        ok: false,
+        error: policy.user_safe_message,
+        reason_code: policy.reason_code
+      };
     }
 
     const execution = await this.store.insert({
@@ -94,6 +228,7 @@ export class AgentOrchestrator {
       target_id: input.targetId,
       status: "queued",
       depends_on_execution_id: input.dependsOnExecutionId ?? null,
+      chain_depth: chainDepth,
       metadata: input.metadata ?? {}
     });
 
@@ -106,7 +241,8 @@ export class AgentOrchestrator {
         agent_name: execution.agent_name,
         target_type: execution.target_type,
         target_id: execution.target_id,
-        depends_on_execution_id: execution.depends_on_execution_id
+        depends_on_execution_id: execution.depends_on_execution_id,
+        chain_depth: execution.chain_depth
       }
     });
 
@@ -173,6 +309,39 @@ export class AgentOrchestrator {
       ? Date.parse(running.started_at)
       : Date.now();
 
+    const policy = await this.evaluatePreflight({
+      organizationId: running.organization_id,
+      agentName: running.agent_name,
+      chainDepth: running.chain_depth,
+      env: params.env,
+      includeSelfInRunning: true
+    });
+
+    if (!policy.allowed) {
+      await this.recordPolicyDenial({
+        organizationId: running.organization_id,
+        actorUserId: params.actorUserId,
+        executionId: running.id,
+        agentName: running.agent_name,
+        targetType: running.target_type,
+        targetId: running.target_id,
+        decision: policy
+      });
+
+      const completedAt = Date.now();
+      return this.finalizeFailure(running, {
+        actorUserId: params.actorUserId,
+        errorMessage: policy.user_safe_message,
+        errorCode: policy.reason_code,
+        metadata: {
+          policy_denied: true,
+          reason_code: policy.reason_code
+        },
+        durationMs: completedAt - startedAt,
+        completedAt
+      });
+    }
+
     await this.recordAudit({
       organizationId: running.organization_id,
       actorUserId: params.actorUserId,
@@ -182,7 +351,8 @@ export class AgentOrchestrator {
         agent_name: running.agent_name,
         target_type: running.target_type,
         target_id: running.target_id,
-        attempt_count: running.attempt_count
+        attempt_count: running.attempt_count,
+        chain_depth: running.chain_depth
       }
     });
 
@@ -461,6 +631,58 @@ export class AgentOrchestrator {
     });
 
     return { ok: true, execution: retried };
+  }
+
+  private async recordPolicyDenial(params: {
+    organizationId: string;
+    actorUserId: string;
+    executionId: string | null;
+    agentName: AgentName;
+    targetType: string;
+    targetId: string;
+    decision: Extract<AgentPolicyDecision, { allowed: false }>;
+  }): Promise<void> {
+    const action = auditActionForPolicyDenial(params.decision.reason_code);
+
+    if (params.executionId) {
+      await this.recordAudit({
+        organizationId: params.organizationId,
+        actorUserId: params.actorUserId,
+        action,
+        recordId: params.executionId,
+        metadata: {
+          agent_name: params.agentName,
+          reason_code: params.decision.reason_code,
+          target_type: params.targetType,
+          target_id: params.targetId
+        }
+      });
+
+      if (action !== AGENT_AUDIT_ACTIONS.policyDenied) {
+        await this.recordAudit({
+          organizationId: params.organizationId,
+          actorUserId: params.actorUserId,
+          action: AGENT_AUDIT_ACTIONS.policyDenied,
+          recordId: params.executionId,
+          metadata: {
+            agent_name: params.agentName,
+            reason_code: params.decision.reason_code
+          }
+        });
+      }
+    }
+
+    if (this.usageStore) {
+      await recordLlmUsageEvent(this.usageStore, {
+        organizationId: params.organizationId,
+        agentExecutionId: params.executionId,
+        agentName: params.agentName,
+        targetType: params.targetType,
+        targetId: params.targetId,
+        status: "denied",
+        denialReasonCode: params.decision.reason_code
+      });
+    }
   }
 
   private async recordAudit(event: AgentAuditEventInput): Promise<void> {

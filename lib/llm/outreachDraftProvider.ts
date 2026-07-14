@@ -113,8 +113,14 @@ export function createOpenAiOutreachDraftProvider(options: {
         provider: "openai" as const,
         model,
         usage: {
-          input_tokens: response.usage?.prompt_tokens ?? 0,
-          output_tokens: response.usage?.completion_tokens ?? 0
+          input_tokens:
+            typeof response.usage?.prompt_tokens === "number"
+              ? response.usage.prompt_tokens
+              : null,
+          output_tokens:
+            typeof response.usage?.completion_tokens === "number"
+              ? response.usage.completion_tokens
+              : null
         }
       };
     }

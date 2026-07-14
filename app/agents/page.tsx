@@ -3,6 +3,7 @@ import Link from "next/link";
 import AgentExecutionsTable from "@/app/components/AgentExecutionsTable";
 import AgentOperationsFilters from "@/app/components/AgentOperationsFilters";
 import AgentOperationsMetricsGrid from "@/app/components/AgentOperationsMetricsGrid";
+import AgentUsagePanel from "@/app/components/AgentUsagePanel";
 import { loadAgentOperationsDashboard } from "@/lib/actions/agentOperations";
 import {
   canViewAgentOperations,
@@ -108,6 +109,11 @@ export default async function AgentsOperationsPage({ searchParams }: AgentsPageP
         </div>
 
         <AgentOperationsMetricsGrid metrics={dashboard.metrics} />
+
+        <AgentUsagePanel
+          showDetailedBreakdown={dashboard.canManage || dashboard.isSuperAdmin}
+          usage={dashboard.usage}
+        />
 
         <AgentOperationsFilters
           agentName={params.agentName ?? ""}

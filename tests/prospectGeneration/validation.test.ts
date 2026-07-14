@@ -90,7 +90,7 @@ describe("parseProspectGenerationInput", () => {
       )
     ).toEqual({
       ok: false,
-      error: "Maximum results must be between 1 and 100."
+      error: "Maximum results must be between 1 and 50."
     });
 
     expect(
@@ -103,7 +103,7 @@ describe("parseProspectGenerationInput", () => {
       )
     ).toEqual({
       ok: false,
-      error: "Maximum results must be between 1 and 100."
+      error: "Maximum results must be between 1 and 50."
     });
   });
 });

@@ -80,8 +80,8 @@ export type ProspectOutreachDraftSuccessResult = {
   model: string;
   prompt_version: string;
   usage: {
-    input_tokens: number;
-    output_tokens: number;
+    input_tokens: number | null;
+    output_tokens: number | null;
   };
 };
 

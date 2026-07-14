@@ -13,10 +13,12 @@ import {
 import {
   fetchAgentOperationsExecutions,
   fetchAgentOperationsMetrics,
+  fetchAgentOperationsUsage,
   isKnownAgentName
 } from "@/lib/agentOperationsData";
 import type { AgentExecutionListItem } from "@/lib/agentOperationsData";
 import type { AgentOperationsMetrics } from "@/lib/agentOperations";
+import type { AgentUsageTotals } from "@/lib/agents/usage";
 import {
   AgentOrchestrator,
   type CancelAgentResult,
@@ -26,6 +28,7 @@ import {
   createSupabaseAgentAuditRecorder,
   SupabaseAgentExecutionStore
 } from "@/lib/agents/supabaseStore";
+import { SupabaseAgentUsageStore } from "@/lib/agents/usageStore";
 import { AGENT_EXECUTION_STATUSES, type AgentExecutionStatus } from "@/lib/agents/types";
 import { recordAuditEvent } from "@/lib/auditLog";
 import {
@@ -99,6 +102,7 @@ export async function loadAgentOperationsDashboard(input: {
   | {
       ok: true;
       metrics: AgentOperationsMetrics;
+      usage: AgentUsageTotals;
       executions: AgentExecutionListItem[];
       total: number;
       page: number;
@@ -129,8 +133,13 @@ export async function loadAgentOperationsDashboard(input: {
   const agentName =
     agentNameRaw && isKnownAgentName(agentNameRaw) ? agentNameRaw : null;
 
-  const [metrics, executions] = await Promise.all([
+  const [metrics, usage, executions] = await Promise.all([
     fetchAgentOperationsMetrics(
+      context.supabase,
+      context.accessibleOrganizationIds,
+      organizationId
+    ),
+    fetchAgentOperationsUsage(
       context.supabase,
       context.accessibleOrganizationIds,
       organizationId
@@ -151,6 +160,7 @@ export async function loadAgentOperationsDashboard(input: {
   return {
     ok: true,
     metrics,
+    usage,
     executions: executions.items,
     total: executions.total,
     page,
@@ -167,7 +177,8 @@ function createOrchestrator(
   return new AgentOrchestrator(
     new SupabaseAgentExecutionStore(supabase),
     undefined,
-    createSupabaseAgentAuditRecorder(supabase, recordAuditEvent)
+    createSupabaseAgentAuditRecorder(supabase, recordAuditEvent),
+    new SupabaseAgentUsageStore(supabase)
   );
 }
 

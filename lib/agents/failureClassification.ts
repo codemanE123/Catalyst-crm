@@ -17,7 +17,13 @@ const PERMANENT_PATTERNS = [
   /forbidden/i,
   /cancelled by user/i,
   /only failed agent executions/i,
-  /requires target_type/i
+  /requires target_type/i,
+  /daily ai usage limit/i,
+  /ai budget limit/i,
+  /too many agent jobs/i,
+  /temporarily unavailable/i,
+  /candidate batch/i,
+  /circular agent dependency/i
 ];
 
 const CONFIGURATION_PATTERNS = [
@@ -55,6 +61,16 @@ export function classifyAgentFailure(
     code === "permanent" ||
     code === "validation" ||
     code === "authorization" ||
+    code === "policy" ||
+    code === "feature_disabled" ||
+    code === "hourly_execution_limit" ||
+    code === "daily_llm_limit" ||
+    code === "daily_budget_limit" ||
+    code === "monthly_budget_limit" ||
+    code === "concurrency_limit" ||
+    code === "chain_depth_exceeded" ||
+    code === "candidate_batch_limit" ||
+    code === "invalid_configuration" ||
     PERMANENT_PATTERNS.some((pattern) => pattern.test(message))
   ) {
     return "permanent";

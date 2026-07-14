@@ -9,6 +9,8 @@ import {
 } from "@/lib/agentOperations";
 import { AGENT_NAMES, type AgentExecution } from "@/lib/agents/types";
 import { sanitizeAgentErrorMessage } from "@/lib/agents/sanitize";
+import { startOfUtcMonth, type AgentUsageTotals } from "@/lib/agents/usage";
+import { SupabaseAgentUsageStore } from "@/lib/agents/usageStore";
 import { SupabaseAgentExecutionStore } from "@/lib/agents/supabaseStore";
 
 export type AgentOperationsOrganization = {
@@ -187,6 +189,36 @@ export async function fetchAgentOperationsMetrics(
     outreach_drafts_generated: outreachDraftsGenerated,
     meeting_briefs_generated: meetingBriefsGenerated,
     proposal_drafts_generated: proposalDraftsGenerated
+  };
+}
+
+export async function fetchAgentOperationsUsage(
+  supabase: SupabaseClient,
+  accessibleOrganizationIds: string[] | null,
+  organizationId?: string | null
+): Promise<AgentUsageTotals> {
+  const scopedIds = resolveScopedOrganizationIds(
+    accessibleOrganizationIds,
+    organizationId
+  );
+  const usageStore = new SupabaseAgentUsageStore(supabase);
+  const summary = await usageStore.summarizeForDashboard({
+    organizationIds: scopedIds,
+    todayStartIso: startOfUtcDay(),
+    monthStartIso: startOfUtcMonth()
+  });
+
+  const executionsToday = await countWithFilters(
+    supabase,
+    "agent_executions",
+    scopedIds,
+    {},
+    { created_at: startOfUtcDay() }
+  );
+
+  return {
+    ...summary,
+    agent_executions_today: executionsToday
   };
 }
 

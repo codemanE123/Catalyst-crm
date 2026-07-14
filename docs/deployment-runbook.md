@@ -147,6 +147,7 @@ Apply on the **target Supabase project** before relying on that environment. Fil
 | 11 | `20260704203000_add_organization_members_admin_policies.sql` | Admin membership RLS |
 | … | *(additional migrations in folder order)* | Apply all files in `supabase/migrations/` by timestamp |
 | — | `20260714150000_agent_execution_retry_scheduling.sql` | Agent retry fields + claim/stale RPCs |
+| — | `20260714160000_agent_usage_events_and_chain_depth.sql` | `agent_usage_events` + `chain_depth` + org RLS |
 
 **New migration discipline:** When adding migrations after initial staging setup, apply to staging first, run smoke tests, then production. Apply every file under `supabase/migrations/` in timestamp order on the target project.
 
@@ -221,7 +222,31 @@ See [§18 Error monitoring (Sentry)](#18-error-monitoring-sentry--task-232) for 
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` or `AGENT_CRON_SECRET` via `NEXT_PUBLIC_*`.
 
-### 6.6 Future variables
+### 6.6 Agent cost, usage, and safety limits (Phase 4.8)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AGENT_FEATURE_ENABLED` | `true` | Kill switch for agent queue/run preflight |
+| `AGENT_MAX_EXECUTIONS_PER_HOUR` | `60` | Max new agent executions per org per rolling hour |
+| `LLM_MAX_CALLS_PER_DAY` | `200` | Max LLM provider calls per org per UTC day |
+| `LLM_DAILY_BUDGET_USD` | `25` | Max estimated AI spend per org per UTC day |
+| `LLM_MONTHLY_BUDGET_USD` | `250` | Max estimated AI spend per org per UTC month |
+| `AGENT_MAX_CONCURRENT_EXECUTIONS` | `5` | Max `running` executions per org |
+| `AGENT_MAX_CANDIDATE_BATCH_SIZE` | `50` | Cap for prospect generation `max_results` |
+| `AGENT_MAX_CHAIN_DEPTH` | `5` | Max dependency chain depth (`chain_depth`) |
+| `AGENT_MAX_PROMPT_CHARS` | `24000` | Max serialized LLM input size |
+| `AGENT_MAX_OUTPUT_CHARS` | `8000` | Max generated output size checks |
+| `AGENT_MAX_ATTEMPTS` | `3` | Max automatic retries (unchanged from 4.7) |
+
+**Budget calculation:** Estimated USD = `(input_tokens/1e6)*input_price + (output_tokens/1e6)*output_price` from `lib/llm/pricing.ts`. Unknown models or missing token counts → `estimated_cost_usd = null` (not invented). Limits use summed non-null estimates for the UTC day/month windows.
+
+**When a limit is reached:** Preflight returns a safe user message; the execution is marked `failed` with a permanent/policy error code (not retried as transient). Audits: `agent.policy_denied`, `agent.usage_limit_reached`, `agent.budget_limit_reached`, `agent.chain_depth_exceeded`. Usage rows may record `status=denied` without prompts or raw LLM text.
+
+**Adjusting limits:** Change Vercel env vars and redeploy (or restart). Apply migration `20260714160000_agent_usage_events_and_chain_depth.sql` before relying on the usage dashboard.
+
+**Limitations:** List prices can drift from vendor invoices; null token responses under-count spend; admin UI estimates are operational guidance, not billing.
+
+### 6.7 Future variables
 
 | Variable | Task | Purpose |
 | --- | --- | --- |

@@ -34,6 +34,7 @@ export type AgentExecution = {
   target_id: string;
   status: AgentExecutionStatus;
   depends_on_execution_id: string | null;
+  chain_depth: number;
   attempt_count: number;
   max_attempts: number;
   next_retry_at: string | null;

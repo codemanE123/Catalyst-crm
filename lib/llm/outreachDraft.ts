@@ -1,3 +1,9 @@
+import type { AgentUsageStore } from "@/lib/agents/usage";
+import { recordLlmUsageEvent, startOfUtcMonth } from "@/lib/agents/usage";
+import { evaluateLlmCallPolicy } from "@/lib/agents/policy";
+import { enforcePromptInputSize } from "@/lib/agents/safety";
+import { startOfUtcDay } from "@/lib/agentOperations";
+
 import { createOpenAiOutreachDraftProvider } from "./outreachDraftProvider";
 import {
   containsUnresolvedPiiInValue,
@@ -49,6 +55,9 @@ export async function generateProspectOutreachDraftWithLlm(
   options?: {
     env?: NodeJS.ProcessEnv;
     fetchJson?: Parameters<typeof createOpenAiOutreachDraftProvider>[0]["fetchJson"];
+    usageStore?: AgentUsageStore;
+    agentExecutionId?: string | null;
+    agentName?: string | null;
   }
 ): Promise<ProspectOutreachDraftResult> {
   const env = options?.env ?? process.env;
@@ -60,6 +69,52 @@ export async function generateProspectOutreachDraftWithLlm(
       status: "disabled",
       reason: status.reason
     };
+  }
+
+  if (options?.usageStore) {
+    const [llmCallsToday, spendToday, spendMonth] = await Promise.all([
+      options.usageStore.countLlmCallsSince(
+        request.context.organization_id,
+        startOfUtcDay()
+      ),
+      options.usageStore.sumEstimatedCostSince(
+        request.context.organization_id,
+        startOfUtcDay()
+      ),
+      options.usageStore.sumEstimatedCostSince(
+        request.context.organization_id,
+        startOfUtcMonth()
+      )
+    ]);
+
+    const policy = evaluateLlmCallPolicy({
+      usage: {
+        executionsLastHour: 0,
+        runningCount: 0,
+        llmCallsToday,
+        estimatedSpendTodayUsd: spendToday,
+        estimatedSpendMonthUsd: spendMonth
+      },
+      env
+    });
+
+    if (!policy.allowed) {
+      await recordLlmUsageEvent(options.usageStore, {
+        organizationId: request.context.organization_id,
+        agentExecutionId: options.agentExecutionId,
+        agentName: options.agentName ?? "OutreachDraftAgent",
+        targetType: "prospect_candidate",
+        targetId: request.context.candidate_id,
+        status: "denied",
+        denialReasonCode: policy.reason_code
+      });
+
+      return {
+        ok: false,
+        status: "disabled",
+        reason: policy.user_safe_message
+      };
+    }
   }
 
   const forbiddenKeys = findOutreachDraftForbiddenInputKeys(request);
@@ -85,6 +140,16 @@ export async function generateProspectOutreachDraftWithLlm(
   }
 
   const sanitizedInput = sanitizeProspectOutreachDraftInput(validatedInput.input);
+  const promptSize = enforcePromptInputSize(JSON.stringify(sanitizedInput), env);
+
+  if (!promptSize.ok) {
+    return {
+      ok: false,
+      status: "blocked",
+      reason: promptSize.error,
+      block_reason: "invalid_input"
+    };
+  }
 
   if (containsUnresolvedPiiInValue(sanitizedInput)) {
     return {
@@ -114,17 +179,60 @@ export async function generateProspectOutreachDraftWithLlm(
     const providerResult = await provider.generateDraft(sanitizedInput);
 
     if (!providerResult.ok) {
+      if (options?.usageStore) {
+        await recordLlmUsageEvent(options.usageStore, {
+          organizationId: request.context.organization_id,
+          agentExecutionId: options.agentExecutionId,
+          agentName: options.agentName ?? "OutreachDraftAgent",
+          targetType: "prospect_candidate",
+          targetId: request.context.candidate_id,
+          provider: "openai",
+          model: provider.model,
+          status: "failed"
+        });
+      }
+
       return providerResult;
     }
 
     const validatedOutput = validateProspectOutreachDraftOutput(providerResult.data);
 
     if (!validatedOutput.ok) {
+      if (options?.usageStore) {
+        await recordLlmUsageEvent(options.usageStore, {
+          organizationId: request.context.organization_id,
+          agentExecutionId: options.agentExecutionId,
+          agentName: options.agentName ?? "OutreachDraftAgent",
+          targetType: "prospect_candidate",
+          targetId: request.context.candidate_id,
+          provider: providerResult.provider,
+          model: providerResult.model,
+          inputTokens: providerResult.usage.input_tokens,
+          outputTokens: providerResult.usage.output_tokens,
+          status: "failed"
+        });
+      }
+
       return {
         ok: false,
         status: "validation_failed",
         reason: validatedOutput.error
       };
+    }
+
+    if (options?.usageStore) {
+      await recordLlmUsageEvent(options.usageStore, {
+        organizationId: request.context.organization_id,
+        agentExecutionId: options.agentExecutionId,
+        agentName: options.agentName ?? "OutreachDraftAgent",
+        targetType: "prospect_candidate",
+        targetId: request.context.candidate_id,
+        provider: providerResult.provider,
+        model: providerResult.model,
+        inputTokens: providerResult.usage.input_tokens,
+        outputTokens: providerResult.usage.output_tokens,
+        status: "success"
+      });
     }
 
     return {
@@ -137,6 +245,18 @@ export async function generateProspectOutreachDraftWithLlm(
       usage: providerResult.usage
     };
   } catch {
+    if (options?.usageStore) {
+      await recordLlmUsageEvent(options.usageStore, {
+        organizationId: request.context.organization_id,
+        agentExecutionId: options.agentExecutionId,
+        agentName: options.agentName ?? "OutreachDraftAgent",
+        targetType: "prospect_candidate",
+        targetId: request.context.candidate_id,
+        provider: "openai",
+        status: "failed"
+      });
+    }
+
     return {
       ok: false,
       status: "provider_error",

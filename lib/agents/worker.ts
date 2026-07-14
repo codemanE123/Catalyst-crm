@@ -91,11 +91,17 @@ export function createAgentOrchestrator(
   options?: {
     handlerDependencies?: AgentHandlerDependencies;
     auditRecorder?: import("./orchestrator").AgentAuditRecorder;
+    usageStore?: import("./usage").AgentUsageStore;
   }
 ): AgentOrchestrator {
   const handlers = createAgentHandlerRegistry(options?.handlerDependencies ?? {});
 
-  return new AgentOrchestrator(store, handlers, options?.auditRecorder);
+  return new AgentOrchestrator(
+    store,
+    handlers,
+    options?.auditRecorder,
+    options?.usageStore
+  );
 }
 
 export function createAgentWorkerFromStore(
@@ -103,6 +109,7 @@ export function createAgentWorkerFromStore(
   options?: {
     handlerDependencies?: AgentHandlerDependencies;
     auditRecorder?: import("./orchestrator").AgentAuditRecorder;
+    usageStore?: import("./usage").AgentUsageStore;
   }
 ): AgentWorker {
   return new AgentWorker(createAgentOrchestrator(store, options));
@@ -112,10 +119,12 @@ export function createAgentWorkerFromSupabase(
   supabase: SupabaseClient,
   options?: {
     handlerDependencies?: AgentHandlerDependencies;
+    usageStore?: import("./usage").AgentUsageStore;
   }
 ): AgentWorker {
   return createAgentWorkerFromStore(new SupabaseAgentExecutionStore(supabase), {
     handlerDependencies: options?.handlerDependencies,
-    auditRecorder: createSupabaseAgentAuditRecorder(supabase, recordAuditEvent)
+    auditRecorder: createSupabaseAgentAuditRecorder(supabase, recordAuditEvent),
+    usageStore: options?.usageStore
   });
 }

@@ -281,6 +281,10 @@ Append-only table; **do not delete** rows during investigation.
 | `agent.retry_scheduled` | Transient failure scheduled for backoff retry |
 | `agent.retry_exhausted` | Transient retries exhausted; left failed |
 | `agent.stale_recovered` | Stale `running` execution re-queued by cron worker |
+| `agent.policy_denied` | Preflight policy denied queue/run (safe reason_code only) |
+| `agent.usage_limit_reached` | Hourly/concurrency/LLM call limit hit |
+| `agent.budget_limit_reached` | Daily or monthly estimated spend limit hit |
+| `agent.chain_depth_exceeded` | Agent chain deeper than `AGENT_MAX_CHAIN_DEPTH` |
 
 ### 14.2.1 Agent cron worker incidents
 

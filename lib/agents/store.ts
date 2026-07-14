@@ -14,6 +14,7 @@ export type AgentExecutionInsert = {
   target_id: string;
   status: AgentExecution["status"];
   depends_on_execution_id?: string | null;
+  chain_depth?: number;
   attempt_count?: number;
   max_attempts?: number;
   next_retry_at?: string | null;
@@ -34,6 +35,7 @@ export type AgentExecutionUpdate = Partial<
     | "max_attempts"
     | "next_retry_at"
     | "last_error_code"
+    | "chain_depth"
   >
 >;
 
@@ -56,6 +58,11 @@ export interface AgentExecutionStore {
     now?: Date
   ): Promise<AgentExecution[]>;
   list(filter: AgentExecutionListFilter): Promise<AgentExecutionListResult>;
+  countCreatedSince(organizationId: string, sinceIso: string): Promise<number>;
+  countByStatus(
+    organizationId: string,
+    status: AgentExecution["status"]
+  ): Promise<number>;
 }
 
 function nowIso(now?: Date): string {
@@ -98,6 +105,7 @@ export class InMemoryAgentExecutionStore implements AgentExecutionStore {
       target_id: input.target_id,
       status: input.status,
       depends_on_execution_id: input.depends_on_execution_id ?? null,
+      chain_depth: input.chain_depth ?? 1,
       attempt_count: input.attempt_count ?? 0,
       max_attempts: input.max_attempts ?? resolveAgentMaxAttempts(),
       next_retry_at: input.next_retry_at ?? null,
@@ -255,6 +263,26 @@ export class InMemoryAgentExecutionStore implements AgentExecutionStore {
 
   async list(filter: AgentExecutionListFilter): Promise<AgentExecutionListResult> {
     return paginateAgentExecutions([...this.rows.values()], filter);
+  }
+
+  async countCreatedSince(
+    organizationId: string,
+    sinceIso: string
+  ): Promise<number> {
+    return [...this.rows.values()].filter(
+      (row) =>
+        row.organization_id === organizationId && row.created_at >= sinceIso
+    ).length;
+  }
+
+  async countByStatus(
+    organizationId: string,
+    status: AgentExecution["status"]
+  ): Promise<number> {
+    return [...this.rows.values()].filter(
+      (row) =>
+        row.organization_id === organizationId && row.status === status
+    ).length;
   }
 
   snapshot(): AgentExecution[] {

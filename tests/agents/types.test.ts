@@ -34,6 +34,7 @@ describe("agent types helpers", () => {
         target_id: "job-1",
         status: "completed",
         depends_on_execution_id: null,
+        chain_depth: 1,
         attempt_count: 0,
         max_attempts: 3,
         next_retry_at: null,

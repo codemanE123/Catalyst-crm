@@ -14,7 +14,7 @@ import type {
 } from "./store";
 
 const AGENT_EXECUTION_SELECT =
-  "id,organization_id,agent_name,target_type,target_id,status,depends_on_execution_id,attempt_count,max_attempts,next_retry_at,last_error_code,started_at,completed_at,duration_ms,error_message,metadata,created_at,updated_at";
+  "id,organization_id,agent_name,target_type,target_id,status,depends_on_execution_id,chain_depth,attempt_count,max_attempts,next_retry_at,last_error_code,started_at,completed_at,duration_ms,error_message,metadata,created_at,updated_at";
 
 type AgentExecutionRow = {
   id: string;
@@ -24,6 +24,7 @@ type AgentExecutionRow = {
   target_id: string;
   status: AgentExecution["status"];
   depends_on_execution_id: string | null;
+  chain_depth: number | null;
   attempt_count: number;
   max_attempts: number | null;
   next_retry_at: string | null;
@@ -46,6 +47,7 @@ function mapRow(row: AgentExecutionRow): AgentExecution {
     target_id: row.target_id,
     status: row.status,
     depends_on_execution_id: row.depends_on_execution_id,
+    chain_depth: row.chain_depth ?? 1,
     attempt_count: row.attempt_count,
     max_attempts: row.max_attempts ?? resolveAgentMaxAttempts(),
     next_retry_at: row.next_retry_at,
@@ -73,6 +75,7 @@ export class SupabaseAgentExecutionStore implements AgentExecutionStore {
         target_id: input.target_id,
         status: input.status,
         depends_on_execution_id: input.depends_on_execution_id ?? null,
+        chain_depth: input.chain_depth ?? 1,
         attempt_count: input.attempt_count ?? 0,
         max_attempts: input.max_attempts ?? resolveAgentMaxAttempts(),
         next_retry_at: input.next_retry_at ?? null,
@@ -330,6 +333,42 @@ export class SupabaseAgentExecutionStore implements AgentExecutionStore {
       rows: ((data ?? []) as AgentExecutionRow[]).map(mapRow),
       total: count ?? 0
     };
+  }
+
+  async countCreatedSince(
+    organizationId: string,
+    sinceIso: string
+  ): Promise<number> {
+    const { count, error } = await this.supabase
+      .from("agent_executions")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .gte("created_at", sinceIso);
+
+    if (error) {
+      console.error("countCreatedSince failed:", error.message);
+      return 0;
+    }
+
+    return count ?? 0;
+  }
+
+  async countByStatus(
+    organizationId: string,
+    status: AgentExecution["status"]
+  ): Promise<number> {
+    const { count, error } = await this.supabase
+      .from("agent_executions")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("status", status);
+
+    if (error) {
+      console.error("countByStatus failed:", error.message);
+      return 0;
+    }
+
+    return count ?? 0;
   }
 }
 

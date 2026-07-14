@@ -12,6 +12,7 @@ describe("MeetingPrepAgent handler", () => {
     target_id: "school-1",
     status: "running",
     depends_on_execution_id: null,
+    chain_depth: 1,
     attempt_count: 1,
     max_attempts: 3,
     next_retry_at: null,

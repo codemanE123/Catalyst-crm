@@ -1,3 +1,5 @@
+import { resolveAgentMaxCandidateBatchSize } from "@/lib/agents/limits";
+
 export const PROSPECT_SCHOOL_TYPES = [
   "hbcu",
   "cae",
@@ -107,8 +109,11 @@ export const PROSPECT_CANDIDATE_STATUS_LABELS: Record<
 };
 
 const MAX_RESULTS_MIN = 1;
-const MAX_RESULTS_MAX = 100;
 const MAX_RESULTS_DEFAULT = 25;
+
+function resolveMaxResultsCap(): number {
+  return resolveAgentMaxCandidateBatchSize();
+}
 
 export function parseProspectSchoolTypes(
   values: string[]
@@ -151,10 +156,10 @@ export function parseProspectGenerationInput(formData: FormData):
     return { ok: false, error: "Maximum results must be a number." };
   }
 
-  if (maxResults < MAX_RESULTS_MIN || maxResults > MAX_RESULTS_MAX) {
+  if (maxResults < MAX_RESULTS_MIN || maxResults > resolveMaxResultsCap()) {
     return {
       ok: false,
-      error: `Maximum results must be between ${MAX_RESULTS_MIN} and ${MAX_RESULTS_MAX}.`
+      error: `Maximum results must be between ${MAX_RESULTS_MIN} and ${resolveMaxResultsCap()}.`
     };
   }
 
