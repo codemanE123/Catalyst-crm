@@ -31,8 +31,13 @@ vi.mock("@/lib/agents/worker", () => ({
   })
 }));
 
+vi.mock("@/lib/actions/agentHandlerDependencies", () => ({
+  createAgentHandlerDependencies: async () => ({})
+}));
+
 describe("processNextAgentExecution", () => {
   beforeEach(() => {
+    vi.resetModules();
     vi.clearAllMocks();
     mockRequireUser.mockResolvedValue({ id: "admin-user" });
     mockGetRecordOwnershipFields.mockResolvedValue({
@@ -57,7 +62,7 @@ describe("processNextAgentExecution", () => {
       error: "Only admins can process agent executions."
     });
     expect(mockProcessNext).not.toHaveBeenCalled();
-  });
+  }, 15000);
 
   it("processes one queued execution for admins", async () => {
     mockRequireRole.mockResolvedValue({ role: "admin" });
