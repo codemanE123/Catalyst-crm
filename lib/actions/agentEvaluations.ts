@@ -438,6 +438,8 @@ export async function recordLightweightApprovalEvaluation(input: {
   targetId?: string | null;
   usefulnessScore?: number | null;
   feedback?: string | null;
+  feedbackCategories?: FeedbackCategory[];
+  savedTimeMinutes?: number | null;
   agentConfidence?: number | null;
 }): Promise<AgentEvaluationActionResult> {
   const dimensions: Partial<QualityDimensionScores> = {};
@@ -452,6 +454,13 @@ export async function recordLightweightApprovalEvaluation(input: {
     dimensions.usefulness_score = 2;
   }
 
+  const savedTime =
+    typeof input.savedTimeMinutes === "number" &&
+    Number.isFinite(input.savedTimeMinutes) &&
+    input.savedTimeMinutes >= 0
+      ? Math.min(480, Math.round(input.savedTimeMinutes))
+      : null;
+
   return submitAgentEvaluation({
     organizationId: input.organizationId,
     agentExecutionId: input.agentExecutionId,
@@ -459,12 +468,15 @@ export async function recordLightweightApprovalEvaluation(input: {
     targetType: input.targetType ?? input.approvalType,
     targetId: input.targetId ?? input.sourceId,
     outcome: input.outcome,
-    feedback: input.feedback,
+    // Prefer structured categories over free-text to avoid storing private notes.
+    feedback: input.feedback ?? null,
+    feedbackCategories: input.feedbackCategories ?? [],
     dimensions,
     agentConfidence: input.agentConfidence,
     metadata: {
       approval_type: input.approvalType,
-      approval_item_id: `${input.approvalType}:${input.sourceId}`
+      approval_item_id: `${input.approvalType}:${input.sourceId}`,
+      saved_time_minutes: savedTime
     }
   });
 }

@@ -16,15 +16,19 @@ import {
   fetchAgentOperationsExecutions,
   fetchAgentOperationsMetrics,
   fetchAgentOperationsUsage,
+  fetchAgentPilotMonitoringSnapshot,
   isKnownAgentName
 } from "@/lib/agentOperationsData";
 import type { AgentExecutionListItem } from "@/lib/agentOperationsData";
 import type { AgentOperationsMetrics } from "@/lib/agentOperations";
 import type { AgentUsageTotals } from "@/lib/agents/usage";
 import {
+  calculateAgentPilotMonitoringMetrics,
   calculateAgentQualityDashboardMetrics,
+  countHumanOutcomesForApprovalType,
   SupabaseAgentEvaluationStore,
   type AgentEvaluation,
+  type AgentPilotMonitoringMetrics,
   type AgentQualityDashboardMetrics
 } from "@/lib/agents/evaluation";
 import {
@@ -123,6 +127,7 @@ export async function loadAgentOperationsDashboard(input: {
       metrics: AgentOperationsMetrics;
       usage: AgentUsageTotals;
       quality: AgentQualityDashboardMetrics;
+      pilotMonitoring: AgentPilotMonitoringMetrics;
       evaluationsByExecutionId: Record<string, AgentEvaluation[]>;
       executions: AgentExecutionListItem[];
       total: number;
@@ -185,7 +190,7 @@ export async function loadAgentOperationsDashboard(input: {
     );
   }
 
-  const [metrics, usage, executions, evaluations, readinessRows] =
+  const [metrics, usage, executions, evaluations, readinessRows, pilotSnapshot] =
     await Promise.all([
       fetchAgentOperationsMetrics(
         context.supabase,
@@ -216,11 +221,43 @@ export async function loadAgentOperationsDashboard(input: {
         sinceIso: since30Days,
         limit: 2000
       }),
-      readinessQuery
+      readinessQuery,
+      fetchAgentPilotMonitoringSnapshot(
+        context.supabase,
+        context.accessibleOrganizationIds,
+        organizationId
+      )
     ]);
 
   const quality = calculateAgentQualityDashboardMetrics(evaluations, {
     since7DaysIso: since7Days
+  });
+
+  const enrichmentAccepted = countHumanOutcomesForApprovalType(
+    evaluations,
+    "prospect_enrichment",
+    ["accepted", "approved_with_edits"]
+  );
+  const enrichmentRejected = countHumanOutcomesForApprovalType(
+    evaluations,
+    "prospect_enrichment",
+    ["rejected"]
+  );
+
+  const pilotMonitoring = calculateAgentPilotMonitoringMetrics({
+    candidatesApproved: pilotSnapshot.candidatesApproved,
+    candidatesRejected: pilotSnapshot.candidatesRejected,
+    enrichmentAccepted,
+    enrichmentRejected,
+    outreachDraftsGenerated: pilotSnapshot.outreachDraftsGenerated,
+    outreachDraftsSaved: pilotSnapshot.outreachDraftsSaved,
+    failedJobs: pilotSnapshot.failedJobs,
+    policyDenials: pilotSnapshot.policyDenials,
+    budgetDenials: pilotSnapshot.budgetDenials,
+    averageQualityScore: quality.average_overall_quality_score,
+    prospectGenerationSpendUsd: pilotSnapshot.prospectGenerationSpendUsd,
+    outreachDraftSpendUsd: pilotSnapshot.outreachDraftSpendUsd,
+    evaluations
   });
 
   const evaluationsByExecutionId: Record<string, AgentEvaluation[]> = {};
@@ -254,6 +291,7 @@ export async function loadAgentOperationsDashboard(input: {
     metrics,
     usage,
     quality,
+    pilotMonitoring,
     evaluationsByExecutionId,
     executions: executions.items,
     total: executions.total,

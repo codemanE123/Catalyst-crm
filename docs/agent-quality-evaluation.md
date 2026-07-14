@@ -44,6 +44,22 @@ Buckets high/medium/low confidence vs human outcomes. Reports patterns such as h
 
 Agent Ops shows average quality, acceptance/rejection/needs-revision/edits rates, averages by agent/model/approval type, low-quality last 7 days, high-confidence rejects, missing citations, revision %, and alerts.
 
+## Pilot monitoring and feedback (Phase 5.6)
+
+Approval Center pilot controls capture structured usefulness signals:
+
+| Control | Stored as |
+| --- | --- |
+| Accepted as-is | outcome `accepted` |
+| Accepted with edits | outcome `approved_with_edits` |
+| Rejected | outcome `rejected` |
+| Not relevant / Incorrect / Weak sources / Useful | `feedback_categories` |
+| Saved time estimate | `metadata.saved_time_minutes` (discrete minutes) |
+
+**Pilot monitoring panel** (`/agents`): candidate approval rate, enrichment acceptance rate, outreach draft use rate (saves ÷ generated), average quality score, cost per approved prospect, cost per saved outreach draft, failed jobs (today), policy denials, budget denials, average saved time, top feedback tags.
+
+Prefer category tags over free-text. If free-text is supplied it is length-limited and PII-scrubbed; prompts and draft bodies are never stored on evaluations.
+
 ## Privacy
 
 - No raw prompts, API keys, tokens, cookies, or student PII in evaluation storage
@@ -52,7 +68,7 @@ Agent Ops shows average quality, acceptance/rejection/needs-revision/edits rates
 
 ## Human workflow
 
-Approval Center actions record a lightweight evaluation by default (optional usefulness score). Detailed dimension scoring remains available via `submitAgentEvaluation` without duplicating approval decisions.
+Approval Center records a lightweight evaluation with optional usefulness score, structured pilot tags, and saved-time estimate. Prefer tags over narrative. Detailed dimension scoring remains available via `submitAgentEvaluation` without duplicating approval decisions.
 
 ## Future agents
 

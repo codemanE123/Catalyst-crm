@@ -40,6 +40,7 @@ export const FEEDBACK_CATEGORIES = [
   "poor_tone",
   "not_actionable",
   "irrelevant",
+  "not_relevant",
   "unsafe",
   "too_generic",
   "excessive_confidence",
@@ -96,6 +97,8 @@ export type AgentEvaluationMetadata = {
   approval_item_id?: string | null;
   agent_confidence?: number | null;
   low_quality_flags?: string[];
+  /** Discrete minutes saved estimate from the reviewer (no narrative required). */
+  saved_time_minutes?: number | null;
   // Never store prompts, secrets, or raw LLM responses here.
 };
 

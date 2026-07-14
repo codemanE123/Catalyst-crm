@@ -234,6 +234,8 @@ export async function approveApprovalItem(input: {
   approvalItemId: string;
   usefulnessScore?: number | null;
   feedback?: string | null;
+  feedbackCategories?: string[] | null;
+  savedTimeMinutes?: number | null;
   approvedWithEdits?: boolean;
 }): Promise<ApprovalActionResult> {
   const context = await requireApprovalsContext({ mutate: true });
@@ -250,6 +252,13 @@ export async function approveApprovalItem(input: {
     ? "approved_with_edits"
     : "accepted";
 
+  const { sanitizePilotFeedbackCategories, normalizeSavedTimeMinutes } =
+    await import("@/lib/agents/evaluation/pilotFeedback");
+  const feedbackCategories = sanitizePilotFeedbackCategories(
+    input.feedbackCategories
+  );
+  const savedTimeMinutes = normalizeSavedTimeMinutes(input.savedTimeMinutes);
+
   async function recordEval(organizationId: string, agentName?: string | null) {
     await recordLightweightApprovalEvaluation({
       organizationId,
@@ -260,7 +269,10 @@ export async function approveApprovalItem(input: {
       targetType: parsed!.approvalType,
       targetId: parsed!.sourceId,
       usefulnessScore: input.usefulnessScore ?? null,
-      feedback: input.feedback ?? null
+      // Intentionally omit free-text by default for privacy.
+      feedback: input.feedback ?? null,
+      feedbackCategories,
+      savedTimeMinutes
     });
   }
 
@@ -370,6 +382,8 @@ export async function approveApprovalItem(input: {
 export async function rejectApprovalItem(input: {
   approvalItemId: string;
   feedback?: string | null;
+  feedbackCategories?: string[] | null;
+  savedTimeMinutes?: number | null;
 }): Promise<ApprovalActionResult> {
   const context = await requireApprovalsContext({ mutate: true });
   if (!context.ok) {
@@ -380,6 +394,13 @@ export async function rejectApprovalItem(input: {
   if (!parsed) {
     return { ok: false, error: "Invalid approval item." };
   }
+
+  const { sanitizePilotFeedbackCategories, normalizeSavedTimeMinutes } =
+    await import("@/lib/agents/evaluation/pilotFeedback");
+  const feedbackCategories = sanitizePilotFeedbackCategories(
+    input.feedbackCategories
+  );
+  const savedTimeMinutes = normalizeSavedTimeMinutes(input.savedTimeMinutes);
 
   if (
     parsed.approvalType === "prospect_candidate" ||
@@ -435,7 +456,9 @@ export async function rejectApprovalItem(input: {
       outcome: "rejected",
       agentName: "ProspectGenerationAgent",
       targetId: parsed.sourceId,
-      feedback: input.feedback ?? null
+      feedback: input.feedback ?? null,
+      feedbackCategories,
+      savedTimeMinutes
     });
 
     revalidatePath("/approvals");
@@ -483,7 +506,9 @@ export async function rejectApprovalItem(input: {
       sourceId: parsed.sourceId,
       outcome: "rejected",
       targetId: parsed.sourceId,
-      feedback: input.feedback ?? null
+      feedback: input.feedback ?? null,
+      feedbackCategories,
+      savedTimeMinutes
     });
 
     revalidatePath("/approvals");
@@ -496,11 +521,20 @@ export async function rejectApprovalItem(input: {
 export async function markApprovalNeedsRevision(input: {
   approvalItemId: string;
   feedback?: string | null;
+  feedbackCategories?: string[] | null;
+  savedTimeMinutes?: number | null;
 }): Promise<ApprovalActionResult> {
   const context = await requireApprovalsContext({ mutate: true });
   if (!context.ok) {
     return { ok: false, error: context.error };
   }
+
+  const { sanitizePilotFeedbackCategories, normalizeSavedTimeMinutes } =
+    await import("@/lib/agents/evaluation/pilotFeedback");
+  const feedbackCategories = sanitizePilotFeedbackCategories(
+    input.feedbackCategories
+  );
+  const savedTimeMinutes = normalizeSavedTimeMinutes(input.savedTimeMinutes);
 
   const parsed = parseApprovalItemId(input.approvalItemId);
   if (!parsed) {
@@ -562,7 +596,9 @@ export async function markApprovalNeedsRevision(input: {
     sourceId: parsed.sourceId,
     outcome: "needs_revision",
     targetId: parsed.sourceId,
-    feedback: input.feedback ?? null
+    feedback: input.feedback ?? null,
+    feedbackCategories,
+    savedTimeMinutes
   });
 
   revalidatePath("/approvals");

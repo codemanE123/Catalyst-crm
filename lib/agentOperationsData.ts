@@ -273,6 +273,156 @@ export function toAgentExecutionListItem(
   };
 }
 
+async function sumCostForAgentNames(
+  supabase: SupabaseClient,
+  organizationIds: string[] | null,
+  agentNames: string[]
+): Promise<number | null> {
+  if (organizationIds && organizationIds.length === 0) {
+    return 0;
+  }
+
+  let query = supabase
+    .from("agent_usage_events")
+    .select("estimated_cost_usd")
+    .eq("status", "success")
+    .in("agent_name", agentNames);
+
+  if (organizationIds) {
+    query = query.in("organization_id", organizationIds);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Failed to sum agent spend:", error.message);
+    return null;
+  }
+
+  let total = 0;
+  let sawValue = false;
+
+  for (const row of data ?? []) {
+    const value = Number(
+      (row as { estimated_cost_usd?: number | string | null }).estimated_cost_usd
+    );
+    if (Number.isFinite(value)) {
+      total += value;
+      sawValue = true;
+    }
+  }
+
+  return sawValue ? total : null;
+}
+
+async function countAuditActions(
+  supabase: SupabaseClient,
+  organizationIds: string[] | null,
+  action: string
+): Promise<number> {
+  if (organizationIds && organizationIds.length === 0) {
+    return 0;
+  }
+
+  let query = supabase
+    .from("audit_events")
+    .select("id", { count: "exact", head: true })
+    .eq("action", action);
+
+  if (organizationIds) {
+    query = query.in("organization_id", organizationIds);
+  }
+
+  const { count, error } = await query;
+
+  if (error) {
+    console.error("Failed to count audit actions:", error.message);
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
+export async function fetchAgentPilotMonitoringSnapshot(
+  supabase: SupabaseClient,
+  accessibleOrganizationIds: string[] | null,
+  organizationId?: string | null
+): Promise<{
+  candidatesApproved: number;
+  candidatesRejected: number;
+  policyDenials: number;
+  budgetDenials: number;
+  failedJobs: number;
+  outreachDraftsGenerated: number;
+  outreachDraftsSaved: number;
+  prospectGenerationSpendUsd: number | null;
+  outreachDraftSpendUsd: number | null;
+}> {
+  const scopedIds = resolveScopedOrganizationIds(
+    accessibleOrganizationIds,
+    organizationId
+  );
+  const todayStart = startOfUtcDay();
+
+  const [
+    candidatesApproved,
+    candidatesRejected,
+    policyDenials,
+    budgetDenials,
+    failedJobs,
+    outreachDraftsGenerated,
+    outreachDraftsSaved,
+    prospectGenerationSpendUsd,
+    outreachDraftSpendUsd
+  ] = await Promise.all([
+    countWithFilters(supabase, "prospect_candidates", scopedIds, {
+      status: "approved"
+    }),
+    countWithFilters(supabase, "prospect_candidates", scopedIds, {
+      status: "rejected"
+    }),
+    countWithFilters(supabase, "prospect_candidates", scopedIds, {
+      enrichment_status: "policy_denied"
+    }),
+    countWithFilters(supabase, "prospect_candidates", scopedIds, {
+      enrichment_status: "budget_denied"
+    }),
+    countWithFilters(
+      supabase,
+      "agent_executions",
+      scopedIds,
+      { status: "failed" },
+      { completed_at: todayStart }
+    ),
+    countWithFilters(supabase, "agent_executions", scopedIds, {
+      agent_name: "OutreachDraftAgent",
+      status: "completed"
+    }),
+    countAuditActions(
+      supabase,
+      scopedIds,
+      "prospect_candidate.outreach_draft_save"
+    ),
+    sumCostForAgentNames(supabase, scopedIds, [
+      "ProspectGenerationAgent",
+      "ProspectEnrichmentAgent"
+    ]),
+    sumCostForAgentNames(supabase, scopedIds, ["OutreachDraftAgent"])
+  ]);
+
+  return {
+    candidatesApproved,
+    candidatesRejected,
+    policyDenials,
+    budgetDenials,
+    failedJobs,
+    outreachDraftsGenerated,
+    outreachDraftsSaved,
+    prospectGenerationSpendUsd,
+    outreachDraftSpendUsd
+  };
+}
+
 export function isKnownAgentName(
   value: string
 ): value is (typeof AGENT_NAMES)[number] {
