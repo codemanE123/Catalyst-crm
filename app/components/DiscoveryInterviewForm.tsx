@@ -163,10 +163,12 @@ function summarizeNotes(rawNotes: string): Summary {
 
 export default function DiscoveryInterviewForm({
   schools,
-  action
+  action,
+  lockedSchool
 }: {
   schools: School[];
   action: (formData: FormData) => Promise<InterviewActionResult> | InterviewActionResult;
+  lockedSchool?: { id: string; name: string };
 }) {
   const [rawNotes, setRawNotes] = useState("");
   const [summary, setSummary] = useState<Summary>(emptySummary);
@@ -214,24 +216,32 @@ export default function DiscoveryInterviewForm({
             Discovery interview saved.
           </p>
         ) : null}
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700">School</span>
-          <select
-            name="school_id"
-            required
-            className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
-            defaultValue=""
-          >
-            <option value="" disabled>
-              Select school
-            </option>
-            {schools.map((school) => (
-              <option key={school.id} value={school.id}>
-                {school.name}
+        {lockedSchool ? (
+          <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            <p className="text-xs font-medium text-slate-400">School</p>
+            <p className="mt-1 text-sm font-semibold text-white">{lockedSchool.name}</p>
+            <input type="hidden" name="school_id" value={lockedSchool.id} />
+          </div>
+        ) : (
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">School</span>
+            <select
+              name="school_id"
+              required
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
+              defaultValue=""
+            >
+              <option value="" disabled>
+                Select school
               </option>
-            ))}
-          </select>
-        </label>
+              {schools.map((school) => (
+                <option key={school.id} value={school.id}>
+                  {school.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
             <span className="text-sm font-medium text-slate-700">Interviewer</span>

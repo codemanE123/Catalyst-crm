@@ -87,6 +87,7 @@ export type Contact = {
   name: string;
   role: string;
   school: string;
+  schoolId: string | null;
   email: string;
   last_touch: string;
   relationship: "New" | "Warm" | "Champion" | "Needs follow-up";
@@ -163,7 +164,8 @@ export type SchoolProfileData = {
   restrictedFieldsRedacted?: boolean;
 };
 
-type ContactRow = Omit<Contact, "school"> & {
+type ContactRow = Omit<Contact, "school" | "schoolId"> & {
+  school_id?: string | null;
   schools:
     | {
         name: string;
@@ -236,6 +238,7 @@ const sampleContacts: Contact[] = [
     name: "Dr. Elaine Foster",
     role: "Principal",
     school: "Roosevelt High School",
+    schoolId: "school-1",
     email: "elaine.foster@example.edu",
     last_touch: "2026-07-01",
     relationship: "Champion"
@@ -245,6 +248,7 @@ const sampleContacts: Contact[] = [
     name: "Marcus Lee",
     role: "College Counselor",
     school: "North Star Academy",
+    schoolId: "school-2",
     email: "marcus.lee@example.edu",
     last_touch: "2026-06-28",
     relationship: "Warm"
@@ -254,6 +258,7 @@ const sampleContacts: Contact[] = [
     name: "Ana Morales",
     role: "Assistant Principal",
     school: "Lakeview Middle School",
+    schoolId: "school-3",
     email: "ana.morales@example.edu",
     last_touch: "2026-06-20",
     relationship: "Needs follow-up"
@@ -271,6 +276,7 @@ const sampleSchoolContacts: SchoolContact[] = [
     name: "Renee Jackson",
     role: "Dean of Students",
     school: "Roosevelt High School",
+    schoolId: "school-1",
     email: "renee.jackson@example.edu",
     last_touch: "2026-06-26",
     relationship: "Warm",
@@ -544,7 +550,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       .order("name"),
     supabase
       .from("contacts")
-      .select("id,name,role,email,last_touch,relationship,schools(name)")
+      .select("id,name,role,email,last_touch,relationship,school_id,schools(name)")
       .order("last_touch", { ascending: false })
   ]);
 
@@ -577,6 +583,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       name: row.name,
       role: row.role,
       school: getRelatedSchoolName(row.schools),
+      schoolId: row.school_id ?? null,
       email: row.email,
       last_touch: row.last_touch,
       relationship: row.relationship

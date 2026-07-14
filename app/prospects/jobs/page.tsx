@@ -1,8 +1,6 @@
-import { redirect } from "next/navigation";
-
-import ProspectGenerationForm from "@/app/components/ProspectGenerationForm";
 import ProspectJobHistory from "@/app/components/ProspectJobHistory";
-import { createProspectGenerationJob, processProspectGenerationJob } from "@/lib/actions/prospectGeneration";
+import { PageHeader, SecondaryButtonLink } from "@/app/components/ui";
+import { processProspectGenerationJob } from "@/lib/actions/prospectGeneration";
 import {
   canEnqueueProspectGeneration,
   canViewProspectGeneration,
@@ -11,14 +9,15 @@ import {
 import { fetchProspectGenerationJobs } from "@/lib/prospectGenerationData";
 import { getRecordOwnershipFields } from "@/lib/supabase";
 import { getServerSupabaseClient, requireUser } from "@/lib/supabaseServer";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function GenerateProspectsPage() {
+export default async function ProspectJobsPage() {
   const user = await requireUser();
 
   if (!user) {
-    redirect("/login?next=/prospects/generate");
+    redirect("/login?next=/prospects/jobs");
   }
 
   const supabase = await getServerSupabaseClient();
@@ -35,22 +34,16 @@ export default async function GenerateProspectsPage() {
   const { jobs, source } = await fetchProspectGenerationJobs(organizationId);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold text-white">Generate prospects</h1>
-        <p className="mt-2 max-w-3xl text-sm text-slate-400">
-          Queue prospect discovery jobs, then run them against the College Scorecard
-          API (when enabled and configured). Candidates stay pending review until a
-          human approves them into CRM schools. No scraping or personal contact
-          collection.
-        </p>
-      </div>
-
-      <ProspectGenerationForm
-        canEnqueue={canEnqueueProspectGeneration(memberships)}
-        createAction={createProspectGenerationJob}
+    <div>
+      <PageHeader
+        title="Prospect jobs"
+        subtitle="Queued and completed discovery jobs for your organization."
+        actions={
+          <SecondaryButtonLink href="/prospects/generate">
+            Generate prospects
+          </SecondaryButtonLink>
+        }
       />
-
       <ProspectJobHistory
         canProcess={canEnqueueProspectGeneration(memberships)}
         jobs={jobs}

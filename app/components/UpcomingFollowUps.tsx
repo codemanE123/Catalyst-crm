@@ -30,28 +30,50 @@ function formatDueDate(value: string | null) {
 }
 
 export default function UpcomingFollowUps({
-  followUps
+  followUps,
+  limit,
+  compact = false,
+  showViewAll = false
 }: {
   followUps: UpcomingFollowUpItem[];
+  limit?: number;
+  compact?: boolean;
+  showViewAll?: boolean;
 }) {
+  const rows = typeof limit === "number" ? followUps.slice(0, limit) : followUps;
+
   return (
-    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 p-6">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Task queue
-        </p>
-        <h2 className="mt-1 text-2xl font-semibold text-slate-950">
-          Upcoming follow-ups
-        </h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Open follow-ups across your organization, sorted by urgency.
-        </p>
+    <section
+      className={`overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-panel)] shadow-sm ${
+        compact ? "" : ""
+      }`}
+    >
+      <div className="border-b border-white/10 p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">
+              {compact ? "Upcoming follow-ups" : "Follow-up queue"}
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Open follow-ups sorted by urgency.
+            </p>
+          </div>
+          {showViewAll ? (
+            <Link
+              href="/follow-ups"
+              prefetch={false}
+              className="text-sm font-semibold text-blue-300 hover:text-blue-200"
+            >
+              View all
+            </Link>
+          ) : null}
+        </div>
       </div>
 
-      {followUps.length ? (
+      {rows.length ? (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-white/5 text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 <th className="px-6 py-4 font-semibold">School</th>
                 <th className="px-6 py-4 font-semibold">Follow-up</th>
@@ -60,19 +82,19 @@ export default function UpcomingFollowUps({
                 <th className="px-6 py-4 font-semibold">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {followUps.map((followUp) => (
+            <tbody className="divide-y divide-white/5">
+              {rows.map((followUp) => (
                 <tr key={followUp.id} className="align-top">
-                  <td className="px-6 py-5">
+                  <td className="px-6 py-4">
                     <Link
                       href={`/schools/${followUp.schoolId}`}
                       prefetch={false}
-                      className="font-semibold text-slate-950 transition hover:text-cyan-700"
+                      className="font-semibold text-white transition hover:text-blue-300"
                     >
                       {followUp.schoolName}
                     </Link>
                   </td>
-                  <td className="px-6 py-5 text-slate-600">{followUp.title}</td>
+                  <td className="px-6 py-4 text-slate-300">{followUp.title}</td>
                   <td className="px-6 py-5">
                     <div className="flex flex-col gap-2">
                       <span

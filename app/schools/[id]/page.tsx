@@ -19,6 +19,8 @@ import {
   getOpenFollowUpsForSchool
 } from "@/lib/actions/followUps";
 import { createContact, updateContact } from "@/lib/actions/contacts";
+import { createInterviewNote } from "@/lib/supabase";
+import { updateSchool } from "@/lib/actions/schools";
 import {
   getServerSupabaseClient,
   requireUser
@@ -37,22 +39,38 @@ import { fetchLatestMeetingPrepBrief } from "@/lib/meetingPrep/execute";
 import SchoolProposalDraftSection from "@/app/components/SchoolProposalDraftSection";
 import { runProposalGenerationForSchool } from "@/lib/actions/proposalGeneration";
 import { fetchLatestProposalDraft } from "@/lib/proposalGeneration/execute";
+import DiscoveryInterviewForm from "@/app/components/DiscoveryInterviewForm";
+import OutreachEmailGenerator from "@/app/components/OutreachEmailGenerator";
+import SchoolForm from "@/app/components/SchoolForm";
+import {
+  PrimaryButtonLink,
+  SecondaryButtonLink,
+  statusPillStyles
+} from "@/app/components/ui";
 
 export const dynamic = "force-dynamic";
 
-const statusStyles: Record<School["status"], string> = {
-  Prospect: "bg-slate-100 text-slate-700 ring-slate-200",
-  Contacted: "bg-sky-100 text-sky-700 ring-sky-200",
-  Interviewing: "bg-amber-100 text-amber-800 ring-amber-200",
-  Partner: "bg-emerald-100 text-emerald-700 ring-emerald-200"
-};
+const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "contacts", label: "Contacts" },
+  { id: "outreach", label: "Outreach" },
+  { id: "discovery", label: "Discovery" },
+  { id: "ai", label: "AI Insights" },
+  { id: "activity", label: "Activity" },
+  { id: "edit", label: "Edit" }
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
 
 export default async function SchoolProfile({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { id } = await params;
+  const { tab: tabParam } = await searchParams;
   const profile = await getSchoolProfileData(id);
 
   if (!profile) {
@@ -96,57 +114,182 @@ export default async function SchoolProfile({
         )
       : null;
 
-  return (
-    <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950 lg:px-10">
-      <div className="mx-auto flex max-w-7xl flex-col gap-8">
-        <Link
-          href="/"
-          prefetch={false}
-          className="text-sm font-semibold text-cyan-700 hover:text-cyan-900"
-        >
-          Back to dashboard
-        </Link>
+  const availableTabs = TABS.filter((tab) => {
+    if (tab.id === "edit" || tab.id === "discovery") {
+      return canMutateSchool;
+    }
+    return true;
+  });
+  const tab: TabId = availableTabs.some((item) => item.id === tabParam)
+    ? (tabParam as TabId)
+    : "overview";
 
-        <section className="overflow-hidden rounded-[2rem] bg-slate-950 p-8 text-white shadow-xl shadow-slate-200">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="mb-3 text-sm font-semibold uppercase tracking-[0.3em] text-cyan-300">
-                School profile
-              </p>
-              <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-                {school.name}
-              </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
-                {school.district} · {school.location}
-              </p>
+  return (
+    <div>
+      <div className="mb-4">
+        <Link
+          href="/schools"
+          prefetch={false}
+          className="text-sm font-semibold text-blue-300 hover:text-blue-200"
+        >
+          ← Schools
+        </Link>
+      </div>
+
+      <section className="overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-panel)] p-6 sm:p-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${
+                  statusPillStyles[school.status]
+                }`}
+              >
+                {school.status}
+              </span>
+              <span className="text-xs text-slate-400">
+                {source === "supabase" ? "Live data" : "Sample data"}
+              </span>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <ProfileBadge label="Status" value={school.status} />
-              <ProfileBadge
-                label="Data source"
-                value={source === "supabase" ? "Supabase" : "Sample"}
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+              {school.name}
+            </h1>
+            <p className="mt-2 text-sm text-slate-300">
+              {school.location}
+              {school.state ? ` · ${school.state}` : ""} · Owner {school.owner}
+            </p>
+            <p className="mt-2 text-sm text-slate-400">
+              Next follow-up:{" "}
+              {nextFollowUp
+                ? `${nextFollowUp.title} (${formatDate(nextFollowUp.due_date)})`
+                : "None scheduled"}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {canMutateSchool ? (
+              <>
+                <PrimaryButtonLink href={`/schools/${school.id}?tab=edit`}>
+                  Edit
+                </PrimaryButtonLink>
+                <SecondaryButtonLink href={`/schools/${school.id}?tab=outreach`}>
+                  Log Outreach
+                </SecondaryButtonLink>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      {restrictedFieldsRedacted ? (
+        <section className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          Some sensitive fields are hidden for your role and appear as &quot;
+          {RESTRICTED_FIELD_PLACEHOLDER}&quot;.
+        </section>
+      ) : null}
+
+      <nav className="mt-6 flex gap-1 overflow-x-auto border-b border-white/10 pb-px">
+        {availableTabs.map((item) => {
+          const active = item.id === tab;
+          return (
+            <Link
+              key={item.id}
+              href={`/schools/${school.id}?tab=${item.id}`}
+              prefetch={false}
+              className={`whitespace-nowrap rounded-t-lg px-3 py-2.5 text-sm font-medium transition ${
+                active
+                  ? "bg-white/5 text-white ring-1 ring-inset ring-white/10"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="mt-6 space-y-6">
+        {tab === "overview" ? (
+          <>
+            <div className="grid gap-4 md:grid-cols-3">
+              <SummaryCard label="Owner" value={school.owner} />
+              <SummaryCard label="Next step" value={school.next_step} />
+              <SummaryCard
+                label="Next follow-up"
+                value={
+                  nextFollowUp
+                    ? `${nextFollowUp.title} · ${formatDate(nextFollowUp.due_date)}`
+                    : "None"
+                }
               />
             </div>
-          </div>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-3">
-          <SummaryCard label="Owner" value={school.owner} />
-          <SummaryCard label="Contacts" value={contacts.length.toString()} />
-          <SummaryCard label="Interviews" value={interviews.length.toString()} />
-        </section>
-
-        {restrictedFieldsRedacted ? (
-          <section className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
-            Some sensitive fields are hidden for your role. Budget, objections,
-            raw interview notes, and follow-up notes appear as &quot;
-            {RESTRICTED_FIELD_PLACEHOLDER}&quot;.
-          </section>
+            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+              <div className="space-y-6">
+                <SchoolNotes school={school} />
+                <UniversityProfilePanel school={school} />
+              </div>
+              <div className="space-y-6">
+                <StatusPanel school={school} nextFollowUp={nextFollowUp} />
+                {canMutateSchool ? (
+                  <FollowUpPanel
+                    schoolId={school.id}
+                    schoolName={school.name}
+                    openFollowUps={openFollowUps}
+                    createAction={createFollowUp}
+                    completeAction={completeFollowUp}
+                  />
+                ) : null}
+              </div>
+            </div>
+          </>
         ) : null}
 
-        <section className="grid gap-8 xl:grid-cols-[1fr_0.75fr]">
-          <div className="flex flex-col gap-8">
-            <UniversityProfilePanel school={school} />
+        {tab === "contacts" ? (
+          <div className="space-y-6">
+            {canMutateSchool ? (
+              <ContactForm
+                schoolId={school.id}
+                schoolName={school.name}
+                contacts={contacts}
+                createAction={createContact}
+                updateAction={updateContact}
+              />
+            ) : null}
+            <ContactsPanel contacts={contacts} />
+          </div>
+        ) : null}
+
+        {tab === "outreach" ? (
+          <div className="space-y-6">
+            {canMutateSchool ? (
+              <OutreachLogForm
+                schoolId={school.id}
+                schoolName={school.name}
+                action={createOutreachLog}
+              />
+            ) : null}
+            <OutreachEmailGenerator
+              defaults={{
+                schoolName: school.name,
+                painPoint: school.next_step
+              }}
+            />
+            <OutreachHistory outreach={outreach} />
+          </div>
+        ) : null}
+
+        {tab === "discovery" && canMutateSchool ? (
+          <div className="space-y-6">
+            <DiscoveryInterviewForm
+              schools={[school]}
+              lockedSchool={{ id: school.id, name: school.name }}
+              action={createInterviewNote}
+            />
+            <InterviewSummaries interviews={interviews} />
+          </div>
+        ) : null}
+
+        {tab === "ai" ? (
+          <div className="space-y-6">
             <SchoolRecommendedContactRolesSection
               actionsEnabled={source === "supabase"}
               canDiscover={canMutateSchool}
@@ -171,42 +314,27 @@ export default async function SchoolProfile({
               schoolId={school.id}
               schoolName={school.name}
             />
-            <SchoolNotes school={school} />
-            {canMutateSchool ? (
-              <ContactForm
-                schoolId={school.id}
-                schoolName={school.name}
-                contacts={contacts}
-                createAction={createContact}
-                updateAction={updateContact}
-              />
-            ) : null}
-            <ContactsPanel contacts={contacts} />
-            {canMutateSchool ? (
-              <OutreachLogForm
-                schoolId={school.id}
-                schoolName={school.name}
-                action={createOutreachLog}
-              />
-            ) : null}
-            <OutreachHistory outreach={outreach} />
           </div>
-          <div className="flex flex-col gap-8">
-            <StatusPanel school={school} nextFollowUp={nextFollowUp} />
-            {canMutateSchool ? (
-              <FollowUpPanel
-                schoolId={school.id}
-                schoolName={school.name}
-                openFollowUps={openFollowUps}
-                createAction={createFollowUp}
-                completeAction={completeFollowUp}
-              />
-            ) : null}
+        ) : null}
+
+        {tab === "activity" ? (
+          <div className="grid gap-6 xl:grid-cols-2">
+            <OutreachHistory outreach={outreach} />
             <InterviewSummaries interviews={interviews} />
           </div>
-        </section>
+        ) : null}
+
+        {tab === "edit" && canMutateSchool ? (
+          <SchoolForm
+            mode="update"
+            schools={[school]}
+            fixedSchoolId={school.id}
+            createAction={async () => ({ ok: false, error: "Use add school." })}
+            updateAction={updateSchool}
+          />
+        ) : null}
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -233,20 +361,11 @@ async function userCanMutateSchool(schoolId: string): Promise<boolean> {
   return membership !== null;
 }
 
-function ProfileBadge({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/10 px-5 py-4">
-      <p className="text-sm text-slate-300">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{value}</p>
-    </div>
-  );
-}
-
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <p className="text-sm font-medium text-slate-500">{label}</p>
-      <p className="mt-3 text-2xl font-semibold text-slate-950">{value}</p>
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-panel)] p-5 shadow-sm">
+      <p className="text-sm font-medium text-slate-400">{label}</p>
+      <p className="mt-3 text-xl font-semibold text-white">{value}</p>
     </div>
   );
 }
@@ -378,7 +497,7 @@ function StatusPanel({
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusStyles[school.status]}`}
+          className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusPillStyles[school.status]}`}
         >
           {school.status}
         </span>

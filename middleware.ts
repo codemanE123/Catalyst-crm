@@ -19,7 +19,14 @@ function isAgentsPath(pathname: string) {
 function isProtectedPath(pathname: string) {
   return (
     pathname === "/" ||
+    pathname === "/schools" ||
     pathname.startsWith("/schools/") ||
+    pathname === "/contacts" ||
+    pathname.startsWith("/contacts/") ||
+    pathname === "/follow-ups" ||
+    pathname.startsWith("/follow-ups/") ||
+    pathname === "/approvals" ||
+    pathname.startsWith("/approvals/") ||
     pathname.startsWith("/prospects/") ||
     isSettingsPath(pathname) ||
     isAgentsPath(pathname)

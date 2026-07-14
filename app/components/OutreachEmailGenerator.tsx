@@ -19,10 +19,18 @@ Best,
 Catalyst`;
 }
 
-export default function OutreachEmailGenerator() {
-  const [schoolName, setSchoolName] = useState("");
-  const [contactRole, setContactRole] = useState("");
-  const [painPoint, setPainPoint] = useState("");
+export default function OutreachEmailGenerator({
+  defaults
+}: {
+  defaults?: {
+    schoolName?: string;
+    contactRole?: string;
+    painPoint?: string;
+  };
+}) {
+  const [schoolName, setSchoolName] = useState(defaults?.schoolName ?? "");
+  const [contactRole, setContactRole] = useState(defaults?.contactRole ?? "");
+  const [painPoint, setPainPoint] = useState(defaults?.painPoint ?? "");
   const [generatedEmail, setGeneratedEmail] = useState("");
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">(
     "idle"

@@ -114,17 +114,17 @@ export default function GlobalSearch() {
         role="combobox"
         aria-expanded={showPanel}
         aria-controls={listboxId}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-950 outline-none ring-cyan-500 transition focus:bg-white focus:ring-2"
+        className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-slate-100 outline-none ring-blue-500 transition placeholder:text-slate-500 focus:bg-slate-950 focus:ring-2"
       />
 
       {showPanel ? (
         <div
           id={listboxId}
           role="listbox"
-          className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200"
+          className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-white/10 bg-[#121a2b] shadow-lg shadow-black/40"
         >
           {isLoading ? (
-            <p className="px-4 py-3 text-sm text-slate-500">Searching…</p>
+            <p className="px-4 py-3 text-sm text-slate-400">Searching…</p>
           ) : null}
 
           {!isLoading && error ? (
@@ -200,9 +200,9 @@ function SchoolResult({
       prefetch={false}
       onClick={onNavigate}
       role="option"
-      className="block rounded-xl px-3 py-2 transition hover:bg-slate-50"
+      className="block rounded-xl px-3 py-2 transition hover:bg-white/5"
     >
-      <p className="font-medium text-slate-950">{school.name}</p>
+      <p className="font-medium text-slate-100">{school.name}</p>
       <p className="mt-1 text-xs text-slate-500">
         {school.location}
         {school.state ? ` · ${school.state}` : ""} · {school.status}
@@ -224,9 +224,9 @@ function ContactResult({
       prefetch={false}
       onClick={onNavigate}
       role="option"
-      className="block rounded-xl px-3 py-2 transition hover:bg-slate-50"
+      className="block rounded-xl px-3 py-2 transition hover:bg-white/5"
     >
-      <p className="font-medium text-slate-950">{contact.name}</p>
+      <p className="font-medium text-slate-100">{contact.name}</p>
       <p className="mt-1 text-xs text-slate-500">
         {contact.title} · {contact.schoolName}
       </p>

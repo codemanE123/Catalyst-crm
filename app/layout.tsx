@@ -1,4 +1,6 @@
+import AppShell from "@/app/components/AppShell";
 import {
+  canAccessSettingsRoutes,
   canViewAgentOperations,
   canViewProspectGeneration,
   getMembershipsForUser
@@ -8,18 +10,18 @@ import {
   getAccessibleApprovalOrganizationIds
 } from "@/lib/approvals/permissions";
 import { countAwaitingHumanReview } from "@/lib/approvals/data";
+import { buildAppNavGroups, type AppNavVisibility } from "@/lib/appNav";
 import {
   getServerSupabaseClient,
   requireUser
 } from "@/lib/supabaseServer";
 import type { Metadata } from "next";
 import Link from "next/link";
-import GlobalSearch from "./components/GlobalSearch";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Catalyst CRM",
-  description: "First-version school outreach dashboard"
+  description: "School partnership CRM and agent operations"
 };
 
 export default async function RootLayout({
@@ -31,113 +33,64 @@ export default async function RootLayout({
   const supabase = await getServerSupabaseClient();
   const memberships =
     user && supabase ? await getMembershipsForUser(supabase, user.id) : [];
-  const showProspectsNav = user && canViewProspectGeneration(memberships);
-  const showAgentsNav = user && canViewAgentOperations(memberships);
-  const showApprovalsNav = Boolean(user && canViewApprovals(memberships));
+
+  const visibility: AppNavVisibility = user
+    ? {
+        showProspects: canViewProspectGeneration(memberships),
+        showApprovals: canViewApprovals(memberships),
+        showAgents: canViewAgentOperations(memberships),
+        showSettings: canAccessSettingsRoutes(memberships)
+      }
+    : {
+        showProspects: false,
+        showApprovals: false,
+        showAgents: false,
+        showSettings: false
+      };
+
+  const groups = buildAppNavGroups(visibility);
   const pendingApprovalsCount =
-    user && supabase && showApprovalsNav
+    user && supabase && visibility.showApprovals
       ? await countAwaitingHumanReview(
           supabase,
           getAccessibleApprovalOrganizationIds(memberships)
         )
       : 0;
 
-  return (
-    <html lang="en">
-      <body>
-        <header className="border-b border-slate-200 bg-white px-6 py-3">
-          <div className="mx-auto flex max-w-7xl items-center gap-4">
-            <Link className="shrink-0 font-semibold text-slate-950" href="/" prefetch={false}>
-              Catalyst CRM
-            </Link>
-            {user ? (
-              <div className="min-w-0 flex-1">
-                <GlobalSearch />
-              </div>
-            ) : (
-              <div className="flex-1" />
-            )}
-            {showProspectsNav ? (
-              <Link
-                className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
-                href="/prospects/generate"
-                prefetch={false}
-              >
-                Generate prospects
+  if (!user) {
+    return (
+      <html lang="en">
+        <body>
+          <header className="border-b border-white/10 bg-[var(--app-sidebar)] px-6 py-3">
+            <div className="mx-auto flex max-w-5xl items-center justify-between">
+              <Link className="font-semibold text-white" href="/" prefetch={false}>
+                Catalyst CRM
               </Link>
-            ) : null}
-            {showApprovalsNav ? (
               <Link
-                className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
-                href="/approvals"
-                prefetch={false}
-              >
-                Approvals
-                {pendingApprovalsCount > 0 ? (
-                  <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800 ring-1 ring-slate-200">
-                    {pendingApprovalsCount}
-                  </span>
-                ) : null}
-              </Link>
-            ) : null}
-            {showAgentsNav ? (
-              <>
-                <Link
-                  className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
-                  href="/agents"
-                  prefetch={false}
-                >
-                  Agents
-                </Link>
-                <Link
-                  className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
-                  href="/agents/prompts"
-                  prefetch={false}
-                >
-                  Prompts
-                </Link>
-                <Link
-                  className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
-                  href="/agents/rollouts"
-                  prefetch={false}
-                >
-                  Rollouts
-                </Link>
-                <Link
-                  className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
-                  href="/agents/policies"
-                  prefetch={false}
-                >
-                  Policies
-                </Link>
-                <Link
-                  className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
-                  href="/agents/readiness"
-                  prefetch={false}
-                >
-                  Readiness
-                </Link>
-              </>
-            ) : null}
-            {user ? (
-              <a
-                className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
-                href="/logout"
-              >
-                Sign out
-              </a>
-            ) : (
-              <Link
-                className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
+                className="text-sm text-slate-300 hover:text-white"
                 href="/login"
                 prefetch={false}
               >
                 Sign in
               </Link>
-            )}
-          </div>
-        </header>
-        {children}
+            </div>
+          </header>
+          {children}
+        </body>
+      </html>
+    );
+  }
+
+  return (
+    <html lang="en">
+      <body>
+        <AppShell
+          groups={groups}
+          pendingApprovalsCount={pendingApprovalsCount}
+          userLabel={user.email ?? user.id}
+        >
+          {children}
+        </AppShell>
       </body>
     </html>
   );
