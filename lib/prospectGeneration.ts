@@ -30,9 +30,13 @@ export type ProspectCandidateStatus =
 
 export const PROSPECT_CANDIDATE_ENRICHMENT_STATUSES = [
   "not_enriched",
+  "queued",
+  "running",
   "enriched",
   "failed",
-  "blocked"
+  "blocked",
+  "policy_denied",
+  "budget_denied"
 ] as const;
 
 export type ProspectCandidateEnrichmentStatus =

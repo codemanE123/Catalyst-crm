@@ -5,10 +5,11 @@ import type { User } from "@supabase/supabase-js";
 
 import { AUDIT_ACTIONS, recordAuditEvent } from "@/lib/auditLog";
 import { MUTATION_ROLES, requireRole, getSchoolOrganizationId } from "@/lib/authz";
+import { createAgentHandlerDependencies } from "@/lib/actions/agentHandlerDependencies";
 import { recordLlmUsageEvent } from "@/lib/agents/usage";
 import { SupabaseAgentUsageStore } from "@/lib/agents/usageStore";
+import { createGatedAgentOrchestratorFromSupabase } from "@/lib/agents/worker";
 import {
-  enrichProspectCandidate as invokeLlmEnrichment,
   getLlmEnrichmentStatus,
   resolveLlmProductionContextFromSupabase
 } from "@/lib/llm";
@@ -18,7 +19,6 @@ import {
 } from "@/lib/llm/outreachDraft";
 import type { ProspectGenerationInput } from "@/lib/prospectGeneration";
 import type { ProspectCandidate } from "@/lib/prospectGeneration";
-import { buildProspectEnrichmentInput } from "@/lib/prospectEnrichmentInput";
 import { buildProspectOutreachDraftInput } from "@/lib/prospectOutreachDraftInput";
 import {
   buildProspectOutreachDraftNextStep,
@@ -563,6 +563,16 @@ export async function enrichProspectCandidate(
     };
   }
 
+  if (
+    candidate.enrichment_status === "queued" ||
+    candidate.enrichment_status === "running"
+  ) {
+    return {
+      ok: false,
+      error: "Enrichment is already in progress for this candidate."
+    };
+  }
+
   const jobInput = await loadJobInputForCandidate(
     supabase,
     candidate.job_id,
@@ -576,120 +586,73 @@ export async function enrichProspectCandidate(
     };
   }
 
-  const enrichmentInput = buildProspectEnrichmentInput({
-    candidate,
-    jobInput
-  });
-
+  const handlerDependencies = await createAgentHandlerDependencies(supabase);
   const usageStore = new SupabaseAgentUsageStore(supabase);
-  const gate = await resolveLlmProductionContextFromSupabase({
-    supabase,
-    organizationId: ownership.organization_id,
-    agentName: "ProspectEnrichmentAgent",
-    actorUserId: user.id,
-    targetId: candidate.id,
+  const orchestrator = createGatedAgentOrchestratorFromSupabase(supabase, {
+    handlerDependencies,
     usageStore
   });
 
-  if (!gate.ok) {
-    await recordAuditEvent(supabase, {
-      organizationId: ownership.organization_id,
-      actorUserId: user.id,
-      action: AUDIT_ACTIONS.prospectCandidateEnrich,
-      targetTable: "prospect_candidates",
-      recordId: candidate.id,
-      metadata: {
-        job_id: candidate.job_id,
-        outcome: "denied",
-        reason_code: gate.reason_code
-      }
-    });
+  const queued = await orchestrator.queueAgent({
+    organizationId: ownership.organization_id,
+    actorUserId: user.id,
+    agentName: "ProspectEnrichmentAgent",
+    targetType: "prospect_candidate",
+    targetId: candidate.id
+  });
 
-    await recordLlmUsageEvent(usageStore, {
-      organizationId: ownership.organization_id,
-      agentName: "ProspectEnrichmentAgent",
-      targetType: "prospect_candidate",
-      targetId: candidate.id,
-      provider: "openai",
-      status: "denied",
-      denialReasonCode: gate.reason_code
-    });
+  if (!queued.ok) {
+    const reasonCode = queued.reason_code ?? null;
+    const denialStatus =
+      reasonCode === "daily_budget_limit" ||
+      reasonCode === "monthly_budget_limit" ||
+      reasonCode === "daily_llm_limit"
+        ? "budget_denied"
+        : reasonCode === "feature_disabled" ||
+            reasonCode === "hourly_execution_limit" ||
+            reasonCode === "concurrency_limit" ||
+            reasonCode === "chain_depth_exceeded" ||
+            reasonCode === "certification_denied" ||
+            reasonCode === "invalid_configuration"
+          ? "policy_denied"
+          : null;
+
+    if (denialStatus) {
+      await supabase
+        .from("prospect_candidates")
+        .update({ enrichment_status: denialStatus })
+        .eq("id", candidate.id)
+        .eq("organization_id", ownership.organization_id)
+        .eq("status", "pending_review");
+
+      await recordAuditEvent(supabase, {
+        organizationId: ownership.organization_id,
+        actorUserId: user.id,
+        action: AUDIT_ACTIONS.prospectCandidateEnrich,
+        targetTable: "prospect_candidates",
+        recordId: candidate.id,
+        metadata: {
+          job_id: candidate.job_id,
+          outcome: denialStatus,
+          reason_code: reasonCode
+        }
+      });
+
+      revalidateProspectReviewViews(candidate.job_id);
+    }
 
     return {
       ok: false,
-      error: gate.user_safe_message,
-      disabled: gate.reason_code === "feature_disabled" ||
-        gate.reason_code === "provider_disabled" ||
-        gate.reason_code === "certification_denied"
+      error: queued.error,
+      disabled:
+        reasonCode === "feature_disabled" ||
+        reasonCode === "certification_denied"
     };
   }
 
-  const enrichmentResult = await invokeLlmEnrichment(
-    {
-      input: enrichmentInput,
-      context: {
-        organization_id: ownership.organization_id,
-        job_id: candidate.job_id,
-        candidate_id: candidate.id
-      }
-    },
-    {
-      usageStore,
-      agentName: "ProspectEnrichmentAgent",
-      productionContext: gate.context
-    }
-  );
-
-  if (!enrichmentResult.ok) {
-    if (enrichmentResult.status === "disabled") {
-      return {
-        ok: false,
-        error: enrichmentResult.reason,
-        disabled: true
-      };
-    }
-
-    const failureStatus =
-      enrichmentResult.status === "blocked" ? "blocked" : "failed";
-
-    await supabase
-      .from("prospect_candidates")
-      .update({ enrichment_status: failureStatus })
-      .eq("id", candidate.id)
-      .eq("organization_id", ownership.organization_id)
-      .eq("status", "pending_review");
-
-    await recordAuditEvent(supabase, {
-      organizationId: ownership.organization_id,
-      actorUserId: user.id,
-      action: AUDIT_ACTIONS.prospectCandidateEnrich,
-      targetTable: "prospect_candidates",
-      recordId: candidate.id,
-      metadata: {
-        job_id: candidate.job_id,
-        outcome: failureStatus,
-        reason: enrichmentResult.reason
-      }
-    });
-
-    revalidateProspectReviewViews(candidate.job_id);
-
-    return {
-      ok: false,
-      error: enrichmentResult.reason
-    };
-  }
-
-  const enrichedAt = new Date().toISOString();
   const { error: updateError } = await supabase
     .from("prospect_candidates")
-    .update({
-      enrichment_summary: enrichmentResult.data.public_summary,
-      outreach_angle: enrichmentResult.data.outreach_angle,
-      recommended_next_step: enrichmentResult.data.suggested_next_step,
-      enrichment_status: "enriched",
-      enriched_at: enrichedAt
-    })
+    .update({ enrichment_status: "queued" })
     .eq("id", candidate.id)
     .eq("organization_id", ownership.organization_id)
     .eq("status", "pending_review");
@@ -697,7 +660,7 @@ export async function enrichProspectCandidate(
   if (updateError) {
     return {
       ok: false,
-      error: "Could not save prospect enrichment results."
+      error: "Could not mark candidate enrichment as queued."
     };
   }
 
@@ -709,17 +672,8 @@ export async function enrichProspectCandidate(
     recordId: candidate.id,
     metadata: {
       job_id: candidate.job_id,
-      outcome: "enriched",
-      provider: enrichmentResult.provider,
-      model: enrichmentResult.model,
-      prompt_version: enrichmentResult.prompt_version,
-      prompt_version_id: enrichmentResult.prompt_version_id ?? null,
-      policy_set_id: enrichmentResult.policy_set_id ?? null,
-      policy_version: enrichmentResult.policy_version ?? null,
-      rollout_id: enrichmentResult.rollout_id ?? null,
-      experiment_variant: enrichmentResult.experiment_variant ?? null,
-      estimated_cost_usd: enrichmentResult.estimated_cost_usd ?? null,
-      enrichment_confidence: enrichmentResult.data.enrichment_confidence
+      outcome: "queued",
+      agent_execution_id: queued.execution.id
     }
   });
 
@@ -727,7 +681,7 @@ export async function enrichProspectCandidate(
 
   return {
     ok: true,
-    message: `${candidate.name} enriched successfully.`
+    message: `Enrichment queued for ${candidate.name}. The background worker will process it shortly.`
   };
 }
 

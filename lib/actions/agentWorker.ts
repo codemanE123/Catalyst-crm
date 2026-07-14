@@ -7,6 +7,7 @@ import {
 import { createAgentHandlerDependencies } from "@/lib/actions/agentHandlerDependencies";
 import { createAgentWorkerFromSupabase } from "@/lib/agents/worker";
 import type { ProcessNextAgentWorkerResult } from "@/lib/agents/worker";
+import { SupabaseAgentUsageStore } from "@/lib/agents/usageStore";
 import { getRecordOwnershipFields } from "@/lib/supabase";
 import {
   getServerSupabaseClient,
@@ -58,7 +59,11 @@ export async function processNextAgentExecution(): Promise<ProcessNextAgentWorke
   }
 
   const handlerDependencies = await createAgentHandlerDependencies(supabase);
-  const worker = createAgentWorkerFromSupabase(supabase, { handlerDependencies });
+  const usageStore = new SupabaseAgentUsageStore(supabase);
+  const worker = createAgentWorkerFromSupabase(supabase, {
+    handlerDependencies,
+    usageStore
+  });
 
   return worker.processNext({
     organizationId: ownership.organization_id,

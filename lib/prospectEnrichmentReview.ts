@@ -11,17 +11,24 @@ export const PROSPECT_CANDIDATE_ENRICHMENT_STATUS_LABELS: Record<
   string
 > = {
   not_enriched: "Not enriched",
-  enriched: "Enriched",
+  queued: "Queued",
+  running: "Running",
+  enriched: "Completed",
   failed: "Failed",
-  blocked: "Blocked"
+  blocked: "Blocked",
+  policy_denied: "Policy denied",
+  budget_denied: "Budget denied"
 };
 
 export type ProspectEnrichmentReviewState =
   | "not_enriched"
   | "enrichment_disabled"
-  | "enriching"
+  | "queued"
+  | "running"
   | "enriched"
-  | "failed";
+  | "failed"
+  | "policy_denied"
+  | "budget_denied";
 
 export const PROSPECT_ENRICHMENT_REVIEW_STATE_LABELS: Record<
   ProspectEnrichmentReviewState,
@@ -29,9 +36,12 @@ export const PROSPECT_ENRICHMENT_REVIEW_STATE_LABELS: Record<
 > = {
   not_enriched: "Not enriched",
   enrichment_disabled: "Enrichment disabled",
-  enriching: "Enriching",
-  enriched: "Enriched",
-  failed: "Failed"
+  queued: "Queued",
+  running: "Running",
+  enriched: "Completed",
+  failed: "Failed",
+  policy_denied: "Policy denied",
+  budget_denied: "Budget denied"
 };
 
 export const prospectEnrichmentReviewStateStyles: Record<
@@ -40,9 +50,12 @@ export const prospectEnrichmentReviewStateStyles: Record<
 > = {
   not_enriched: "bg-slate-100 text-slate-800 ring-slate-200",
   enrichment_disabled: "bg-amber-100 text-amber-900 ring-amber-200",
-  enriching: "bg-sky-100 text-sky-900 ring-sky-200",
+  queued: "bg-sky-100 text-sky-900 ring-sky-200",
+  running: "bg-indigo-100 text-indigo-900 ring-indigo-200",
   enriched: "bg-violet-100 text-violet-900 ring-violet-200",
-  failed: "bg-red-100 text-red-900 ring-red-200"
+  failed: "bg-red-100 text-red-900 ring-red-200",
+  policy_denied: "bg-orange-100 text-orange-900 ring-orange-200",
+  budget_denied: "bg-rose-100 text-rose-900 ring-rose-200"
 };
 
 export function resolveProspectEnrichmentReviewState(params: {
@@ -50,12 +63,24 @@ export function resolveProspectEnrichmentReviewState(params: {
   llmEnrichmentEnabled: boolean;
   isEnriching: boolean;
 }): ProspectEnrichmentReviewState {
-  if (params.isEnriching) {
-    return "enriching";
-  }
-
   if (params.enrichmentStatus === "enriched") {
     return "enriched";
+  }
+
+  if (params.enrichmentStatus === "queued") {
+    return "queued";
+  }
+
+  if (params.enrichmentStatus === "running" || params.isEnriching) {
+    return "running";
+  }
+
+  if (params.enrichmentStatus === "policy_denied") {
+    return "policy_denied";
+  }
+
+  if (params.enrichmentStatus === "budget_denied") {
+    return "budget_denied";
   }
 
   if (
@@ -99,4 +124,10 @@ export function hasProspectEnrichmentContent(candidate: {
       candidate.outreach_angle?.trim() ||
       candidate.recommended_next_step?.trim()
   );
+}
+
+export function isProspectEnrichmentInProgress(
+  status: ProspectCandidateEnrichmentStatus
+): boolean {
+  return status === "queued" || status === "running";
 }

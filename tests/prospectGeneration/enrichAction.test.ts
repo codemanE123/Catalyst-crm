@@ -8,8 +8,8 @@ const mockRecordAuditEvent = vi.fn();
 const mockRevalidatePath = vi.fn();
 const mockRevalidateSchoolViews = vi.fn();
 const mockGetLlmEnrichmentStatus = vi.fn();
-const mockInvokeLlmEnrichment = vi.fn();
-const mockResolveLlmProductionContext = vi.fn();
+const mockQueueAgent = vi.fn();
+const mockCreateAgentHandlerDependencies = vi.fn();
 
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args)
@@ -45,38 +45,26 @@ vi.mock("@/lib/auditLog", () => ({
   recordAuditEvent: (...args: unknown[]) => mockRecordAuditEvent(...args)
 }));
 
+vi.mock("@/lib/actions/agentHandlerDependencies", () => ({
+  createAgentHandlerDependencies: (...args: unknown[]) =>
+    mockCreateAgentHandlerDependencies(...args)
+}));
+
+vi.mock("@/lib/agents/worker", () => ({
+  createGatedAgentOrchestratorFromSupabase: () => ({
+    queueAgent: (...args: unknown[]) => mockQueueAgent(...args)
+  })
+}));
+
 vi.mock("@/lib/agents/usageStore", () => ({
-  SupabaseAgentUsageStore: class {
-    insert = vi.fn(async () => ({
-      id: "usage-1",
-      organization_id: "org-1",
-      agent_execution_id: null,
-      agent_name: "ProspectEnrichmentAgent",
-      target_type: "prospect_candidate",
-      target_id: "candidate-1",
-      provider: "openai",
-      model: null,
-      input_tokens: null,
-      output_tokens: null,
-      total_tokens: null,
-      estimated_cost_usd: null,
-      status: "denied",
-      denial_reason_code: null,
-      created_at: "2026-07-14T12:00:00.000Z"
-    }));
-    countLlmCallsSince = vi.fn(async () => 0);
-    sumEstimatedCostSince = vi.fn(async () => 0);
-  }
+  SupabaseAgentUsageStore: class {}
 }));
 
 vi.mock("@/lib/llm", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/llm")>();
   return {
     ...actual,
-    getLlmEnrichmentStatus: () => mockGetLlmEnrichmentStatus(),
-    enrichProspectCandidate: (...args: unknown[]) => mockInvokeLlmEnrichment(...args),
-    resolveLlmProductionContextFromSupabase: (...args: unknown[]) =>
-      mockResolveLlmProductionContext(...args)
+    getLlmEnrichmentStatus: () => mockGetLlmEnrichmentStatus()
   };
 });
 
@@ -164,7 +152,7 @@ function buildSupabaseMock(options?: {
   };
 }
 
-describe("enrichProspectCandidate action", () => {
+describe("enrichProspectCandidate action (async queue)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireUser.mockResolvedValue({
@@ -182,30 +170,12 @@ describe("enrichProspectCandidate action", () => {
       enabled: true,
       reason: "LLM enrichment is enabled."
     });
-    mockResolveLlmProductionContext.mockResolvedValue({
+    mockCreateAgentHandlerDependencies.mockResolvedValue({
+      enrichProspectCandidate: vi.fn()
+    });
+    mockQueueAgent.mockResolvedValue({
       ok: true,
-      context: {
-        agentName: "ProspectEnrichmentAgent",
-        model: "gpt-4o-mini",
-        limits: {
-          maxExecutionsPerHour: 60,
-          maxLlmCallsPerDay: 200,
-          dailyBudgetUsd: 25,
-          monthlyBudgetUsd: 250,
-          maxConcurrentExecutions: 5,
-          maxCandidateBatchSize: 50,
-          maxChainDepth: 5,
-          maxPromptChars: 24000,
-          maxOutputChars: 8000,
-          maxAutomaticRetries: 3,
-          featureEnabled: true
-        },
-        policy: null,
-        policyStamp: null,
-        promptStamp: null,
-        certification: null,
-        chainDepth: 0
-      }
+      execution: { id: "exec-1" }
     });
   });
 
@@ -224,7 +194,7 @@ describe("enrichProspectCandidate action", () => {
       disabled: true
     });
     expect(mockGetServerSupabaseClient).not.toHaveBeenCalled();
-    expect(mockInvokeLlmEnrichment).not.toHaveBeenCalled();
+    expect(mockQueueAgent).not.toHaveBeenCalled();
   });
 
   it("rejects users without mutation permissions", async () => {
@@ -239,10 +209,10 @@ describe("enrichProspectCandidate action", () => {
       ok: false,
       error: "You do not have permission to review prospects."
     });
-    expect(mockInvokeLlmEnrichment).not.toHaveBeenCalled();
+    expect(mockQueueAgent).not.toHaveBeenCalled();
   });
 
-  it("only enriches pending review candidates", async () => {
+  it("only queues enrichment for pending review candidates", async () => {
     const supabase = buildSupabaseMock({
       candidate: { ...pendingCandidate, status: "approved" }
     });
@@ -255,81 +225,78 @@ describe("enrichProspectCandidate action", () => {
       ok: false,
       error: "Only pending review candidates can be enriched."
     });
-    expect(mockInvokeLlmEnrichment).not.toHaveBeenCalled();
+    expect(mockQueueAgent).not.toHaveBeenCalled();
   });
 
-  it("stores enrichment output and records audit metadata on success", async () => {
+  it("queues enrichment and marks the candidate queued without calling the LLM", async () => {
     const supabase = buildSupabaseMock();
     mockGetServerSupabaseClient.mockResolvedValue(supabase);
-    mockInvokeLlmEnrichment.mockResolvedValue({
-      ok: true,
-      status: "enriched",
-      provider: "openai",
-      model: "gpt-4o-mini",
-      prompt_version: "prospect.enrich.v1",
-      data: {
-        public_summary:
-          "Howard University is a public HBCU in Washington, DC with cybersecurity-related program signals.",
-        fit_rationale:
-          "The institution aligns with the HBCU and cybersecurity-focused ICP for the Southeast geography.",
-        outreach_angle: "Lead with workforce development and cybersecurity program alignment.",
-        suggested_next_step: "Initial outreach - cyber workforce program",
-        enrichment_confidence: 0.84,
-        evidence_used: ["categories", "program_highlights"]
-      },
-      usage: { input_tokens: 120, output_tokens: 80 }
-    });
 
     const { enrichProspectCandidate } = await import("@/lib/actions/prospectCandidates");
     const result = await enrichProspectCandidate("candidate-1");
 
     expect(result).toEqual({
       ok: true,
-      message: "Howard University enriched successfully."
+      message:
+        "Enrichment queued for Howard University. The background worker will process it shortly."
     });
-    expect(supabase.updatedCandidates[0]).toMatchObject({
-      enrichment_summary:
-        "Howard University is a public HBCU in Washington, DC with cybersecurity-related program signals.",
-      outreach_angle: "Lead with workforce development and cybersecurity program alignment.",
-      recommended_next_step: "Initial outreach - cyber workforce program",
-      enrichment_status: "enriched"
+    expect(mockQueueAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentName: "ProspectEnrichmentAgent",
+        targetType: "prospect_candidate",
+        targetId: "candidate-1",
+        organizationId: "org-1"
+      })
+    );
+    expect(supabase.updatedCandidates[0]).toEqual({
+      enrichment_status: "queued"
     });
-    expect(mockInvokeLlmEnrichment).toHaveBeenCalledOnce();
-    expect(mockInvokeLlmEnrichment.mock.calls[0][0].input).toMatchObject({
-      institution: { name: "Howard University" },
-      icp: { geography: "Southeast US" }
-    });
-    expect(mockInvokeLlmEnrichment.mock.calls[0][0].input).not.toHaveProperty("notes");
     expect(mockRecordAuditEvent).toHaveBeenCalledOnce();
     expect(mockRecordAuditEvent.mock.calls[0][1]).toMatchObject({
       action: "prospect_candidate.enrich",
       metadata: {
         job_id: "job-1",
-        outcome: "enriched",
-        provider: "openai"
+        outcome: "queued",
+        agent_execution_id: "exec-1"
       }
     });
   });
 
-  it("records a failed enrichment outcome without storing private data", async () => {
+  it("marks budget_denied when queueing is rejected for budget limits", async () => {
     const supabase = buildSupabaseMock();
     mockGetServerSupabaseClient.mockResolvedValue(supabase);
-    mockInvokeLlmEnrichment.mockResolvedValue({
+    mockQueueAgent.mockResolvedValue({
       ok: false,
-      status: "validation_failed",
-      reason: "Prospect enrichment output did not match the schema."
+      error: "Daily AI usage limit reached.",
+      reason_code: "daily_budget_limit"
     });
+
+    const { enrichProspectCandidate } = await import("@/lib/actions/prospectCandidates");
+    const result = await enrichProspectCandidate("candidate-1");
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("expected failure");
+    }
+    expect(result.error).toMatch(/Daily AI usage limit/i);
+    expect(supabase.updatedCandidates[0]).toEqual({
+      enrichment_status: "budget_denied"
+    });
+  });
+
+  it("refuses to queue when enrichment is already in progress", async () => {
+    const supabase = buildSupabaseMock({
+      candidate: { ...pendingCandidate, enrichment_status: "running" }
+    });
+    mockGetServerSupabaseClient.mockResolvedValue(supabase);
 
     const { enrichProspectCandidate } = await import("@/lib/actions/prospectCandidates");
     const result = await enrichProspectCandidate("candidate-1");
 
     expect(result).toEqual({
       ok: false,
-      error: "Prospect enrichment output did not match the schema."
+      error: "Enrichment is already in progress for this candidate."
     });
-    expect(supabase.updatedCandidates[0]).toEqual({
-      enrichment_status: "failed"
-    });
-    expect(mockRecordAuditEvent).toHaveBeenCalledOnce();
+    expect(mockQueueAgent).not.toHaveBeenCalled();
   });
 });

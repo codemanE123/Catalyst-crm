@@ -74,6 +74,9 @@ export function classifyAgentFailure(
     code === "candidate_batch_limit" ||
     code === "invalid_configuration" ||
     code === "certification_denied" ||
+    code === "model_not_approved" ||
+    code === "provider_disabled" ||
+    code === "human_review_required_disabled" ||
     PERMANENT_PATTERNS.some((pattern) => pattern.test(message))
   ) {
     return "permanent";

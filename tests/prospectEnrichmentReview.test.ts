@@ -7,19 +7,38 @@ import {
   PROSPECT_ENRICHMENT_REVIEW_WARNING,
   resolveProspectEnrichmentReviewState
 } from "@/lib/prospectEnrichmentReview";
+import { classifyAgentFailure, isRetriableFailureClass } from "@/lib/agents/failureClassification";
 
 describe("resolveProspectEnrichmentReviewState", () => {
-  it("returns enriching while a request is in flight", () => {
+  it("returns running while a client request is in flight", () => {
     expect(
       resolveProspectEnrichmentReviewState({
         enrichmentStatus: "not_enriched",
         llmEnrichmentEnabled: true,
         isEnriching: true
       })
-    ).toBe("enriching");
+    ).toBe("running");
   });
 
-  it("returns enriched even when the feature flag is off", () => {
+  it("returns queued and running from persisted status", () => {
+    expect(
+      resolveProspectEnrichmentReviewState({
+        enrichmentStatus: "queued",
+        llmEnrichmentEnabled: true,
+        isEnriching: false
+      })
+    ).toBe("queued");
+
+    expect(
+      resolveProspectEnrichmentReviewState({
+        enrichmentStatus: "running",
+        llmEnrichmentEnabled: true,
+        isEnriching: false
+      })
+    ).toBe("running");
+  });
+
+  it("returns enriched (completed) even when the feature flag is off", () => {
     expect(
       resolveProspectEnrichmentReviewState({
         enrichmentStatus: "enriched",
@@ -65,6 +84,47 @@ describe("resolveProspectEnrichmentReviewState", () => {
         isEnriching: false
       })
     ).toBe("failed");
+  });
+
+  it("surfaces policy and budget denials distinctly", () => {
+    expect(
+      resolveProspectEnrichmentReviewState({
+        enrichmentStatus: "policy_denied",
+        llmEnrichmentEnabled: true,
+        isEnriching: false
+      })
+    ).toBe("policy_denied");
+
+    expect(
+      resolveProspectEnrichmentReviewState({
+        enrichmentStatus: "budget_denied",
+        llmEnrichmentEnabled: true,
+        isEnriching: false
+      })
+    ).toBe("budget_denied");
+  });
+});
+
+describe("async enrichment retry classification", () => {
+  it("retries only transient provider failures", () => {
+    expect(isRetriableFailureClass(classifyAgentFailure("timeout", "transient"))).toBe(
+      true
+    );
+  });
+
+  it("does not retry validation, budget, policy, or readiness denials", () => {
+    expect(isRetriableFailureClass(classifyAgentFailure("bad schema", "validation"))).toBe(
+      false
+    );
+    expect(
+      isRetriableFailureClass(classifyAgentFailure("budget", "daily_budget_limit"))
+    ).toBe(false);
+    expect(
+      isRetriableFailureClass(classifyAgentFailure("policy", "model_not_approved"))
+    ).toBe(false);
+    expect(
+      isRetriableFailureClass(classifyAgentFailure("not certified", "certification_denied"))
+    ).toBe(false);
   });
 });
 

@@ -50,15 +50,21 @@ export default function ProspectEnrichmentReviewPanel({
         </span>
       </div>
 
-      {reviewState === "enriching" ? (
+      {reviewState === "queued" ? (
         <p className="text-xs text-sky-800" role="status">
-          Running enrichment from public institution data. This may take a few seconds.
+          Enrichment is queued. The background worker will claim this job shortly.
+        </p>
+      ) : null}
+
+      {reviewState === "running" ? (
+        <p className="text-xs text-indigo-800" role="status">
+          Enrichment is running. Structured AI output will appear when the worker finishes.
         </p>
       ) : null}
 
       {reviewState === "not_enriched" ? (
         <p className="text-xs text-slate-600">
-          No AI enrichment yet. Use Enrich to generate a draft summary, outreach angle, and
+          No AI enrichment yet. Use Enrich to queue a draft summary, outreach angle, and
           recommended next step from public data.
         </p>
       ) : null}
@@ -67,12 +73,33 @@ export default function ProspectEnrichmentReviewPanel({
         <p className="text-xs text-amber-800">{llmEnrichmentDisabledReason}</p>
       ) : null}
 
+      {reviewState === "policy_denied" ? (
+        <div className="rounded-xl border border-orange-200 bg-orange-50 p-3 text-xs text-orange-950">
+          <p className="font-medium">Enrichment was denied by agent policy or readiness.</p>
+          <p className="mt-1">
+            This is not retried automatically. Resolve policy or certification, then try Enrich
+            again. Human approval is still required before CRM promotion.
+          </p>
+        </div>
+      ) : null}
+
+      {reviewState === "budget_denied" ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-950">
+          <p className="font-medium">Enrichment was denied by AI budget or call limits.</p>
+          <p className="mt-1">
+            This is not retried automatically. Wait for limits to reset or adjust budgets, then try
+            Enrich again.
+          </p>
+        </div>
+      ) : null}
+
       {reviewState === "failed" ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-950">
           <p className="font-medium">Enrichment did not complete.</p>
           <p className="mt-1">
-            Review the source rationale below, try Enrich again when enabled, or approve/reject
-            without AI output. Human approval is still required.
+            Transient provider failures may be retried by the worker. Permanent validation failures
+            will not. You can try Enrich again or approve/reject without AI output. Human approval
+            is still required.
           </p>
         </div>
       ) : null}

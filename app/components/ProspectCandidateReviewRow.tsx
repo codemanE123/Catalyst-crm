@@ -22,6 +22,7 @@ import {
   type ProspectCandidate,
   type ProspectCandidateStatus
 } from "@/lib/prospectGeneration";
+import { isProspectEnrichmentInProgress } from "@/lib/prospectEnrichmentReview";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -173,7 +174,9 @@ export default function ProspectCandidateReviewRow({
     });
   }
 
-  const actionsBusy = isPending || isEnriching;
+  const enrichmentInProgress =
+    isEnriching || isProspectEnrichmentInProgress(candidate.enrichment_status);
+  const actionsBusy = isPending || enrichmentInProgress;
   const canGenerateOutreachDraft =
     canReview &&
     (candidate.status === "pending_review" || candidate.status === "approved");
@@ -228,7 +231,7 @@ export default function ProspectCandidateReviewRow({
       <td className="px-3 py-3 align-top text-slate-700">
         <ProspectEnrichmentReviewPanel
           candidate={candidate}
-          isEnriching={isEnriching}
+          isEnriching={enrichmentInProgress}
           llmEnrichmentDisabledReason={llmEnrichmentDisabledReason}
           llmEnrichmentEnabled={llmEnrichmentEnabled}
         />
@@ -314,11 +317,15 @@ export default function ProspectCandidateReviewRow({
               </button>
               <button
                 className="rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-800 disabled:opacity-60"
-                disabled={!actionsEnabled || actionsBusy}
+                disabled={!actionsEnabled || actionsBusy || !llmEnrichmentEnabled}
                 onClick={handleEnrich}
                 type="button"
               >
-                {isEnriching ? "Enriching…" : "Enrich"}
+                {enrichmentInProgress
+                  ? candidate.enrichment_status === "queued"
+                    ? "Queued…"
+                    : "Running…"
+                  : "Enrich"}
               </button>
             </div>
             {!actionsEnabled ? (

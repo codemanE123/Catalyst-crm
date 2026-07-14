@@ -1,12 +1,10 @@
 import { timingSafeEqual } from "crypto";
 
+import { createAgentHandlerDependencies } from "@/lib/actions/agentHandlerDependencies";
 import { recordAuditEvent } from "@/lib/auditLog";
 import { createServiceRoleSupabaseClient } from "@/lib/supabaseServiceRole";
 
-import {
-  AGENT_AUDIT_ACTIONS,
-  AgentOrchestrator
-} from "./orchestrator";
+import { AGENT_AUDIT_ACTIONS, type AgentOrchestrator } from "./orchestrator";
 import {
   DEFAULT_STALE_RUNNING_MINUTES,
   resolveAgentWorkerBatchSize
@@ -15,9 +13,10 @@ import {
   createSupabaseAgentAuditRecorder,
   SupabaseAgentExecutionStore
 } from "./supabaseStore";
-import { SupabaseAgentUsageStore } from "./usageStore";
-import type { AgentExecution } from "./types";
 import type { AgentExecutionStore } from "./store";
+import type { AgentExecution } from "./types";
+import { SupabaseAgentUsageStore } from "./usageStore";
+import { createGatedAgentOrchestratorFromSupabase } from "./worker";
 
 export const AGENT_CRON_ACTOR_USER_ID = "00000000-0000-4000-8000-0000000000cron";
 
@@ -147,12 +146,11 @@ export async function processAgentExecutionsFromCron(params: {
   const store = new SupabaseAgentExecutionStore(supabase);
   const usageStore = new SupabaseAgentUsageStore(supabase);
   const auditRecorder = createSupabaseAgentAuditRecorder(supabase, recordAuditEvent);
-  const orchestrator = new AgentOrchestrator(
-    store,
-    undefined,
-    auditRecorder,
+  const handlerDependencies = await createAgentHandlerDependencies(supabase);
+  const orchestrator = createGatedAgentOrchestratorFromSupabase(supabase, {
+    handlerDependencies,
     usageStore
-  );
+  });
   const actorUserId = params.actorUserId ?? AGENT_CRON_ACTOR_USER_ID;
 
   const summary = await processAgentExecutionBatch({

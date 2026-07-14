@@ -62,6 +62,7 @@ export {
   createAgentOrchestrator,
   createAgentWorkerFromStore,
   createAgentWorkerFromSupabase,
+  createGatedAgentOrchestratorFromSupabase,
   toWorkerResult,
   type ProcessNextAgentWorkerResult
 } from "./worker";

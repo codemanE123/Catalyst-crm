@@ -19,6 +19,7 @@ export type AgentHandlerDependencies = {
     candidateId: string;
     organizationId: string;
     actorUserId: string;
+    agentExecutionId?: string | null;
     env?: NodeJS.ProcessEnv;
   }) => Promise<AgentExecutorResult>;
   generateProspectOutreachDraft?: (input: {
@@ -130,14 +131,17 @@ function defaultProspectEnrichmentHandler(
       candidateId: execution.target_id,
       organizationId: execution.organization_id,
       actorUserId: context.actorUserId,
+      agentExecutionId: execution.id,
       env: context.env
     });
   }
 
   return Promise.resolve({
-    ok: true,
+    ok: false,
+    error_message:
+      "ProspectEnrichmentAgent handler is not configured. Wire enrichProspectCandidate before running enrichment jobs.",
+    error_code: "configuration",
     metadata: {
-      mode: "worker_stub",
       agent_name: "ProspectEnrichmentAgent",
       target_id: execution.target_id
     }
