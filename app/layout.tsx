@@ -4,6 +4,11 @@ import {
   getMembershipsForUser
 } from "@/lib/authz";
 import {
+  canViewApprovals,
+  getAccessibleApprovalOrganizationIds
+} from "@/lib/approvals/permissions";
+import { countAwaitingHumanReview } from "@/lib/approvals/data";
+import {
   getServerSupabaseClient,
   requireUser
 } from "@/lib/supabaseServer";
@@ -28,6 +33,14 @@ export default async function RootLayout({
     user && supabase ? await getMembershipsForUser(supabase, user.id) : [];
   const showProspectsNav = user && canViewProspectGeneration(memberships);
   const showAgentsNav = user && canViewAgentOperations(memberships);
+  const showApprovalsNav = Boolean(user && canViewApprovals(memberships));
+  const pendingApprovalsCount =
+    user && supabase && showApprovalsNav
+      ? await countAwaitingHumanReview(
+          supabase,
+          getAccessibleApprovalOrganizationIds(memberships)
+        )
+      : 0;
 
   return (
     <html lang="en">
@@ -51,6 +64,20 @@ export default async function RootLayout({
                 prefetch={false}
               >
                 Generate prospects
+              </Link>
+            ) : null}
+            {showApprovalsNav ? (
+              <Link
+                className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
+                href="/approvals"
+                prefetch={false}
+              >
+                Approvals
+                {pendingApprovalsCount > 0 ? (
+                  <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800 ring-1 ring-slate-200">
+                    {pendingApprovalsCount}
+                  </span>
+                ) : null}
               </Link>
             ) : null}
             {showAgentsNav ? (

@@ -127,6 +127,7 @@ describe("agent operations metrics", () => {
       completed_today: 1,
       failed_today: 1,
       candidates_awaiting_review: 4,
+      awaiting_human_review: 4,
       enriched_candidates: 2,
       outreach_drafts_generated: 3,
       meeting_briefs_generated: 1,

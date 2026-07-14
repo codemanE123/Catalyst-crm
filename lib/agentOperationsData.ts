@@ -12,6 +12,7 @@ import { sanitizeAgentErrorMessage } from "@/lib/agents/sanitize";
 import { startOfUtcMonth, type AgentUsageTotals } from "@/lib/agents/usage";
 import { SupabaseAgentUsageStore } from "@/lib/agents/usageStore";
 import { SupabaseAgentExecutionStore } from "@/lib/agents/supabaseStore";
+import { countAwaitingHumanReview } from "@/lib/approvals/data";
 
 export type AgentOperationsOrganization = {
   id: string;
@@ -140,6 +141,7 @@ export async function fetchAgentOperationsMetrics(
     completedToday,
     failedToday,
     candidatesAwaitingReview,
+    awaitingHumanReview,
     enrichedCandidates,
     outreachDraftsGenerated,
     meetingBriefsGenerated,
@@ -168,6 +170,7 @@ export async function fetchAgentOperationsMetrics(
     countWithFilters(supabase, "prospect_candidates", scopedIds, {
       status: "pending_review"
     }),
+    countAwaitingHumanReview(supabase, scopedIds),
     countWithFilters(supabase, "prospect_candidates", scopedIds, {
       enrichment_status: "enriched"
     }),
@@ -185,6 +188,7 @@ export async function fetchAgentOperationsMetrics(
     completed_today: completedToday,
     failed_today: failedToday,
     candidates_awaiting_review: candidatesAwaitingReview,
+    awaiting_human_review: awaitingHumanReview,
     enriched_candidates: enrichedCandidates,
     outreach_drafts_generated: outreachDraftsGenerated,
     meeting_briefs_generated: meetingBriefsGenerated,

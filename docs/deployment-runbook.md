@@ -148,6 +148,7 @@ Apply on the **target Supabase project** before relying on that environment. Fil
 | … | *(additional migrations in folder order)* | Apply all files in `supabase/migrations/` by timestamp |
 | — | `20260714150000_agent_execution_retry_scheduling.sql` | Agent retry fields + claim/stale RPCs |
 | — | `20260714160000_agent_usage_events_and_chain_depth.sql` | `agent_usage_events` + `chain_depth` + org RLS |
+| — | `20260714170000_approval_assignments_and_review_statuses.sql` | Approval assignments + expanded review statuses |
 
 **New migration discipline:** When adding migrations after initial staging setup, apply to staging first, run smoke tests, then production. Apply every file under `supabase/migrations/` in timestamp order on the target project.
 
@@ -221,6 +222,12 @@ See [§18 Error monitoring (Sentry)](#18-error-monitoring-sentry--task-232) for 
 2. Add a Vercel Cron rewrite / middleware that attaches the header (if your plan injects `CRON_SECRET`, map it to `AGENT_CRON_SECRET`).
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` or `AGENT_CRON_SECRET` via `NEXT_PUBLIC_*`.
+
+### 6.6a Human Approval Center (Phase 4.9)
+
+Apply migration `20260714170000_approval_assignments_and_review_statuses.sql` before relying on reviewer assignment or expanded `accepted` / `needs_revision` statuses.
+
+No new public env vars. Route: `/approvals`. See `docs/human-approval-center.md`.
 
 ### 6.6 Agent cost, usage, and safety limits (Phase 4.8)
 

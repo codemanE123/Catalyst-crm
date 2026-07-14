@@ -26,6 +26,7 @@ export type AgentOperationsMetrics = {
   completed_today: number;
   failed_today: number;
   candidates_awaiting_review: number;
+  awaiting_human_review: number;
   enriched_candidates: number;
   outreach_drafts_generated: number;
   meeting_briefs_generated: number;
@@ -107,6 +108,7 @@ export function paginateAgentExecutions(
 export function calculateAgentOperationsMetrics(input: {
   executions: AgentExecution[];
   candidatesAwaitingReview: number;
+  awaitingHumanReview?: number;
   enrichedCandidates: number;
   outreachDraftsGenerated: number;
   meetingBriefsGenerated: number;
@@ -152,6 +154,8 @@ export function calculateAgentOperationsMetrics(input: {
     completed_today: completedToday,
     failed_today: failedToday,
     candidates_awaiting_review: input.candidatesAwaitingReview,
+    awaiting_human_review:
+      input.awaitingHumanReview ?? input.candidatesAwaitingReview,
     enriched_candidates: input.enrichedCandidates,
     outreach_drafts_generated: input.outreachDraftsGenerated,
     meeting_briefs_generated: input.meetingBriefsGenerated,
