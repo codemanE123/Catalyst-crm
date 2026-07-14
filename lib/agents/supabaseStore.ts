@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type {
+  AgentExecutionListFilter,
+  AgentExecutionListResult
+} from "@/lib/agentOperations";
+
 import type { AgentExecution, AgentName } from "./types";
 import type {
   AgentExecutionInsert,
@@ -147,6 +152,54 @@ export class SupabaseAgentExecutionStore implements AgentExecutionStore {
     }
 
     return null;
+  }
+
+  async list(filter: AgentExecutionListFilter): Promise<AgentExecutionListResult> {
+    let query = this.supabase
+      .from("agent_executions")
+      .select(
+        "id,organization_id,agent_name,target_type,target_id,status,depends_on_execution_id,attempt_count,started_at,completed_at,duration_ms,error_message,metadata,created_at,updated_at",
+        { count: "exact" }
+      );
+
+    if (filter.organizationId) {
+      query = query.eq("organization_id", filter.organizationId);
+    } else if (filter.organizationIds && filter.organizationIds.length > 0) {
+      query = query.in("organization_id", filter.organizationIds);
+    }
+
+    if (filter.status) {
+      query = query.eq("status", filter.status);
+    }
+
+    if (filter.agentName) {
+      query = query.eq("agent_name", filter.agentName);
+    }
+
+    if (filter.createdFrom) {
+      query = query.gte("created_at", filter.createdFrom);
+    }
+
+    if (filter.createdTo) {
+      query = query.lte("created_at", filter.createdTo);
+    }
+
+    const offset = Math.max(0, filter.offset ?? 0);
+    const limit = Math.max(1, Math.min(100, filter.limit ?? 25));
+
+    const { data, error, count } = await query
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      console.error("Failed to list agent executions:", error.message);
+      return { rows: [], total: 0 };
+    }
+
+    return {
+      rows: ((data ?? []) as AgentExecutionRow[]).map(mapRow),
+      total: count ?? 0
+    };
   }
 }
 

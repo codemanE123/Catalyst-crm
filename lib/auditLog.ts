@@ -23,6 +23,8 @@ export const AUDIT_ACTIONS = {
   agentStart: "agent.start",
   agentComplete: "agent.complete",
   agentFail: "agent.fail",
+  agentRetry: "agent.retry",
+  agentCancel: "agent.cancel",
   contactDiscoveryRun: "contact_discovery.run",
   contactDiscoveryComplete: "contact_discovery.complete",
   contactDiscoveryFail: "contact_discovery.fail",

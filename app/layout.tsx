@@ -1,4 +1,8 @@
-import { canViewProspectGeneration, getMembershipsForUser } from "@/lib/authz";
+import {
+  canViewAgentOperations,
+  canViewProspectGeneration,
+  getMembershipsForUser
+} from "@/lib/authz";
 import {
   getServerSupabaseClient,
   requireUser
@@ -23,6 +27,7 @@ export default async function RootLayout({
   const memberships =
     user && supabase ? await getMembershipsForUser(supabase, user.id) : [];
   const showProspectsNav = user && canViewProspectGeneration(memberships);
+  const showAgentsNav = user && canViewAgentOperations(memberships);
 
   return (
     <html lang="en">
@@ -46,6 +51,15 @@ export default async function RootLayout({
                 prefetch={false}
               >
                 Generate prospects
+              </Link>
+            ) : null}
+            {showAgentsNav ? (
+              <Link
+                className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
+                href="/agents"
+                prefetch={false}
+              >
+                Agents
               </Link>
             ) : null}
             {user ? (

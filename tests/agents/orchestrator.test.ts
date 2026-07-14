@@ -173,16 +173,27 @@ describe("AgentOrchestrator", () => {
     if (cancelled.ok) {
       expect(cancelled.execution.status).toBe("cancelled");
     }
+
+    expect(auditEvents.some((event) => event.action === AGENT_AUDIT_ACTIONS.cancel)).toBe(
+      true
+    );
   });
 
   it("retries failed executions back to queued", async () => {
+    const retryAuditEvents: AgentAuditEventInput[] = [];
     const executors = new Map<AgentName, AgentExecutor>();
     executors.set("ProspectEnrichmentAgent", async () => ({
       ok: false,
       error_message: "Provider unavailable."
     }));
 
-    const failingOrchestrator = new AgentOrchestrator(store, executors);
+    const failingOrchestrator = new AgentOrchestrator(
+      store,
+      executors,
+      async (event) => {
+        retryAuditEvents.push(event);
+      }
+    );
 
     const queued = await failingOrchestrator.queueAgent({
       organizationId,
@@ -223,6 +234,10 @@ describe("AgentOrchestrator", () => {
       expect(retried.execution.status).toBe("queued");
       expect(retried.execution.attempt_count).toBe(1);
     }
+
+    expect(retryAuditEvents.some((event) => event.action === AGENT_AUDIT_ACTIONS.retry)).toBe(
+      true
+    );
   });
 
   it("marks legacy future contact discovery agent as failed until migrated", async () => {

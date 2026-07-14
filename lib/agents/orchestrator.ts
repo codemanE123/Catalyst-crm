@@ -23,7 +23,9 @@ export const AGENT_AUDIT_ACTIONS = {
   queue: "agent.queue",
   start: "agent.start",
   complete: "agent.complete",
-  fail: "agent.fail"
+  fail: "agent.fail",
+  retry: "agent.retry",
+  cancel: "agent.cancel"
 } as const;
 
 export type QueueAgentResult =
@@ -294,6 +296,18 @@ export class AgentOrchestrator {
       return { ok: false, error: "Could not cancel the agent execution." };
     }
 
+    await this.recordAudit({
+      organizationId: params.organizationId,
+      actorUserId: params.actorUserId,
+      action: AGENT_AUDIT_ACTIONS.cancel,
+      recordId: cancelled.id,
+      metadata: {
+        agent_name: cancelled.agent_name,
+        target_type: cancelled.target_type,
+        target_id: cancelled.target_id
+      }
+    });
+
     return { ok: true, execution: cancelled };
   }
 
@@ -341,12 +355,13 @@ export class AgentOrchestrator {
     await this.recordAudit({
       organizationId: params.organizationId,
       actorUserId: params.actorUserId,
-      action: AGENT_AUDIT_ACTIONS.queue,
+      action: AGENT_AUDIT_ACTIONS.retry,
       recordId: retried.id,
       metadata: {
         agent_name: retried.agent_name,
-        retry: true,
-        attempt_count: retried.attempt_count
+        attempt_count: retried.attempt_count,
+        target_type: retried.target_type,
+        target_id: retried.target_id
       }
     });
 

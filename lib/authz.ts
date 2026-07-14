@@ -91,6 +91,72 @@ export function canEnqueueProspectGeneration(
   return canManageSchools(memberships);
 }
 
+export function canViewAgentOperations(
+  memberships: OrganizationMember[]
+): boolean {
+  if (isSuperAdmin(memberships)) {
+    return true;
+  }
+
+  return memberships.some((membership) =>
+    MUTATION_ROLES.includes(membership.role)
+  );
+}
+
+export function canManageAgentExecutions(
+  memberships: OrganizationMember[]
+): boolean {
+  if (isSuperAdmin(memberships)) {
+    return true;
+  }
+
+  return memberships.some((membership) =>
+    AGENT_WORKER_ROLES.includes(membership.role)
+  );
+}
+
+export function canAccessAgentOrganization(
+  memberships: OrganizationMember[],
+  organizationId: string
+): boolean {
+  if (isSuperAdmin(memberships)) {
+    return true;
+  }
+
+  return memberships.some(
+    (membership) =>
+      membership.organization_id === organizationId &&
+      MUTATION_ROLES.includes(membership.role)
+  );
+}
+
+export function canManageAgentOrganization(
+  memberships: OrganizationMember[],
+  organizationId: string
+): boolean {
+  if (isSuperAdmin(memberships)) {
+    return true;
+  }
+
+  return memberships.some(
+    (membership) =>
+      membership.organization_id === organizationId &&
+      AGENT_WORKER_ROLES.includes(membership.role)
+  );
+}
+
+export function getAccessibleAgentOrganizationIds(
+  memberships: OrganizationMember[]
+): string[] | null {
+  if (isSuperAdmin(memberships)) {
+    return null;
+  }
+
+  return memberships
+    .filter((membership) => MUTATION_ROLES.includes(membership.role))
+    .map((membership) => membership.organization_id);
+}
+
 export async function getMembershipsForUser(
   supabase: SupabaseClient,
   userId: string

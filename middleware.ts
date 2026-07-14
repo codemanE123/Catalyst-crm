@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { safeNextPath } from "@/lib/authPaths";
 import {
   canAccessSettingsRoutes,
+  canViewAgentOperations,
   getMembershipsForUser
 } from "@/lib/authz";
 
@@ -11,12 +12,17 @@ function isSettingsPath(pathname: string) {
   return pathname === "/settings" || pathname.startsWith("/settings/");
 }
 
+function isAgentsPath(pathname: string) {
+  return pathname === "/agents" || pathname.startsWith("/agents/");
+}
+
 function isProtectedPath(pathname: string) {
   return (
     pathname === "/" ||
     pathname.startsWith("/schools/") ||
     pathname.startsWith("/prospects/") ||
-    isSettingsPath(pathname)
+    isSettingsPath(pathname) ||
+    isAgentsPath(pathname)
   );
 }
 
@@ -133,6 +139,14 @@ export async function middleware(request: NextRequest) {
     const memberships = await getMembershipsForUser(supabase, user.id);
 
     if (!canAccessSettingsRoutes(memberships)) {
+      return applySessionCookies(redirectToDashboard(request), supabaseResponse);
+    }
+  }
+
+  if (isAgentsPath(pathname)) {
+    const memberships = await getMembershipsForUser(supabase, user.id);
+
+    if (!canViewAgentOperations(memberships)) {
       return applySessionCookies(redirectToDashboard(request), supabaseResponse);
     }
   }

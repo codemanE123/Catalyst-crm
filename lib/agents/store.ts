@@ -1,3 +1,9 @@
+import type {
+  AgentExecutionListFilter,
+  AgentExecutionListResult
+} from "@/lib/agentOperations";
+import { paginateAgentExecutions } from "@/lib/agentOperations";
+
 import type { AgentExecution, AgentExecutionMetadata, AgentName } from "./types";
 
 export type AgentExecutionInsert = {
@@ -33,6 +39,7 @@ export interface AgentExecutionStore {
   ): Promise<AgentExecution | null>;
   findById(id: string, organizationId: string): Promise<AgentExecution | null>;
   findNextRunnable(organizationId: string): Promise<AgentExecution | null>;
+  list(filter: AgentExecutionListFilter): Promise<AgentExecutionListResult>;
 }
 
 function nowIso(): string {
@@ -131,6 +138,10 @@ export class InMemoryAgentExecutionStore implements AgentExecutionStore {
     }
 
     return null;
+  }
+
+  async list(filter: AgentExecutionListFilter): Promise<AgentExecutionListResult> {
+    return paginateAgentExecutions([...this.rows.values()], filter);
   }
 
   snapshot(): AgentExecution[] {
