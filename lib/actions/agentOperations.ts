@@ -31,6 +31,11 @@ import {
   type RetryAgentResult
 } from "@/lib/agents/orchestrator";
 import {
+  mapCertification,
+  CERT_SELECT
+} from "@/lib/agents/readiness/supabase";
+import type { AgentReadinessCertification } from "@/lib/agents/readiness";
+import {
   createSupabaseAgentAuditRecorder,
   SupabaseAgentExecutionStore
 } from "@/lib/agents/supabaseStore";
@@ -118,6 +123,7 @@ export async function loadAgentOperationsDashboard(input: {
       canManage: boolean;
       isSuperAdmin: boolean;
       organizations: { id: string; name: string }[];
+      readinessCertifications: AgentReadinessCertification[];
     }
   | { ok: false; error: string }
 > {
@@ -154,33 +160,54 @@ export async function loadAgentOperationsDashboard(input: {
       ? [organizationId]
       : context.accessibleOrganizationIds;
 
-  const [metrics, usage, executions, evaluations] = await Promise.all([
-    fetchAgentOperationsMetrics(
-      context.supabase,
-      context.accessibleOrganizationIds,
-      organizationId
-    ),
-    fetchAgentOperationsUsage(
-      context.supabase,
-      context.accessibleOrganizationIds,
-      organizationId
-    ),
-    fetchAgentOperationsExecutions(context.supabase, context.accessibleOrganizationIds, {
-      organizationId,
-      status: parseStatus(input.status),
-      agentName,
-      createdFrom: input.createdFrom?.trim() || null,
-      createdTo: input.createdTo?.trim()
-        ? `${input.createdTo.trim()}T23:59:59.999Z`
-        : null,
-      limit: PAGE_SIZE,
-      offset: (page - 1) * PAGE_SIZE
-    }),
-    evaluationStore.listForOrganizations(scopedOrgIds, {
-      sinceIso: since30Days,
-      limit: 2000
-    })
-  ]);
+  let readinessQuery = context.supabase
+    .from("agent_readiness_certifications")
+    .select(CERT_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (organizationId) {
+    readinessQuery = readinessQuery.eq("organization_id", organizationId);
+  } else if (context.accessibleOrganizationIds) {
+    readinessQuery = readinessQuery.in(
+      "organization_id",
+      context.accessibleOrganizationIds
+    );
+  }
+
+  const [metrics, usage, executions, evaluations, readinessRows] =
+    await Promise.all([
+      fetchAgentOperationsMetrics(
+        context.supabase,
+        context.accessibleOrganizationIds,
+        organizationId
+      ),
+      fetchAgentOperationsUsage(
+        context.supabase,
+        context.accessibleOrganizationIds,
+        organizationId
+      ),
+      fetchAgentOperationsExecutions(
+        context.supabase,
+        context.accessibleOrganizationIds,
+        {
+          organizationId,
+          status: parseStatus(input.status),
+          agentName,
+          createdFrom: input.createdFrom?.trim() || null,
+          createdTo: input.createdTo?.trim()
+            ? `${input.createdTo.trim()}T23:59:59.999Z`
+            : null,
+          limit: PAGE_SIZE,
+          offset: (page - 1) * PAGE_SIZE
+        }
+      ),
+      evaluationStore.listForOrganizations(scopedOrgIds, {
+        sinceIso: since30Days,
+        limit: 2000
+      }),
+      readinessQuery
+    ]);
 
   const quality = calculateAgentQualityDashboardMetrics(evaluations, {
     since7DaysIso: since7Days
@@ -197,6 +224,10 @@ export async function loadAgentOperationsDashboard(input: {
     evaluationsByExecutionId[evaluation.agent_execution_id] = list;
   }
 
+  const readinessCertifications = (readinessRows.data ?? []).map((row) =>
+    mapCertification(row as Record<string, unknown>)
+  );
+
   return {
     ok: true,
     metrics,
@@ -209,7 +240,8 @@ export async function loadAgentOperationsDashboard(input: {
     pageSize: PAGE_SIZE,
     canManage: context.canManage,
     isSuperAdmin: context.accessibleOrganizationIds === null,
-    organizations: executions.organizations
+    organizations: executions.organizations,
+    readinessCertifications
   };
 }
 

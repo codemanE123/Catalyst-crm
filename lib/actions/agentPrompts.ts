@@ -434,7 +434,19 @@ export async function activatePromptVersionAction(input: {
     })
   });
 
+  const { invalidateCertificationsForChange } = await import(
+    "@/lib/actions/agentReadiness"
+  );
+  await invalidateCertificationsForChange({
+    supabase: ctx.supabase,
+    actorUserId: ctx.user.id,
+    organizationId: version.organization_id,
+    agentName: String(version.agent_name),
+    reason: `Active prompt changed to ${version.prompt_key}@${version.version}; recertification required.`
+  });
+
   revalidatePath("/agents/prompts");
+  revalidatePath("/agents/readiness");
   return { ok: true, message: "Prompt version activated." };
 }
 

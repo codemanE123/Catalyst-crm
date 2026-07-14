@@ -220,6 +220,38 @@ export function canUsePolicyBreakGlass(
   return isSuperAdmin(memberships);
 }
 
+/** Sales+ may view readiness summary; read_only denied. */
+export function canViewAgentReadiness(
+  memberships: OrganizationMember[]
+): boolean {
+  return canViewAgentOperations(memberships);
+}
+
+/** Org admins may evaluate/create/submit org certifications. */
+export function canManageOrgReadiness(
+  memberships: OrganizationMember[],
+  organizationId: string
+): boolean {
+  return canManageOrgPrompts(memberships, organizationId);
+}
+
+/** Super_admin only for global production approve/reject/revoke. */
+export function canApproveProductionReadiness(
+  memberships: OrganizationMember[]
+): boolean {
+  return isSuperAdmin(memberships);
+}
+
+export function canManageReadinessScope(
+  memberships: OrganizationMember[],
+  organizationId: string | null
+): boolean {
+  if (organizationId == null) {
+    return isSuperAdmin(memberships);
+  }
+  return canManageOrgReadiness(memberships, organizationId);
+}
+
 export function getAccessibleAgentOrganizationIds(
   memberships: OrganizationMember[]
 ): string[] | null {

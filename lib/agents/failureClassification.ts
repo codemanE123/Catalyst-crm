@@ -23,7 +23,9 @@ const PERMANENT_PATTERNS = [
   /too many agent jobs/i,
   /temporarily unavailable/i,
   /candidate batch/i,
-  /circular agent dependency/i
+  /circular agent dependency/i,
+  /not certified/i,
+  /readiness certification/i
 ];
 
 const CONFIGURATION_PATTERNS = [
@@ -71,6 +73,7 @@ export function classifyAgentFailure(
     code === "chain_depth_exceeded" ||
     code === "candidate_batch_limit" ||
     code === "invalid_configuration" ||
+    code === "certification_denied" ||
     PERMANENT_PATTERNS.some((pattern) => pattern.test(message))
   ) {
     return "permanent";

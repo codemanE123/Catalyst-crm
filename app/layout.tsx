@@ -110,6 +110,13 @@ export default async function RootLayout({
                 >
                   Policies
                 </Link>
+                <Link
+                  className="shrink-0 text-sm text-slate-600 hover:text-slate-950"
+                  href="/agents/readiness"
+                  prefetch={false}
+                >
+                  Readiness
+                </Link>
               </>
             ) : null}
             {user ? (

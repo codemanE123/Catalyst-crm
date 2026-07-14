@@ -23,3 +23,17 @@ Status: FAIL
 ## Launch Decision
 ? Ready  
 ? Not Ready
+
+## Agent readiness certification (Phase 4.14)
+
+Before enabling production agents, complete a certification at `/agents/readiness`:
+
+- [ ] Migration `20260714210000_agent_readiness_certifications.sql` applied
+- [ ] Production certification approved for each production agent scope
+- [ ] Simulation evidence fresh and passing
+- [ ] No open SEV-1/SEV-2; quality/safety thresholds met
+- [ ] Orchestrator denies uncertified production execution (`certification_denied`)
+- [ ] Prompt/policy activation path verified to revoke certifications with audit
+- [ ] Expiry calendar noted (default 30 days production)
+
+See `docs/agent-readiness-certification.md`.

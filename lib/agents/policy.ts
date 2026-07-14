@@ -9,7 +9,8 @@ export const AGENT_POLICY_REASON_CODES = [
   "concurrency_limit",
   "invalid_configuration",
   "chain_depth_exceeded",
-  "candidate_batch_limit"
+  "candidate_batch_limit",
+  "certification_denied"
 ] as const;
 
 export type AgentPolicyReasonCode = (typeof AGENT_POLICY_REASON_CODES)[number];
@@ -36,7 +37,9 @@ export const POLICY_USER_SAFE_MESSAGES: Record<AgentPolicyReasonCode, string> = 
   concurrency_limit: "Too many agent jobs are currently running.",
   invalid_configuration: "This agent action is temporarily unavailable.",
   chain_depth_exceeded: "This agent action is temporarily unavailable.",
-  candidate_batch_limit: "Requested candidate batch exceeds the allowed size."
+  candidate_batch_limit: "Requested candidate batch exceeds the allowed size.",
+  certification_denied:
+    "This agent is not certified for the current environment. Contact an administrator."
 };
 
 export function denyAgentPolicy(

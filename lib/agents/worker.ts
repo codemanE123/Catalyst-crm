@@ -13,6 +13,7 @@ import {
   resolveAgentPolicyFromSupabase,
   resolvePolicyStampFromSupabase
 } from "./policies/supabase";
+import { findValidCertification } from "./readiness/supabase";
 import type { AgentExecutionStore } from "./store";
 import {
   createSupabaseAgentAuditRecorder,
@@ -99,6 +100,7 @@ export function createAgentOrchestrator(
     usageStore?: import("./usage").AgentUsageStore;
     resolvePromptStamp?: import("./orchestrator").PromptStampResolver;
     resolvePolicyStamp?: import("./orchestrator").PolicyStampResolver;
+    resolveCertification?: import("./orchestrator").CertificationGateResolver;
   }
 ): AgentOrchestrator {
   const handlers = createAgentHandlerRegistry(options?.handlerDependencies ?? {});
@@ -109,7 +111,8 @@ export function createAgentOrchestrator(
     options?.auditRecorder,
     options?.usageStore,
     options?.resolvePromptStamp,
-    options?.resolvePolicyStamp
+    options?.resolvePolicyStamp,
+    options?.resolveCertification
   );
 }
 
@@ -121,6 +124,7 @@ export function createAgentWorkerFromStore(
     usageStore?: import("./usage").AgentUsageStore;
     resolvePromptStamp?: import("./orchestrator").PromptStampResolver;
     resolvePolicyStamp?: import("./orchestrator").PolicyStampResolver;
+    resolveCertification?: import("./orchestrator").CertificationGateResolver;
   }
 ): AgentWorker {
   return new AgentWorker(createAgentOrchestrator(store, options));
@@ -160,6 +164,13 @@ export function createAgentWorkerFromSupabase(
         organizationId: input.organizationId
       });
       return { stamp, flat: resolved.flat };
-    }
+    },
+    resolveCertification: async (input) =>
+      findValidCertification({
+        supabase,
+        organizationId: input.organizationId,
+        agentName: input.agentName,
+        environment: input.environment
+      })
   });
 }

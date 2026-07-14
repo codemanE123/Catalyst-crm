@@ -272,6 +272,41 @@ async function transitionRollout(
     return { ok: false, error: "You cannot manage this rollout." };
   }
 
+  if (next === "active") {
+    const { resolveAgentReadinessConfig } = await import(
+      "@/lib/agents/readiness"
+    );
+    const { findValidCertification, resolveReadinessEnvironment } =
+      await import("@/lib/agents/readiness/supabase");
+    const { assertRolloutAllowedByCertification } = await import(
+      "@/lib/agents/readiness"
+    );
+    const readiness = resolveAgentReadinessConfig();
+    const environment = resolveReadinessEnvironment();
+    if (
+      readiness.enabled &&
+      environment === "production" &&
+      readiness.productionRequired
+    ) {
+      const certification = await findValidCertification({
+        supabase: ctx.supabase,
+        organizationId: rollout.organization_id,
+        agentName: rollout.agent_name,
+        environment: "production"
+      });
+      const gate = assertRolloutAllowedByCertification({
+        certification,
+        policySetId: null,
+        controlPromptVersionId: rollout.control_prompt_version_id,
+        treatmentPromptVersionId: rollout.treatment_prompt_version_id,
+        rolloutPercentage: rollout.rollout_percentage
+      });
+      if (!gate.ok) {
+        return gate;
+      }
+    }
+  }
+
   const patch: Record<string, string | null> = { status: next };
   if (next === "active" && !rollout.started_at) {
     patch.started_at = new Date().toISOString();

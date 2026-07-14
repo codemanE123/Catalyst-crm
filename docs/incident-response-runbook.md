@@ -9,6 +9,7 @@
 - `docs/deployment-runbook.md` — deploy, rollback, and environment procedures
 - `docs/auth-hardening.md` — MFA, session hygiene, credential compromise
 - `docs/pilot-it-security-packet.md` — IT review, contacts, MOU notification terms
+- `docs/agent-readiness-certification.md` — production agent go/no-go certification
 
 ---
 
@@ -141,6 +142,17 @@ Use when pilot data, credentials, or availability commitments are affected.
 | **Review** | Post-incident checklist §17 |
 
 **Preserve evidence:** Export relevant Sentry issues, audit query results, and deployment IDs before cleanup. Do not delete audit rows.
+
+### Agent readiness / recertification (SEV-1 / SEV-2)
+
+When a SEV-1 or SEV-2 affects agent safety, authenticity, or production configuration:
+
+1. **Revoke** relevant production certifications at `/agents/readiness` with reason linking the incident ID and containment status (`agent_readiness.revoke` audit).
+2. Confirm orchestrator denies new production executions (`certification_denied`).
+3. After containment: re-run evaluation with fresh simulation, quality, and security evidence; submit a new certification for `super_admin` approval.
+4. Do not re-enable agents via env alone — certification must be re-approved.
+
+See `docs/agent-readiness-certification.md`.
 
 ---
 
@@ -541,4 +553,5 @@ Documentation-only. Revert `docs/incident-response-runbook.md` and deployment-ru
 - `docs/auth-hardening.md` — MFA, session compromise, lost device
 - `docs/pilot-it-security-packet.md` — contacts, MOU notification, data categories
 - `docs/pilot-onboarding-checklist.md` — smoke verification after recovery
+- `docs/agent-readiness-certification.md` — agent production launch gate / recertification
 - `lib/auditLog.ts` — `AUDIT_ACTIONS` enum in codebase

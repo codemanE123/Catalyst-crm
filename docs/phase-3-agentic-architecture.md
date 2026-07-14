@@ -12,6 +12,7 @@
 - `docs/supabase-rls-audit.md`
 - `docs/agent-prompt-versioning.md` (Phase 4.11 prompt registry and rollouts)
 - `docs/agent-policy-management.md` (Phase 4.12 policy console)
+- `docs/agent-readiness-certification.md` (Phase 4.14 production launch gate)
 - `docs/agent-quality-evaluation.md` (Phase 4.10)
 - `lib/universityResearch.ts` (legacy synchronous research — superseded by this design)
 
@@ -823,6 +824,10 @@ See `docs/agent-prompt-versioning.md`. Agents resolve stamped `prompt_version_id
 ### Phase 4.12 — Policy management console (implemented)
 
 See `docs/agent-policy-management.md`. Organization/global policy sets resolve over system defaults and stamp `policy_set_id` / limits onto executions. Admin UI: `/agents/policies`. Break-glass is super_admin-only with expiry and audit.
+
+### Phase 4.14 — Production launch gate / agent readiness certification (implemented)
+
+See `docs/agent-readiness-certification.md`. Formal go/no-go certifications gate production queueing and rollout activation. Admin UI: `/agents/readiness`. Orchestrator and worker enforce valid certification when required; denials are permanent and audited. Prompt/policy activation revokes affected certifications with an explicit reason.
 
 ---
 

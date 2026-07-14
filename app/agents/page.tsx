@@ -4,6 +4,7 @@ import AgentExecutionsTable from "@/app/components/AgentExecutionsTable";
 import AgentOperationsFilters from "@/app/components/AgentOperationsFilters";
 import AgentOperationsMetricsGrid from "@/app/components/AgentOperationsMetricsGrid";
 import AgentQualityPanel from "@/app/components/AgentQualityPanel";
+import AgentReadinessBadgePanel from "@/app/components/AgentReadinessBadgePanel";
 import AgentUsagePanel from "@/app/components/AgentUsagePanel";
 import { loadAgentOperationsDashboard } from "@/lib/actions/agentOperations";
 import {
@@ -111,6 +112,9 @@ export default async function AgentsOperationsPage({ searchParams }: AgentsPageP
               <Link className="font-semibold text-cyan-700 hover:text-cyan-900" href="/agents/policies">
                 Policies
               </Link>
+              <Link className="font-semibold text-cyan-700 hover:text-cyan-900" href="/agents/readiness">
+                Readiness
+              </Link>
             </div>
           </div>
           {!dashboard.canManage ? (
@@ -128,6 +132,10 @@ export default async function AgentsOperationsPage({ searchParams }: AgentsPageP
         />
 
         <AgentQualityPanel metrics={dashboard.quality} />
+
+        <AgentReadinessBadgePanel
+          certifications={dashboard.readinessCertifications}
+        />
 
         <AgentOperationsFilters
           agentName={params.agentName ?? ""}

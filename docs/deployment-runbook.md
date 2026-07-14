@@ -296,6 +296,25 @@ Env values bootstrap system defaults only. They **must not** silently override s
 
 Apply migration `20260714200000_agent_policy_sets.sql`. Admin UI: `/agents/policies`. See `docs/agent-policy-management.md`.
 
+### 6.6e Agent readiness certification (Phase 4.14)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AGENT_READINESS_ENABLED` | `true` | Master switch for readiness gates |
+| `AGENT_READINESS_PRODUCTION_REQUIRED` | `true` | Require valid cert before production agent execution/rollout |
+| `AGENT_READINESS_STAGING_REQUIRED` | `false` | Require valid cert in staging |
+| `AGENT_READINESS_PRODUCTION_EXPIRY_DAYS` | `30` | Approved production cert lifetime |
+| `AGENT_READINESS_STAGING_EXPIRY_DAYS` | `14` | Approved staging cert lifetime |
+| `AGENT_READINESS_MAX_SIMULATION_AGE_HOURS` | `168` | Max age of simulation evidence |
+| `AGENT_READINESS_REQUIRE_SEPARATION_OF_DUTIES` | `true` | Emit WARNING when approver also modified prompt/policy/rollout |
+| `AGENT_READINESS_MIN_QUALITY_SCORE` | `3` | Minimum average quality for gate |
+| `AGENT_READINESS_MIN_SAFETY_SCORE` | `3` | Minimum average safety for gate |
+| `AGENT_READINESS_ENVIRONMENT` | inferred | Force `staging` or `production` when set |
+
+Apply migration `20260714210000_agent_readiness_certifications.sql`. Admin UI: `/agents/readiness`. See `docs/agent-readiness-certification.md`.
+
+Before production promote: approve a production certification with all blocking gates passing; confirm orchestrator denies uncertified agents; confirm prompt/policy activation revokes certifications.
+
 ### 6.7 Future variables
 
 | Variable | Task | Purpose |

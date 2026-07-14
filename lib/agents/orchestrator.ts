@@ -33,6 +33,11 @@ import {
   applyResolvedPolicyToSafetyLimits,
   resolveAgentSafetyLimits
 } from "./limits";
+import {
+  resolveAgentReadinessConfig,
+  type AgentReadinessCertification
+} from "./readiness";
+import { resolveReadinessEnvironment } from "./readiness/supabase";
 
 export type AgentAuditEventInput = {
   organizationId: string;
@@ -61,6 +66,12 @@ export type PolicyStampResolver = (input: {
   stamp: PolicyExecutionStamp;
   flat?: Record<string, unknown>;
 } | null>;
+
+export type CertificationGateResolver = (input: {
+  organizationId: string;
+  agentName: AgentName;
+  environment: "staging" | "production";
+}) => Promise<AgentReadinessCertification | null>;
 
 export const AGENT_AUDIT_ACTIONS = {
   queue: "agent.queue",
@@ -121,7 +132,8 @@ export class AgentOrchestrator {
     private readonly audit?: AgentAuditRecorder,
     private readonly usageStore?: AgentUsageStore,
     private readonly resolvePromptStamp?: PromptStampResolver,
-    private readonly resolvePolicyStamp?: PolicyStampResolver
+    private readonly resolvePolicyStamp?: PolicyStampResolver,
+    private readonly resolveCertification?: CertificationGateResolver
   ) {
     this.executors = executors ?? createAgentHandlerRegistry();
   }
@@ -267,6 +279,47 @@ export class AgentOrchestrator {
         error: policy.user_safe_message,
         reason_code: policy.reason_code
       };
+    }
+
+    const readinessConfig = resolveAgentReadinessConfig();
+    const environment = resolveReadinessEnvironment();
+    const readinessRequired =
+      readinessConfig.enabled &&
+      ((environment === "production" && readinessConfig.productionRequired) ||
+        (environment === "staging" && readinessConfig.stagingRequired));
+
+    if (readinessRequired && this.resolveCertification) {
+      const certification = await this.resolveCertification({
+        organizationId: input.organizationId,
+        agentName: input.agentName,
+        environment
+      });
+      if (
+        !certification ||
+        certification.status !== "approved" ||
+        !certification.expires_at ||
+        new Date(certification.expires_at).getTime() <= Date.now()
+      ) {
+        await this.recordAudit({
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: "agent_readiness.execution_denied",
+          recordId: crypto.randomUUID(),
+          metadata: {
+            agent_name: input.agentName,
+            environment,
+            certification_status: certification?.status ?? "missing",
+            certification_id: certification?.id ?? null
+          }
+        });
+
+        return {
+          ok: false,
+          error:
+            "This agent is not certified for the current environment. Contact an administrator.",
+          reason_code: "certification_denied"
+        };
+      }
     }
 
     const baseMetadata = { ...(input.metadata ?? {}) };

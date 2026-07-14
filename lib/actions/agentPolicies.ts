@@ -510,7 +510,18 @@ export async function activatePolicySetAction(input: {
     })
   });
 
+  const { invalidateCertificationsForChange } = await import(
+    "@/lib/actions/agentReadiness"
+  );
+  await invalidateCertificationsForChange({
+    supabase: ctx.supabase,
+    actorUserId: ctx.user.id,
+    organizationId: set.organization_id,
+    reason: `Active policy changed to ${set.version}; recertification required.`
+  });
+
   revalidatePath("/agents/policies");
+  revalidatePath("/agents/readiness");
   return { ok: true, message: "Policy set activated." };
 }
 
