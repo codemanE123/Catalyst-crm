@@ -5,12 +5,15 @@ import type { User } from "@supabase/supabase-js";
 
 import { AUDIT_ACTIONS, recordAuditEvent } from "@/lib/auditLog";
 import { MUTATION_ROLES, requireRole } from "@/lib/authz";
+import { recordLlmUsageEvent } from "@/lib/agents/usage";
+import { SupabaseAgentUsageStore } from "@/lib/agents/usageStore";
 import {
   parseProspectGenerationInput,
   type ProspectGenerationInput,
   type ProspectGenerationJob
 } from "@/lib/prospectGeneration";
 import { generateProspectCandidatesForJob } from "@/lib/prospectSources";
+import { COLLEGE_SCORECARD_PROVIDER } from "@/lib/prospectSources/collegeScorecard";
 import { getRecordOwnershipFields, type RecordOwnershipFields } from "@/lib/supabase";
 import {
   getServerSupabaseClient,
@@ -256,6 +259,33 @@ export async function processProspectGenerationJob(
 
   const generation = await generateProspectCandidatesForJob(job.input, jobId);
 
+  const usageStore = new SupabaseAgentUsageStore(supabase);
+  const usageStatus =
+    generation.summary.source === "college_scorecard"
+      ? "success"
+      : generation.summary.configuration_status === "disabled" ||
+          generation.summary.configuration_status === "missing_api_key"
+        ? "denied"
+        : generation.summary.source === "stub_generator"
+          ? "success"
+          : "failed";
+
+  try {
+    await recordLlmUsageEvent(usageStore, {
+      organizationId: ownership.organization_id,
+      agentName: "ProspectGenerationAgent",
+      targetType: "prospect_generation_job",
+      targetId: jobId,
+      provider: COLLEGE_SCORECARD_PROVIDER,
+      status: usageStatus,
+      denialReasonCode: generation.summary.provider_error_code ?? null,
+      inputTokens: generation.summary.provider_request_count ?? 0,
+      outputTokens: generation.summary.candidate_count
+    });
+  } catch {
+    // Usage recording must not fail the discovery job.
+  }
+
   await recordAuditEvent(supabase, {
     organizationId: ownership.organization_id,
     actorUserId: user.id,
@@ -265,7 +295,11 @@ export async function processProspectGenerationJob(
     metadata: {
       source: generation.summary.source,
       source_name: generation.summary.source_name ?? null,
-      fallback_reason: generation.summary.fallback_reason ?? null
+      fallback_reason: generation.summary.fallback_reason ?? null,
+      configuration_status: generation.summary.configuration_status ?? null,
+      provider_error_code: generation.summary.provider_error_code ?? null,
+      provider_request_count: generation.summary.provider_request_count ?? 0,
+      candidate_count: generation.summary.candidate_count
     }
   });
 

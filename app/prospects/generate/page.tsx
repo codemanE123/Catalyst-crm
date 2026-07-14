@@ -39,8 +39,10 @@ export default async function GenerateProspectsPage() {
       <div>
         <h1 className="text-3xl font-semibold text-slate-950">Generate prospects</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          Queue prospect discovery jobs, then run the stub generator on queued jobs to create mock
-          candidates for review. No AI APIs, scraping, or external services are used.
+          Queue prospect discovery jobs, then run them against the College Scorecard
+          API (when enabled and configured). Candidates stay pending review until a
+          human approves them into CRM schools. No scraping or personal contact
+          collection.
         </p>
       </div>
 

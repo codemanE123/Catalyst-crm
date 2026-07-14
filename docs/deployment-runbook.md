@@ -208,6 +208,21 @@ Set in Vercel when Sentry is enabled. Monitoring is **inactive** when DSN is uns
 
 See [§18 Error monitoring (Sentry)](#18-error-monitoring-sentry--task-232) for full setup.
 
+### 6.4a College Scorecard prospect discovery (Phase 5.2)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `COLLEGE_SCORECARD_ENABLED` | `true` | Master switch for Scorecard prospect discovery |
+| `COLLEGE_SCORECARD_API_KEY` | unset | Official API key (preferred) |
+| `DATA_GOV_API_KEY` | unset | Alternate data.gov key if Scorecard key unset |
+| `COLLEGE_SCORECARD_TIMEOUT_MS` | `12000` | Per-request timeout |
+| `COLLEGE_SCORECARD_MAX_PAGES` | `5` | Bounded pagination per state |
+| `COLLEGE_SCORECARD_MAX_RETRIES` | `2` | Retries for 429/timeouts/transient errors |
+| `COLLEGE_SCORECARD_MIN_REQUEST_INTERVAL_MS` | `250` | Spacing between Scorecard requests |
+| `COLLEGE_SCORECARD_ALLOW_STUB` | `false` | Dev-only stub override; ignored on Vercel production/preview |
+
+When disabled or unconfigured in staging/production, jobs complete with **zero candidates** and a safe configuration summary — never silent mock data. Local `NODE_ENV=development` may use the deterministic stub. Candidates remain `pending_review` until human approval creates CRM schools.
+
 ### 6.5 Agent worker scheduling (Phase 4.7)
 
 | Variable | Scope | Required | Purpose |

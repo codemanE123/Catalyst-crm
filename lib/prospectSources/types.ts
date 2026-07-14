@@ -2,7 +2,8 @@ import type { ProspectGenerationInput } from "@/lib/prospectGeneration";
 
 export const PROSPECT_SOURCE_NAMES = [
   "college_scorecard",
-  "stub_generator"
+  "stub_generator",
+  "unconfigured"
 ] as const;
 
 export type ProspectSourceName = (typeof PROSPECT_SOURCE_NAMES)[number];
@@ -17,6 +18,8 @@ export type ProspectSourceCandidate = {
   fit_score: number | null;
   source_name: string;
   source_urls: string[];
+  /** Public institution enrollment from Scorecard when available. */
+  enrollment_size?: number | null;
 };
 
 export type ProspectCandidateDraft = {
@@ -36,6 +39,15 @@ export type ProspectGenerationSummary = {
   source_name?: string;
   fallback_reason?: string;
   warnings?: string[];
+  configuration_status?:
+    | "ready"
+    | "disabled"
+    | "missing_api_key"
+    | "error"
+    | "no_matches"
+    | "stub_dev_only";
+  provider_error_code?: string | null;
+  provider_request_count?: number;
 };
 
 export type ProspectGenerationRunResult = {
@@ -48,6 +60,8 @@ export type CollegeScorecardSchoolRecord = Record<string, string | number | null
 export type CollegeScorecardFetchResult = {
   records: CollegeScorecardSchoolRecord[];
   request_url: string;
+  page?: number;
+  total?: number | null;
 };
 
 export type ProspectSourceGenerateInput = {
