@@ -223,6 +223,28 @@ See [§18 Error monitoring (Sentry)](#18-error-monitoring-sentry--task-232) for 
 
 When disabled or unconfigured in staging/production, jobs complete with **zero candidates** and a safe configuration summary — never silent mock data. Local `NODE_ENV=development` may use the deterministic stub. Candidates remain `pending_review` until human approval creates CRM schools.
 
+### 6.4b OpenAI LLM enrichment and outreach drafts (Phase 5.3)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LLM_ENRICHMENT_ENABLED` | unset/false | Enables enrichment + outreach draft OpenAI calls |
+| `OPENAI_API_KEY` | unset | Server-only OpenAI API key |
+
+**Model source:** active organization/global policy `default_model` (allowlisted: `gpt-4o-mini`, `gpt-4o`, `gpt-4.1-mini`), overridden by assigned prompt/rollout stamp when present.
+
+**Runtime gates (server actions):** readiness certification when required for the environment, policy provider/model checks, daily/monthly budget + call limits, chain-depth max, human-review flags, allowlisted public input only, structured JSON schema validation. Usage events record provider/model/tokens/estimated cost without raw prompts or raw provider payloads.
+
+**Manual-only external communication:** outreach drafts require human save/review; nothing auto-sends email.
+
+**Staging verification:**
+1. Set `LLM_ENRICHMENT_ENABLED=true` and `OPENAI_API_KEY` on staging Preview.
+2. Ensure staging readiness requirement matches intent (`AGENT_READINESS_STAGING_REQUIRED`); for production-like gates set production certs + `AGENT_READINESS_ENVIRONMENT=production` only on true production.
+3. Confirm org policy `default_provider=openai`, `default_model=gpt-4o-mini`, HITL flags true, budgets above zero.
+4. Enrich a pending Scorecard candidate → approve schema output fields on the candidate; check audit for model/prompt/policy metadata and usage row cost estimate.
+5. Generate outreach draft → confirm draft text is returned for manual review; save only via explicit user action.
+6. Toggle `LLM_ENRICHMENT_ENABLED=false` → safe disabled message, no OpenAI call.
+7. Exhaust budget or deny certification → user-safe denial, usage `denied`, no raw prompt storage.
+
 ### 6.5 Agent worker scheduling (Phase 4.7)
 
 | Variable | Scope | Required | Purpose |

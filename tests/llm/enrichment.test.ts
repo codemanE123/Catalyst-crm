@@ -210,7 +210,79 @@ describe("enrichProspectCandidate", () => {
         input_tokens: 120,
         output_tokens: 80
       });
+      expect(result.estimated_cost_usd).toEqual(expect.any(Number));
     }
+  });
+
+  it("uses the approved model from production context", async () => {
+    const fetchJson = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify(validOutput) } }],
+      usage: { prompt_tokens: 10, completion_tokens: 10 }
+    });
+
+    const result = await enrichProspectCandidate(
+      {
+        input: validInput,
+        context: validContext
+      },
+      {
+        fetchJson,
+        productionContext: {
+          agentName: "ProspectEnrichmentAgent",
+          model: "gpt-4o",
+          limits: {
+            maxExecutionsPerHour: 60,
+            maxLlmCallsPerDay: 200,
+            dailyBudgetUsd: 25,
+            monthlyBudgetUsd: 250,
+            maxConcurrentExecutions: 5,
+            maxCandidateBatchSize: 50,
+            maxChainDepth: 5,
+            maxPromptChars: 24000,
+            maxOutputChars: 8000,
+            maxAutomaticRetries: 3,
+            featureEnabled: true
+          },
+          policy: null,
+          policyStamp: {
+            policy_set_id: "ps-1",
+            policy_version: "v1",
+            policy_scope: "organization",
+            resolved_policy_hash: "hash",
+            policy_feature_enabled: true,
+            policy_max_executions_per_hour: 60,
+            policy_daily_budget_usd: 25,
+            policy_require_approvals: true,
+            policy_require_citations: true
+          },
+          promptStamp: {
+            prompt_key: "prospect.enrich",
+            prompt_version: "1.0.0",
+            prompt_version_id: "pv-1",
+            output_schema_version: "prospect.enrich.output.v1",
+            provider: "openai",
+            model: "gpt-4o",
+            rollout_id: "roll-1",
+            experiment_variant: "treatment"
+          },
+          certification: null,
+          chainDepth: 0
+        }
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.model).toBe("gpt-4o");
+      expect(result.prompt_version_id).toBe("pv-1");
+      expect(result.policy_set_id).toBe("ps-1");
+      expect(result.rollout_id).toBe("roll-1");
+      expect(result.experiment_variant).toBe("treatment");
+    }
+
+    const body = JSON.parse(String(fetchJson.mock.calls[0]?.[1]?.body ?? "{}"));
+    expect(body.model).toBe("gpt-4o");
+    expect(JSON.stringify(body)).not.toMatch(/private_notes|api_key|cookie/i);
   });
 });
 

@@ -13,6 +13,7 @@
 - `docs/agent-prompt-versioning.md` (Phase 4.11 prompt registry and rollouts)
 - `docs/agent-policy-management.md` (Phase 4.12 policy console)
 - `docs/agent-readiness-certification.md` (Phase 4.14 production launch gate)
+- `docs/openai-provider-integration.md` (Phase 5.3 OpenAI enrichment/outreach)
 - `docs/agent-quality-evaluation.md` (Phase 4.10)
 - `lib/universityResearch.ts` (legacy synchronous research — superseded by this design)
 

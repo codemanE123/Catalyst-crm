@@ -18,7 +18,11 @@ import { evaluateLlmCallPolicy } from "@/lib/agents/policy";
 import { startOfUtcDay } from "@/lib/agentOperations";
 import { startOfUtcMonth } from "@/lib/agents/usage";
 import { enforcePromptInputSize } from "@/lib/agents/safety";
-
+import { estimateLlmCostUsd } from "./pricing";
+import {
+  productionMetadataFromContext,
+  type LlmProductionContext
+} from "./productionContext";
 
 export {
   extractWebsiteDomain,
@@ -43,6 +47,15 @@ export {
   sumTokenCounts
 } from "./pricing";
 
+export {
+  evaluateLlmProductionGates,
+  resolveLlmProductionContextFromSupabase,
+  productionMetadataFromContext,
+  APPROVED_OPENAI_MODELS,
+  type LlmProductionContext,
+  type LlmProductionGateResult
+} from "./productionContext";
+
 export function getLlmEnrichmentStatus(env: NodeJS.ProcessEnv = process.env): {
   enabled: boolean;
   reason: string;
@@ -63,10 +76,13 @@ export async function enrichProspectCandidate(
     usageStore?: AgentUsageStore;
     agentExecutionId?: string | null;
     agentName?: string | null;
+    /** When provided, readiness/policy/budget/model gates already evaluated. */
+    productionContext?: LlmProductionContext;
   }
 ): Promise<LlmEnrichmentResult> {
   const env = options?.env ?? process.env;
   const status = getLlmEnrichmentStatus(env);
+  const agentName = options?.agentName ?? "ProspectEnrichmentAgent";
 
   if (!status.enabled) {
     return {
@@ -76,7 +92,10 @@ export async function enrichProspectCandidate(
     };
   }
 
-  if (options?.usageStore) {
+  const limits = options?.productionContext?.limits;
+  const model = options?.productionContext?.model;
+
+  if (options?.usageStore && !options.productionContext) {
     const [llmCallsToday, spendToday, spendMonth] = await Promise.all([
       options.usageStore.countLlmCallsSince(
         request.context.organization_id,
@@ -100,14 +119,15 @@ export async function enrichProspectCandidate(
         estimatedSpendTodayUsd: spendToday,
         estimatedSpendMonthUsd: spendMonth
       },
-      env
+      env,
+      limits
     });
 
     if (!policy.allowed) {
       await recordLlmUsageEvent(options.usageStore, {
         organizationId: request.context.organization_id,
         agentExecutionId: options.agentExecutionId,
-        agentName: options.agentName ?? "ProspectEnrichmentAgent",
+        agentName,
         targetType: "prospect_candidate",
         targetId: request.context.candidate_id,
         status: "denied",
@@ -177,8 +197,13 @@ export async function enrichProspectCandidate(
 
   const provider = createOpenAiProvider({
     apiKey,
+    model,
     fetchJson: options?.fetchJson
   });
+
+  const meta = options?.productionContext
+    ? productionMetadataFromContext(options.productionContext)
+    : null;
 
   try {
     const providerResult = await provider.enrich(sanitizedInput);
@@ -188,7 +213,7 @@ export async function enrichProspectCandidate(
         await recordLlmUsageEvent(options.usageStore, {
           organizationId: request.context.organization_id,
           agentExecutionId: options.agentExecutionId,
-          agentName: options.agentName ?? "ProspectEnrichmentAgent",
+          agentName,
           targetType: "prospect_candidate",
           targetId: request.context.candidate_id,
           provider: "openai",
@@ -207,7 +232,7 @@ export async function enrichProspectCandidate(
         await recordLlmUsageEvent(options.usageStore, {
           organizationId: request.context.organization_id,
           agentExecutionId: options.agentExecutionId,
-          agentName: options.agentName ?? "ProspectEnrichmentAgent",
+          agentName,
           targetType: "prospect_candidate",
           targetId: request.context.candidate_id,
           provider: providerResult.provider,
@@ -225,11 +250,17 @@ export async function enrichProspectCandidate(
       };
     }
 
+    const estimatedCost = estimateLlmCostUsd({
+      model: providerResult.model,
+      inputTokens: providerResult.usage.input_tokens,
+      outputTokens: providerResult.usage.output_tokens
+    });
+
     if (options?.usageStore) {
       await recordLlmUsageEvent(options.usageStore, {
         organizationId: request.context.organization_id,
         agentExecutionId: options.agentExecutionId,
-        agentName: options.agentName ?? "ProspectEnrichmentAgent",
+        agentName,
         targetType: "prospect_candidate",
         targetId: request.context.candidate_id,
         provider: providerResult.provider,
@@ -246,7 +277,14 @@ export async function enrichProspectCandidate(
       data: validatedOutput.data,
       provider: "openai",
       model: providerResult.model,
-      prompt_version: PROSPECT_ENRICHMENT_PROMPT_VERSION,
+      prompt_version:
+        meta?.prompt_version ?? PROSPECT_ENRICHMENT_PROMPT_VERSION,
+      prompt_version_id: meta?.prompt_version_id ?? null,
+      policy_set_id: meta?.policy_set_id ?? null,
+      policy_version: meta?.policy_version ?? null,
+      rollout_id: meta?.rollout_id ?? null,
+      experiment_variant: meta?.experiment_variant ?? null,
+      estimated_cost_usd: estimatedCost,
       usage: providerResult.usage
     };
   } catch {
@@ -254,7 +292,7 @@ export async function enrichProspectCandidate(
       await recordLlmUsageEvent(options.usageStore, {
         organizationId: request.context.organization_id,
         agentExecutionId: options.agentExecutionId,
-        agentName: options.agentName ?? "ProspectEnrichmentAgent",
+        agentName,
         targetType: "prospect_candidate",
         targetId: request.context.candidate_id,
         provider: "openai",

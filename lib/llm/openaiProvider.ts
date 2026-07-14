@@ -70,12 +70,17 @@ export function createOpenAiProvider(options: {
   apiKey: string;
   model?: string;
   fetchJson?: FetchJsonFn;
+  timeoutMs?: number;
 }) {
   const model = options.model ?? DEFAULT_OPENAI_ENRICHMENT_MODEL;
+  const timeoutMs = options.timeoutMs ?? 30_000;
   const fetchJson =
     options.fetchJson ??
     (async <T,>(url: string, init: RequestInit): Promise<T> => {
-      const response = await fetch(url, init);
+      const response = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(timeoutMs)
+      });
 
       if (!response.ok) {
         throw new Error(`OpenAI request failed with status ${response.status}.`);

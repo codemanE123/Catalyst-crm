@@ -93,6 +93,12 @@ export type LlmEnrichmentSuccessResult = {
   provider: "openai";
   model: string;
   prompt_version: string;
+  prompt_version_id?: string | null;
+  policy_set_id?: string | null;
+  policy_version?: string | null;
+  rollout_id?: string | null;
+  experiment_variant?: string | null;
+  estimated_cost_usd?: number | null;
   usage: {
     input_tokens: number | null;
     output_tokens: number | null;

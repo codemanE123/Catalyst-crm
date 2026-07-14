@@ -4,6 +4,11 @@ import { evaluateLlmCallPolicy } from "@/lib/agents/policy";
 import { enforcePromptInputSize } from "@/lib/agents/safety";
 import { startOfUtcDay } from "@/lib/agentOperations";
 
+import { estimateLlmCostUsd } from "./pricing";
+import {
+  productionMetadataFromContext,
+  type LlmProductionContext
+} from "./productionContext";
 import { createOpenAiOutreachDraftProvider } from "./outreachDraftProvider";
 import {
   containsUnresolvedPiiInValue,
@@ -58,10 +63,12 @@ export async function generateProspectOutreachDraftWithLlm(
     usageStore?: AgentUsageStore;
     agentExecutionId?: string | null;
     agentName?: string | null;
+    productionContext?: LlmProductionContext;
   }
 ): Promise<ProspectOutreachDraftResult> {
   const env = options?.env ?? process.env;
   const status = getProspectOutreachDraftStatus(env);
+  const agentName = options?.agentName ?? "OutreachDraftAgent";
 
   if (!status.enabled) {
     return {
@@ -71,7 +78,10 @@ export async function generateProspectOutreachDraftWithLlm(
     };
   }
 
-  if (options?.usageStore) {
+  const limits = options?.productionContext?.limits;
+  const model = options?.productionContext?.model;
+
+  if (options?.usageStore && !options.productionContext) {
     const [llmCallsToday, spendToday, spendMonth] = await Promise.all([
       options.usageStore.countLlmCallsSince(
         request.context.organization_id,
@@ -95,14 +105,15 @@ export async function generateProspectOutreachDraftWithLlm(
         estimatedSpendTodayUsd: spendToday,
         estimatedSpendMonthUsd: spendMonth
       },
-      env
+      env,
+      limits
     });
 
     if (!policy.allowed) {
       await recordLlmUsageEvent(options.usageStore, {
         organizationId: request.context.organization_id,
         agentExecutionId: options.agentExecutionId,
-        agentName: options.agentName ?? "OutreachDraftAgent",
+        agentName,
         targetType: "prospect_candidate",
         targetId: request.context.candidate_id,
         status: "denied",
@@ -172,8 +183,13 @@ export async function generateProspectOutreachDraftWithLlm(
 
   const provider = createOpenAiOutreachDraftProvider({
     apiKey,
+    model,
     fetchJson: options?.fetchJson
   });
+
+  const meta = options?.productionContext
+    ? productionMetadataFromContext(options.productionContext)
+    : null;
 
   try {
     const providerResult = await provider.generateDraft(sanitizedInput);
@@ -183,7 +199,7 @@ export async function generateProspectOutreachDraftWithLlm(
         await recordLlmUsageEvent(options.usageStore, {
           organizationId: request.context.organization_id,
           agentExecutionId: options.agentExecutionId,
-          agentName: options.agentName ?? "OutreachDraftAgent",
+          agentName,
           targetType: "prospect_candidate",
           targetId: request.context.candidate_id,
           provider: "openai",
@@ -202,7 +218,7 @@ export async function generateProspectOutreachDraftWithLlm(
         await recordLlmUsageEvent(options.usageStore, {
           organizationId: request.context.organization_id,
           agentExecutionId: options.agentExecutionId,
-          agentName: options.agentName ?? "OutreachDraftAgent",
+          agentName,
           targetType: "prospect_candidate",
           targetId: request.context.candidate_id,
           provider: providerResult.provider,
@@ -220,11 +236,17 @@ export async function generateProspectOutreachDraftWithLlm(
       };
     }
 
+    const estimatedCost = estimateLlmCostUsd({
+      model: providerResult.model,
+      inputTokens: providerResult.usage.input_tokens,
+      outputTokens: providerResult.usage.output_tokens
+    });
+
     if (options?.usageStore) {
       await recordLlmUsageEvent(options.usageStore, {
         organizationId: request.context.organization_id,
         agentExecutionId: options.agentExecutionId,
-        agentName: options.agentName ?? "OutreachDraftAgent",
+        agentName,
         targetType: "prospect_candidate",
         targetId: request.context.candidate_id,
         provider: providerResult.provider,
@@ -241,7 +263,14 @@ export async function generateProspectOutreachDraftWithLlm(
       data: validatedOutput.data,
       provider: "openai",
       model: providerResult.model,
-      prompt_version: PROSPECT_OUTREACH_DRAFT_PROMPT_VERSION,
+      prompt_version:
+        meta?.prompt_version ?? PROSPECT_OUTREACH_DRAFT_PROMPT_VERSION,
+      prompt_version_id: meta?.prompt_version_id ?? null,
+      policy_set_id: meta?.policy_set_id ?? null,
+      policy_version: meta?.policy_version ?? null,
+      rollout_id: meta?.rollout_id ?? null,
+      experiment_variant: meta?.experiment_variant ?? null,
+      estimated_cost_usd: estimatedCost,
       usage: providerResult.usage
     };
   } catch {
@@ -249,7 +278,7 @@ export async function generateProspectOutreachDraftWithLlm(
       await recordLlmUsageEvent(options.usageStore, {
         organizationId: request.context.organization_id,
         agentExecutionId: options.agentExecutionId,
-        agentName: options.agentName ?? "OutreachDraftAgent",
+        agentName,
         targetType: "prospect_candidate",
         targetId: request.context.candidate_id,
         provider: "openai",

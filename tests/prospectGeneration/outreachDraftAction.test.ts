@@ -7,6 +7,7 @@ const mockGetServerSupabaseClient = vi.fn();
 const mockRecordAuditEvent = vi.fn();
 const mockGetProspectOutreachDraftStatus = vi.fn();
 const mockGenerateProspectOutreachDraftWithLlm = vi.fn();
+const mockResolveLlmProductionContext = vi.fn();
 
 vi.mock("@/lib/supabaseServer", () => ({
   requireUser: () => mockRequireUser(),
@@ -33,6 +34,39 @@ vi.mock("@/lib/auditLog", () => ({
   },
   recordAuditEvent: (...args: unknown[]) => mockRecordAuditEvent(...args)
 }));
+
+vi.mock("@/lib/agents/usageStore", () => ({
+  SupabaseAgentUsageStore: class {
+    insert = vi.fn(async () => ({
+      id: "usage-1",
+      organization_id: "org-1",
+      agent_execution_id: null,
+      agent_name: "OutreachDraftAgent",
+      target_type: "prospect_candidate",
+      target_id: "candidate-1",
+      provider: "openai",
+      model: null,
+      input_tokens: null,
+      output_tokens: null,
+      total_tokens: null,
+      estimated_cost_usd: null,
+      status: "denied",
+      denial_reason_code: null,
+      created_at: "2026-07-14T12:00:00.000Z"
+    }));
+    countLlmCallsSince = vi.fn(async () => 0);
+    sumEstimatedCostSince = vi.fn(async () => 0);
+  }
+}));
+
+vi.mock("@/lib/llm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/llm")>();
+  return {
+    ...actual,
+    resolveLlmProductionContextFromSupabase: (...args: unknown[]) =>
+      mockResolveLlmProductionContext(...args)
+  };
+});
 
 vi.mock("@/lib/llm/outreachDraft", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/llm/outreachDraft")>();
@@ -133,6 +167,31 @@ describe("generateProspectOutreachDraft action", () => {
     mockGetProspectOutreachDraftStatus.mockReturnValue({
       enabled: true,
       reason: "AI outreach drafts are enabled."
+    });
+    mockResolveLlmProductionContext.mockResolvedValue({
+      ok: true,
+      context: {
+        agentName: "OutreachDraftAgent",
+        model: "gpt-4o-mini",
+        limits: {
+          maxExecutionsPerHour: 60,
+          maxLlmCallsPerDay: 200,
+          dailyBudgetUsd: 25,
+          monthlyBudgetUsd: 250,
+          maxConcurrentExecutions: 5,
+          maxCandidateBatchSize: 50,
+          maxChainDepth: 5,
+          maxPromptChars: 24000,
+          maxOutputChars: 8000,
+          maxAutomaticRetries: 3,
+          featureEnabled: true
+        },
+        policy: null,
+        policyStamp: null,
+        promptStamp: null,
+        certification: null,
+        chainDepth: 0
+      }
     });
   });
 

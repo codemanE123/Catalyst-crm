@@ -5,9 +5,12 @@ import type { User } from "@supabase/supabase-js";
 
 import { AUDIT_ACTIONS, recordAuditEvent } from "@/lib/auditLog";
 import { MUTATION_ROLES, requireRole, getSchoolOrganizationId } from "@/lib/authz";
+import { recordLlmUsageEvent } from "@/lib/agents/usage";
+import { SupabaseAgentUsageStore } from "@/lib/agents/usageStore";
 import {
   enrichProspectCandidate as invokeLlmEnrichment,
-  getLlmEnrichmentStatus
+  getLlmEnrichmentStatus,
+  resolveLlmProductionContextFromSupabase
 } from "@/lib/llm";
 import {
   generateProspectOutreachDraftWithLlm,
@@ -578,14 +581,64 @@ export async function enrichProspectCandidate(
     jobInput
   });
 
-  const enrichmentResult = await invokeLlmEnrichment({
-    input: enrichmentInput,
-    context: {
-      organization_id: ownership.organization_id,
-      job_id: candidate.job_id,
-      candidate_id: candidate.id
-    }
+  const usageStore = new SupabaseAgentUsageStore(supabase);
+  const gate = await resolveLlmProductionContextFromSupabase({
+    supabase,
+    organizationId: ownership.organization_id,
+    agentName: "ProspectEnrichmentAgent",
+    actorUserId: user.id,
+    targetId: candidate.id,
+    usageStore
   });
+
+  if (!gate.ok) {
+    await recordAuditEvent(supabase, {
+      organizationId: ownership.organization_id,
+      actorUserId: user.id,
+      action: AUDIT_ACTIONS.prospectCandidateEnrich,
+      targetTable: "prospect_candidates",
+      recordId: candidate.id,
+      metadata: {
+        job_id: candidate.job_id,
+        outcome: "denied",
+        reason_code: gate.reason_code
+      }
+    });
+
+    await recordLlmUsageEvent(usageStore, {
+      organizationId: ownership.organization_id,
+      agentName: "ProspectEnrichmentAgent",
+      targetType: "prospect_candidate",
+      targetId: candidate.id,
+      provider: "openai",
+      status: "denied",
+      denialReasonCode: gate.reason_code
+    });
+
+    return {
+      ok: false,
+      error: gate.user_safe_message,
+      disabled: gate.reason_code === "feature_disabled" ||
+        gate.reason_code === "provider_disabled" ||
+        gate.reason_code === "certification_denied"
+    };
+  }
+
+  const enrichmentResult = await invokeLlmEnrichment(
+    {
+      input: enrichmentInput,
+      context: {
+        organization_id: ownership.organization_id,
+        job_id: candidate.job_id,
+        candidate_id: candidate.id
+      }
+    },
+    {
+      usageStore,
+      agentName: "ProspectEnrichmentAgent",
+      productionContext: gate.context
+    }
+  );
 
   if (!enrichmentResult.ok) {
     if (enrichmentResult.status === "disabled") {
@@ -660,6 +713,12 @@ export async function enrichProspectCandidate(
       provider: enrichmentResult.provider,
       model: enrichmentResult.model,
       prompt_version: enrichmentResult.prompt_version,
+      prompt_version_id: enrichmentResult.prompt_version_id ?? null,
+      policy_set_id: enrichmentResult.policy_set_id ?? null,
+      policy_version: enrichmentResult.policy_version ?? null,
+      rollout_id: enrichmentResult.rollout_id ?? null,
+      experiment_variant: enrichmentResult.experiment_variant ?? null,
+      estimated_cost_usd: enrichmentResult.estimated_cost_usd ?? null,
       enrichment_confidence: enrichmentResult.data.enrichment_confidence
     }
   });
@@ -736,14 +795,65 @@ export async function generateProspectOutreachDraft(
     jobInput
   });
 
-  const draftResult = await generateProspectOutreachDraftWithLlm({
-    input: draftInput,
-    context: {
-      organization_id: ownership.organization_id,
-      job_id: candidate.job_id,
-      candidate_id: candidate.id
-    }
+  const usageStore = new SupabaseAgentUsageStore(supabase);
+  const gate = await resolveLlmProductionContextFromSupabase({
+    supabase,
+    organizationId: ownership.organization_id,
+    agentName: "OutreachDraftAgent",
+    actorUserId: user.id,
+    targetId: candidate.id,
+    usageStore
   });
+
+  if (!gate.ok) {
+    await recordAuditEvent(supabase, {
+      organizationId: ownership.organization_id,
+      actorUserId: user.id,
+      action: AUDIT_ACTIONS.prospectCandidateOutreachDraft,
+      targetTable: "prospect_candidates",
+      recordId: candidate.id,
+      metadata: {
+        job_id: candidate.job_id,
+        outcome: "denied",
+        reason_code: gate.reason_code
+      }
+    });
+
+    await recordLlmUsageEvent(usageStore, {
+      organizationId: ownership.organization_id,
+      agentName: "OutreachDraftAgent",
+      targetType: "prospect_candidate",
+      targetId: candidate.id,
+      provider: "openai",
+      status: "denied",
+      denialReasonCode: gate.reason_code
+    });
+
+    return {
+      ok: false,
+      error: gate.user_safe_message,
+      disabled:
+        gate.reason_code === "feature_disabled" ||
+        gate.reason_code === "provider_disabled" ||
+        gate.reason_code === "certification_denied"
+    };
+  }
+
+  const draftResult = await generateProspectOutreachDraftWithLlm(
+    {
+      input: draftInput,
+      context: {
+        organization_id: ownership.organization_id,
+        job_id: candidate.job_id,
+        candidate_id: candidate.id
+      }
+    },
+    {
+      usageStore,
+      agentName: "OutreachDraftAgent",
+      productionContext: gate.context
+    }
+  );
 
   if (!draftResult.ok) {
     if (draftResult.status === "disabled") {
@@ -785,6 +895,12 @@ export async function generateProspectOutreachDraft(
       provider: draftResult.provider,
       model: draftResult.model,
       prompt_version: draftResult.prompt_version,
+      prompt_version_id: draftResult.prompt_version_id ?? null,
+      policy_set_id: draftResult.policy_set_id ?? null,
+      policy_version: draftResult.policy_version ?? null,
+      rollout_id: draftResult.rollout_id ?? null,
+      experiment_variant: draftResult.experiment_variant ?? null,
+      estimated_cost_usd: draftResult.estimated_cost_usd ?? null,
       draft_length: draftResult.data.draft_text.length
     }
   });
