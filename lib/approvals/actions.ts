@@ -6,6 +6,7 @@ import {
   approveProspectCandidate,
   rejectProspectCandidate
 } from "@/lib/actions/prospectCandidates";
+import { recordLightweightApprovalEvaluation } from "@/lib/actions/agentEvaluations";
 import {
   runMeetingPrepForCandidate,
   runMeetingPrepForSchool
@@ -231,6 +232,9 @@ async function assertSourceOrg(
 
 export async function approveApprovalItem(input: {
   approvalItemId: string;
+  usefulnessScore?: number | null;
+  feedback?: string | null;
+  approvedWithEdits?: boolean;
 }): Promise<ApprovalActionResult> {
   const context = await requireApprovalsContext({ mutate: true });
   if (!context.ok) {
@@ -240,6 +244,24 @@ export async function approveApprovalItem(input: {
   const parsed = parseApprovalItemId(input.approvalItemId);
   if (!parsed) {
     return { ok: false, error: "Invalid approval item." };
+  }
+
+  const evaluationOutcome = input.approvedWithEdits
+    ? "approved_with_edits"
+    : "accepted";
+
+  async function recordEval(organizationId: string, agentName?: string | null) {
+    await recordLightweightApprovalEvaluation({
+      organizationId,
+      approvalType: parsed!.approvalType,
+      sourceId: parsed!.sourceId,
+      outcome: evaluationOutcome,
+      agentName: agentName ?? null,
+      targetType: parsed!.approvalType,
+      targetId: parsed!.sourceId,
+      usefulnessScore: input.usefulnessScore ?? null,
+      feedback: input.feedback ?? null
+    });
   }
 
   if (
@@ -289,6 +311,8 @@ export async function approveApprovalItem(input: {
       }
     });
 
+    await recordEval(ownership.organizationId, "ProspectGenerationAgent");
+
     revalidatePath("/approvals");
     return { ok: true, message: "Prospect candidate approved." };
   }
@@ -328,6 +352,14 @@ export async function approveApprovalItem(input: {
       metadata: { approval_type: parsed.approvalType }
     });
 
+    const agentName =
+      parsed.approvalType === "contact_recommendation"
+        ? "ContactDiscoveryAgent"
+        : parsed.approvalType === "meeting_prep"
+          ? "MeetingPrepAgent"
+          : "ProposalGenerationAgent";
+    await recordEval(ownership.organizationId, agentName);
+
     revalidatePath("/approvals");
     return { ok: true, message: "Item accepted for human-reviewed use." };
   }
@@ -337,6 +369,7 @@ export async function approveApprovalItem(input: {
 
 export async function rejectApprovalItem(input: {
   approvalItemId: string;
+  feedback?: string | null;
 }): Promise<ApprovalActionResult> {
   const context = await requireApprovalsContext({ mutate: true });
   if (!context.ok) {
@@ -395,6 +428,16 @@ export async function rejectApprovalItem(input: {
       }
     });
 
+    await recordLightweightApprovalEvaluation({
+      organizationId: ownership.organizationId,
+      approvalType: parsed.approvalType,
+      sourceId: parsed.sourceId,
+      outcome: "rejected",
+      agentName: "ProspectGenerationAgent",
+      targetId: parsed.sourceId,
+      feedback: input.feedback ?? null
+    });
+
     revalidatePath("/approvals");
     return { ok: true, message: "Prospect candidate rejected." };
   }
@@ -434,6 +477,15 @@ export async function rejectApprovalItem(input: {
       metadata: { approval_type: parsed.approvalType }
     });
 
+    await recordLightweightApprovalEvaluation({
+      organizationId: ownership.organizationId,
+      approvalType: parsed.approvalType,
+      sourceId: parsed.sourceId,
+      outcome: "rejected",
+      targetId: parsed.sourceId,
+      feedback: input.feedback ?? null
+    });
+
     revalidatePath("/approvals");
     return { ok: true, message: "Item dismissed." };
   }
@@ -443,6 +495,7 @@ export async function rejectApprovalItem(input: {
 
 export async function markApprovalNeedsRevision(input: {
   approvalItemId: string;
+  feedback?: string | null;
 }): Promise<ApprovalActionResult> {
   const context = await requireApprovalsContext({ mutate: true });
   if (!context.ok) {
@@ -501,6 +554,15 @@ export async function markApprovalNeedsRevision(input: {
     targetTable: table,
     recordId: parsed.sourceId,
     metadata: { approval_type: parsed.approvalType }
+  });
+
+  await recordLightweightApprovalEvaluation({
+    organizationId: ownership.organizationId,
+    approvalType: parsed.approvalType,
+    sourceId: parsed.sourceId,
+    outcome: "needs_revision",
+    targetId: parsed.sourceId,
+    feedback: input.feedback ?? null
   });
 
   revalidatePath("/approvals");

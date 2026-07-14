@@ -20,6 +20,12 @@ import type { AgentExecutionListItem } from "@/lib/agentOperationsData";
 import type { AgentOperationsMetrics } from "@/lib/agentOperations";
 import type { AgentUsageTotals } from "@/lib/agents/usage";
 import {
+  calculateAgentQualityDashboardMetrics,
+  SupabaseAgentEvaluationStore,
+  type AgentEvaluation,
+  type AgentQualityDashboardMetrics
+} from "@/lib/agents/evaluation";
+import {
   AgentOrchestrator,
   type CancelAgentResult,
   type RetryAgentResult
@@ -103,6 +109,8 @@ export async function loadAgentOperationsDashboard(input: {
       ok: true;
       metrics: AgentOperationsMetrics;
       usage: AgentUsageTotals;
+      quality: AgentQualityDashboardMetrics;
+      evaluationsByExecutionId: Record<string, AgentEvaluation[]>;
       executions: AgentExecutionListItem[];
       total: number;
       page: number;
@@ -133,7 +141,20 @@ export async function loadAgentOperationsDashboard(input: {
   const agentName =
     agentNameRaw && isKnownAgentName(agentNameRaw) ? agentNameRaw : null;
 
-  const [metrics, usage, executions] = await Promise.all([
+  const evaluationStore = new SupabaseAgentEvaluationStore(context.supabase);
+  const since30Days = new Date(
+    Date.now() - 30 * 24 * 60 * 60 * 1000
+  ).toISOString();
+  const since7Days = new Date(
+    Date.now() - 7 * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  const scopedOrgIds =
+    organizationId
+      ? [organizationId]
+      : context.accessibleOrganizationIds;
+
+  const [metrics, usage, executions, evaluations] = await Promise.all([
     fetchAgentOperationsMetrics(
       context.supabase,
       context.accessibleOrganizationIds,
@@ -154,13 +175,34 @@ export async function loadAgentOperationsDashboard(input: {
         : null,
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE
+    }),
+    evaluationStore.listForOrganizations(scopedOrgIds, {
+      sinceIso: since30Days,
+      limit: 2000
     })
   ]);
+
+  const quality = calculateAgentQualityDashboardMetrics(evaluations, {
+    since7DaysIso: since7Days
+  });
+
+  const evaluationsByExecutionId: Record<string, AgentEvaluation[]> = {};
+  for (const evaluation of evaluations) {
+    if (!evaluation.agent_execution_id) {
+      continue;
+    }
+
+    const list = evaluationsByExecutionId[evaluation.agent_execution_id] ?? [];
+    list.push(evaluation);
+    evaluationsByExecutionId[evaluation.agent_execution_id] = list;
+  }
 
   return {
     ok: true,
     metrics,
     usage,
+    quality,
+    evaluationsByExecutionId,
     executions: executions.items,
     total: executions.total,
     page,

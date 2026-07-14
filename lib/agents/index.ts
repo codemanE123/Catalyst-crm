@@ -132,3 +132,5 @@ export type {
 export { InMemoryAgentExecutionStore } from "./store";
 
 export type { AgentExecutionStore } from "./store";
+
+export * from "./evaluation";

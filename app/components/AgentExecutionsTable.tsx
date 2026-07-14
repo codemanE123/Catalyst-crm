@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 
 import {
   cancelAgentExecution,
   retryAgentExecution
 } from "@/lib/actions/agentOperations";
 import type { AgentExecutionListItem } from "@/lib/agentOperationsData";
+import type { AgentEvaluation } from "@/lib/agents/evaluation";
+import AgentExecutionQualityPanel from "@/app/components/AgentExecutionQualityPanel";
 
 const statusStyles: Record<string, string> = {
   queued: "bg-slate-100 text-slate-800 ring-slate-200",
@@ -36,7 +38,8 @@ export default function AgentExecutionsTable({
   page,
   pageSize,
   total,
-  queryString
+  queryString,
+  evaluationsByExecutionId = {}
 }: {
   executions: AgentExecutionListItem[];
   canManage: boolean;
@@ -44,6 +47,7 @@ export default function AgentExecutionsTable({
   pageSize: number;
   total: number;
   queryString: string;
+  evaluationsByExecutionId?: Record<string, AgentEvaluation[]>;
 }) {
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -153,15 +157,19 @@ export default function AgentExecutionsTable({
               <th className="px-3 py-2 font-medium">Duration</th>
               <th className="px-3 py-2 font-medium">Error</th>
               <th className="px-3 py-2 font-medium">Organization</th>
+              <th className="px-3 py-2 font-medium">Quality</th>
               <th className="px-3 py-2 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {executions.map((execution) => {
               const busy = isPending && pendingId === execution.id;
+              const evaluations = evaluationsByExecutionId[execution.id] ?? [];
+              const latestScore = evaluations[0]?.score;
 
               return (
-                <tr key={execution.id}>
+                <Fragment key={execution.id}>
+                <tr>
                   <td className="px-3 py-3 font-medium text-slate-950">
                     {execution.agent_name}
                   </td>
@@ -193,6 +201,9 @@ export default function AgentExecutionsTable({
                     </p>
                   </td>
                   <td className="px-3 py-3 text-slate-700">{execution.organization_name}</td>
+                  <td className="px-3 py-3 text-slate-700">
+                    {latestScore == null ? "—" : latestScore.toFixed(2)}
+                  </td>
                   <td className="px-3 py-3">
                     <div className="flex flex-col gap-2">
                       {execution.target_href ? (
@@ -203,6 +214,12 @@ export default function AgentExecutionsTable({
                           Open related
                         </Link>
                       ) : null}
+                      <Link
+                        className="text-xs font-medium text-sky-700 hover:text-sky-900"
+                        href="/approvals"
+                      >
+                        Approvals
+                      </Link>
                       {canManage && execution.status === "failed" ? (
                         <button
                           className="rounded-full border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 disabled:opacity-60"
@@ -227,6 +244,17 @@ export default function AgentExecutionsTable({
                     </div>
                   </td>
                 </tr>
+                {evaluations.length > 0 ? (
+                  <tr>
+                    <td className="bg-slate-50 px-3 py-3" colSpan={10}>
+                      <AgentExecutionQualityPanel
+                        evaluations={evaluations}
+                        relatedApprovalHref="/approvals"
+                      />
+                    </td>
+                  </tr>
+                ) : null}
+                </Fragment>
               );
             })}
           </tbody>

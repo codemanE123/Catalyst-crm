@@ -101,7 +101,7 @@ export default function ApprovalItemsList({
 
           {item.is_ai_generated ? (
             <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-              {AI_GENERATED_WARNING}
+              {AI_GENERATED_WARNING} Optional feedback should omit protected personal data.
             </p>
           ) : null}
 
@@ -132,6 +132,26 @@ export default function ApprovalItemsList({
             </div>
           </dl>
 
+          <div className="mt-5 flex flex-wrap items-end gap-3">
+            {canAct && item.status === "pending" ? (
+              <label className="text-xs text-slate-600">
+                Optional usefulness (1–5)
+                <select
+                  className="ml-2 rounded-lg border border-slate-200 px-2 py-1"
+                  defaultValue=""
+                  id={`score-${item.id}`}
+                >
+                  <option value="">Skip</option>
+                  <option value="5">5</option>
+                  <option value="4">4</option>
+                  <option value="3">3</option>
+                  <option value="2">2</option>
+                  <option value="1">1</option>
+                </select>
+              </label>
+            ) : null}
+          </div>
+
           <div className="mt-5 flex flex-wrap gap-2">
             {item.source_url ? (
               <Link
@@ -151,7 +171,16 @@ export default function ApprovalItemsList({
                       disabled={pending}
                       label="Approve"
                       onClick={() =>
-                        runAction(async () => approveApprovalItem({ approvalItemId: item.id }))
+                        runAction(async () => {
+                          const select = document.getElementById(
+                            `score-${item.id}`
+                          ) as HTMLSelectElement | null;
+                          const raw = select?.value;
+                          return approveApprovalItem({
+                            approvalItemId: item.id,
+                            usefulnessScore: raw ? Number(raw) : null
+                          });
+                        })
                       }
                     />
                     <ActionButton

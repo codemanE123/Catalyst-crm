@@ -149,6 +149,7 @@ Apply on the **target Supabase project** before relying on that environment. Fil
 | — | `20260714150000_agent_execution_retry_scheduling.sql` | Agent retry fields + claim/stale RPCs |
 | — | `20260714160000_agent_usage_events_and_chain_depth.sql` | `agent_usage_events` + `chain_depth` + org RLS |
 | — | `20260714170000_approval_assignments_and_review_statuses.sql` | Approval assignments + expanded review statuses |
+| — | `20260714180000_agent_evaluations.sql` | Agent quality evaluations + org RLS |
 
 **New migration discipline:** When adding migrations after initial staging setup, apply to staging first, run smoke tests, then production. Apply every file under `supabase/migrations/` in timestamp order on the target project.
 
@@ -252,6 +253,18 @@ No new public env vars. Route: `/approvals`. See `docs/human-approval-center.md`
 **Adjusting limits:** Change Vercel env vars and redeploy (or restart). Apply migration `20260714160000_agent_usage_events_and_chain_depth.sql` before relying on the usage dashboard.
 
 **Limitations:** List prices can drift from vendor invoices; null token responses under-count spend; admin UI estimates are operational guidance, not billing.
+
+### 6.6b Agent quality evaluation (Phase 4.10)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AGENT_QUALITY_LOW_SCORE_THRESHOLD` | `2.5` | Flag overall quality scores below threshold (1–5 scale) |
+| `AGENT_QUALITY_ALERT_REJECTION_RATE` | `0.4` | Warn when human rejection rate exceeds this |
+| `AGENT_REQUIRE_SOURCE_CITATIONS` | `true` | Enforce citation checks when applicable |
+| `AGENT_MIN_SAFETY_SCORE` | `3` | Flag safety dimension scores below this |
+| `AGENT_EVALUATION_FEEDBACK_MAX_LENGTH` | `500` | Max length for scrubbed evaluation feedback |
+
+Apply migration `20260714180000_agent_evaluations.sql`. See `docs/agent-quality-evaluation.md`.
 
 ### 6.7 Future variables
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import AgentExecutionsTable from "@/app/components/AgentExecutionsTable";
 import AgentOperationsFilters from "@/app/components/AgentOperationsFilters";
 import AgentOperationsMetricsGrid from "@/app/components/AgentOperationsMetricsGrid";
+import AgentQualityPanel from "@/app/components/AgentQualityPanel";
 import AgentUsagePanel from "@/app/components/AgentUsagePanel";
 import { loadAgentOperationsDashboard } from "@/lib/actions/agentOperations";
 import {
@@ -115,6 +116,8 @@ export default async function AgentsOperationsPage({ searchParams }: AgentsPageP
           usage={dashboard.usage}
         />
 
+        <AgentQualityPanel metrics={dashboard.quality} />
+
         <AgentOperationsFilters
           agentName={params.agentName ?? ""}
           createdFrom={params.createdFrom ?? ""}
@@ -127,6 +130,7 @@ export default async function AgentsOperationsPage({ searchParams }: AgentsPageP
 
         <AgentExecutionsTable
           canManage={dashboard.canManage}
+          evaluationsByExecutionId={dashboard.evaluationsByExecutionId}
           executions={dashboard.executions}
           page={dashboard.page}
           pageSize={dashboard.pageSize}
