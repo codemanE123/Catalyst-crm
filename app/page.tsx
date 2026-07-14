@@ -232,6 +232,12 @@ function SchoolsTable({ schools }: { schools: School[] }) {
                     {school.name}
                   </a>
                   <p className="mt-1 text-slate-500">{school.location}</p>
+                  <a
+                    href={`/schools/${school.id}`}
+                    className="mt-2 inline-flex rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-800 ring-1 ring-cyan-200 transition hover:bg-cyan-100"
+                  >
+                    View profile
+                  </a>
                 </td>
                 <td className="px-6 py-5 text-slate-600">{school.district}</td>
                 <td className="px-6 py-5">
@@ -242,15 +248,7 @@ function SchoolsTable({ schools }: { schools: School[] }) {
                   </span>
                 </td>
                 <td className="px-6 py-5 text-slate-600">{school.owner}</td>
-                <td className="px-6 py-5">
-                  <p className="text-slate-600">{school.next_step}</p>
-                  <a
-                    href={`/schools/${school.id}`}
-                    className="mt-2 inline-flex text-xs font-semibold text-cyan-700 hover:text-cyan-900"
-                  >
-                    View profile
-                  </a>
-                </td>
+                <td className="px-6 py-5 text-slate-600">{school.next_step}</td>
               </tr>
             ))}
           </tbody>

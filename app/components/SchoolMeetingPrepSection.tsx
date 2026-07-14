@@ -31,7 +31,7 @@ export default function SchoolMeetingPrepSection({
           actionsEnabled={actionsEnabled}
           brief={brief}
           canGenerate={canGenerate}
-          generateAction={() => generateAction(schoolId)}
+          generateAction={generateAction.bind(null, schoolId)}
           targetLabel={schoolName}
         />
       </div>

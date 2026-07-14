@@ -33,7 +33,7 @@ export default function SchoolRecommendedContactRolesSection({
         <RecommendedContactRolesPanel
           actionsEnabled={actionsEnabled}
           canDiscover={canDiscover}
-          discoverAction={() => discoverAction(schoolId)}
+          discoverAction={discoverAction.bind(null, schoolId)}
           recommendations={recommendations}
           targetLabel={schoolName}
         />

@@ -31,7 +31,7 @@ export default function SchoolProposalDraftSection({
           actionsEnabled={actionsEnabled}
           canGenerate={canGenerate}
           draft={draft}
-          generateAction={() => generateAction(schoolId)}
+          generateAction={generateAction.bind(null, schoolId)}
           targetLabel={schoolName}
         />
       </div>

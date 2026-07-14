@@ -78,7 +78,13 @@ export async function middleware(request: NextRequest) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
-    if (isProtectedPath(pathname)) {
+    // Local/dev sample-data mode: the data layer returns fixtures when Supabase
+    // is unset. Allow dashboard and school profiles through so "View profile"
+    // and related navigation work. Staging/production still require Auth.
+    if (
+      isProtectedPath(pathname) &&
+      process.env.NODE_ENV !== "development"
+    ) {
       return redirectToLogin(request);
     }
 
