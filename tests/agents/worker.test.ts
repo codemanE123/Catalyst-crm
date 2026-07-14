@@ -55,12 +55,45 @@ describe("AgentWorker", () => {
     ]);
   });
 
-  it("processes queued executions through running to failed with sanitized errors", async () => {
+  it("schedules transient failures for retry with sanitized errors", async () => {
     const handlers = new Map<AgentName, AgentExecutor>();
     handlers.set("ProspectEnrichmentAgent", async () => ({
       ok: false,
       error_message:
-        "Provider failed for dean@school.edu with token sk-test-secret-key-value"
+        "Provider failed for dean@school.edu with token sk-test-secret-key-value",
+      error_code: "transient"
+    }));
+
+    const orchestrator = new AgentOrchestrator(store, handlers);
+    worker = new AgentWorker(orchestrator);
+
+    await store.insert({
+      organization_id: organizationId,
+      agent_name: "ProspectEnrichmentAgent",
+      target_type: "prospect_candidate",
+      target_id: "candidate-1",
+      status: "queued"
+    });
+
+    const result = await worker.processNext({ organizationId, actorUserId });
+
+    expect(result.ok).toBe(true);
+
+    if (result.ok && result.ran) {
+      expect(result.execution.status).toBe("queued");
+      expect(result.execution.next_retry_at).toBeTruthy();
+      expect(result.execution.error_message).not.toContain("dean@school.edu");
+      expect(result.execution.error_message).not.toContain("sk-test");
+      expect(result.execution.error_message).toContain("[redacted]");
+    }
+  });
+
+  it("leaves permanent failures as failed without retry scheduling", async () => {
+    const handlers = new Map<AgentName, AgentExecutor>();
+    handlers.set("ProspectEnrichmentAgent", async () => ({
+      ok: false,
+      error_message: "Validation failed for candidate.",
+      error_code: "permanent"
     }));
 
     const orchestrator = new AgentOrchestrator(store, handlers);
@@ -80,9 +113,8 @@ describe("AgentWorker", () => {
 
     if (result.ok && result.ran) {
       expect(result.execution.status).toBe("failed");
-      expect(result.execution.error_message).not.toContain("dean@school.edu");
-      expect(result.execution.error_message).not.toContain("sk-test");
-      expect(result.execution.error_message).toContain("[redacted]");
+      expect(result.execution.next_retry_at).toBeNull();
+      expect(result.execution.last_error_code).toBe("permanent");
     }
   });
 

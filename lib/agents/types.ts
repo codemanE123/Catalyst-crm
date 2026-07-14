@@ -35,6 +35,9 @@ export type AgentExecution = {
   status: AgentExecutionStatus;
   depends_on_execution_id: string | null;
   attempt_count: number;
+  max_attempts: number;
+  next_retry_at: string | null;
+  last_error_code: string | null;
   started_at: string | null;
   completed_at: string | null;
   duration_ms: number | null;
@@ -76,6 +79,7 @@ export type AgentExecutorResult =
   | {
       ok: false;
       error_message: string;
+      error_code?: string;
       metadata?: AgentExecutionMetadata;
     };
 

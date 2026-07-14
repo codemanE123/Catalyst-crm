@@ -1,5 +1,6 @@
 import { sanitizeAgentErrorMessage } from "./sanitize";
 import { createAgentHandlerRegistry } from "./handlers";
+import { decideAgentRetry } from "./retryPolicy";
 import type { AgentExecutionStore } from "./store";
 import type {
   AgentExecution,
@@ -25,7 +26,10 @@ export const AGENT_AUDIT_ACTIONS = {
   complete: "agent.complete",
   fail: "agent.fail",
   retry: "agent.retry",
-  cancel: "agent.cancel"
+  cancel: "agent.cancel",
+  retryScheduled: "agent.retry_scheduled",
+  retryExhausted: "agent.retry_exhausted",
+  staleRecovered: "agent.stale_recovered"
 } as const;
 
 export type QueueAgentResult =
@@ -52,7 +56,8 @@ export type RetryAgentResult =
 function defaultMissingAgentExecutor(agentName: AgentName): AgentExecutor {
   return async () => ({
     ok: false,
-    error_message: `${agentName} is not registered.`
+    error_message: `${agentName} is not registered.`,
+    error_code: "configuration"
   });
 }
 
@@ -143,9 +148,9 @@ export class AgentOrchestrator {
     actorUserId: string;
     env?: NodeJS.ProcessEnv;
   }): Promise<RunNextAgentResult> {
-    const next = await this.store.findNextRunnable(params.organizationId);
+    const claimed = await this.store.claimNext(params.organizationId);
 
-    if (!next) {
+    if (!claimed) {
       return {
         ok: true,
         execution: null,
@@ -154,26 +159,30 @@ export class AgentOrchestrator {
       };
     }
 
-    const startedAt = Date.now();
-    const running = await this.store.update(next.id, params.organizationId, {
-      status: "running",
-      started_at: new Date(startedAt).toISOString(),
-      error_message: null
-    });
+    return this.runClaimedExecution(claimed, params);
+  }
 
-    if (!running) {
-      return { ok: false, error: "Could not start the next agent execution." };
+  async runClaimedExecution(
+    running: AgentExecution,
+    params: {
+      actorUserId: string;
+      env?: NodeJS.ProcessEnv;
     }
+  ): Promise<RunNextAgentResult> {
+    const startedAt = running.started_at
+      ? Date.parse(running.started_at)
+      : Date.now();
 
     await this.recordAudit({
-      organizationId: params.organizationId,
+      organizationId: running.organization_id,
       actorUserId: params.actorUserId,
       action: AGENT_AUDIT_ACTIONS.start,
       recordId: running.id,
       metadata: {
         agent_name: running.agent_name,
         target_type: running.target_type,
-        target_id: running.target_id
+        target_id: running.target_id,
+        attempt_count: running.attempt_count
       }
     });
 
@@ -191,7 +200,8 @@ export class AgentOrchestrator {
     } catch {
       result = {
         ok: false,
-        error_message: "Agent execution failed unexpectedly."
+        error_message: "Agent execution failed unexpectedly.",
+        error_code: "transient"
       };
     }
 
@@ -206,37 +216,23 @@ export class AgentOrchestrator {
     const durationMs = completedAt - startedAt;
 
     if (!result.ok) {
-      const failed = await this.store.update(running.id, params.organizationId, {
-        status: "failed",
-        completed_at: new Date(completedAt).toISOString(),
-        duration_ms: durationMs,
-        error_message: result.error_message,
-        metadata: result.metadata
-      });
-
-      if (!failed) {
-        return { ok: false, error: "Could not record agent execution failure." };
-      }
-
-      await this.recordAudit({
-        organizationId: params.organizationId,
+      return this.finalizeFailure(running, {
         actorUserId: params.actorUserId,
-        action: AGENT_AUDIT_ACTIONS.fail,
-        recordId: failed.id,
-        metadata: {
-          agent_name: failed.agent_name,
-          error_message: failed.error_message ?? "unknown"
-        }
+        errorMessage: result.error_message,
+        errorCode: result.error_code ?? null,
+        metadata: result.metadata,
+        durationMs,
+        completedAt
       });
-
-      return { ok: true, execution: failed, ran: true };
     }
 
-    const completed = await this.store.update(running.id, params.organizationId, {
+    const completed = await this.store.update(running.id, running.organization_id, {
       status: "completed",
       completed_at: new Date(completedAt).toISOString(),
       duration_ms: durationMs,
       error_message: null,
+      last_error_code: null,
+      next_retry_at: null,
       metadata: result.metadata
     });
 
@@ -245,7 +241,7 @@ export class AgentOrchestrator {
     }
 
     await this.recordAudit({
-      organizationId: params.organizationId,
+      organizationId: completed.organization_id,
       actorUserId: params.actorUserId,
       action: AGENT_AUDIT_ACTIONS.complete,
       recordId: completed.id,
@@ -256,6 +252,101 @@ export class AgentOrchestrator {
     });
 
     return { ok: true, execution: completed, ran: true };
+  }
+
+  private async finalizeFailure(
+    running: AgentExecution,
+    params: {
+      actorUserId: string;
+      errorMessage: string;
+      errorCode: string | null;
+      metadata?: AgentExecution["metadata"];
+      durationMs: number;
+      completedAt: number;
+    }
+  ): Promise<RunNextAgentResult> {
+    const decision = decideAgentRetry({
+      attemptCount: running.attempt_count,
+      maxAttempts: running.max_attempts,
+      errorMessage: params.errorMessage,
+      errorCode: params.errorCode
+    });
+
+    if (decision.shouldRetry) {
+      const scheduled = await this.store.update(running.id, running.organization_id, {
+        status: "queued",
+        started_at: null,
+        completed_at: null,
+        duration_ms: params.durationMs,
+        error_message: params.errorMessage,
+        last_error_code: decision.failureClass,
+        next_retry_at: decision.nextRetryAt,
+        metadata: params.metadata
+      });
+
+      if (!scheduled) {
+        return { ok: false, error: "Could not schedule agent retry." };
+      }
+
+      await this.recordAudit({
+        organizationId: scheduled.organization_id,
+        actorUserId: params.actorUserId,
+        action: AGENT_AUDIT_ACTIONS.retryScheduled,
+        recordId: scheduled.id,
+        metadata: {
+          agent_name: scheduled.agent_name,
+          attempt_count: scheduled.attempt_count,
+          max_attempts: scheduled.max_attempts,
+          failure_class: decision.failureClass,
+          next_retry_at: decision.nextRetryAt
+        }
+      });
+
+      return { ok: true, execution: scheduled, ran: true };
+    }
+
+    const failed = await this.store.update(running.id, running.organization_id, {
+      status: "failed",
+      completed_at: new Date(params.completedAt).toISOString(),
+      duration_ms: params.durationMs,
+      error_message: params.errorMessage,
+      last_error_code: decision.failureClass,
+      next_retry_at: null,
+      metadata: params.metadata
+    });
+
+    if (!failed) {
+      return { ok: false, error: "Could not record agent execution failure." };
+    }
+
+    await this.recordAudit({
+      organizationId: failed.organization_id,
+      actorUserId: params.actorUserId,
+      action: AGENT_AUDIT_ACTIONS.fail,
+      recordId: failed.id,
+      metadata: {
+        agent_name: failed.agent_name,
+        error_message: failed.error_message ?? "unknown",
+        failure_class: decision.failureClass
+      }
+    });
+
+    if (decision.exhausted) {
+      await this.recordAudit({
+        organizationId: failed.organization_id,
+        actorUserId: params.actorUserId,
+        action: AGENT_AUDIT_ACTIONS.retryExhausted,
+        recordId: failed.id,
+        metadata: {
+          agent_name: failed.agent_name,
+          attempt_count: failed.attempt_count,
+          max_attempts: failed.max_attempts,
+          failure_class: decision.failureClass
+        }
+      });
+    }
+
+    return { ok: true, execution: failed, ran: true };
   }
 
   async cancelAgent(params: {
@@ -288,7 +379,9 @@ export class AgentOrchestrator {
       {
         status: "cancelled",
         completed_at: new Date().toISOString(),
-        error_message: "Cancelled by user."
+        error_message: "Cancelled by user.",
+        last_error_code: "cancelled",
+        next_retry_at: null
       }
     );
 
@@ -344,7 +437,9 @@ export class AgentOrchestrator {
         completed_at: null,
         duration_ms: null,
         error_message: null,
-        attempt_count: execution.attempt_count + 1
+        last_error_code: null,
+        next_retry_at: null,
+        attempt_count: execution.attempt_count
       }
     );
 

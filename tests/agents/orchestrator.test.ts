@@ -179,12 +179,65 @@ describe("AgentOrchestrator", () => {
     );
   });
 
-  it("retries failed executions back to queued", async () => {
+  it("schedules transient failures for retry with backoff", async () => {
     const retryAuditEvents: AgentAuditEventInput[] = [];
     const executors = new Map<AgentName, AgentExecutor>();
     executors.set("ProspectEnrichmentAgent", async () => ({
       ok: false,
-      error_message: "Provider unavailable."
+      error_message: "Provider unavailable.",
+      error_code: "transient"
+    }));
+
+    const failingOrchestrator = new AgentOrchestrator(
+      store,
+      executors,
+      async (event) => {
+        retryAuditEvents.push(event);
+      }
+    );
+
+    const queued = await failingOrchestrator.queueAgent({
+      organizationId,
+      actorUserId,
+      agentName: "ProspectEnrichmentAgent",
+      targetType: "prospect_candidate",
+      targetId: "candidate-1"
+    });
+
+    expect(queued.ok).toBe(true);
+
+    if (!queued.ok) {
+      return;
+    }
+
+    const failedRun = await failingOrchestrator.runNextAgent({
+      organizationId,
+      actorUserId
+    });
+
+    expect(failedRun.ok).toBe(true);
+
+    if (!failedRun.ok || !failedRun.ran) {
+      return;
+    }
+
+    expect(failedRun.execution.status).toBe("queued");
+    expect(failedRun.execution.next_retry_at).toBeTruthy();
+    expect(failedRun.execution.last_error_code).toBe("transient");
+    expect(
+      retryAuditEvents.some(
+        (event) => event.action === AGENT_AUDIT_ACTIONS.retryScheduled
+      )
+    ).toBe(true);
+  });
+
+  it("retries failed permanent executions back to queued when requested by an operator", async () => {
+    const retryAuditEvents: AgentAuditEventInput[] = [];
+    const executors = new Map<AgentName, AgentExecutor>();
+    executors.set("ProspectEnrichmentAgent", async () => ({
+      ok: false,
+      error_message: "Validation failed for candidate.",
+      error_code: "permanent"
     }));
 
     const failingOrchestrator = new AgentOrchestrator(

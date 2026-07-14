@@ -36,6 +36,28 @@ export {
 export { sanitizeAgentErrorMessage } from "./sanitize";
 
 export {
+  classifyAgentFailure,
+  isRetriableFailureClass,
+  type AgentFailureClass
+} from "./failureClassification";
+
+export {
+  computeNextRetryAt,
+  computeRetryBackoffMs,
+  decideAgentRetry,
+  resolveAgentMaxAttempts,
+  resolveAgentWorkerBatchSize
+} from "./retryPolicy";
+
+export {
+  processAgentExecutionBatch,
+  processAgentExecutionsFromCron,
+  summarizeClaimedExecution,
+  validateAgentCronSecret,
+  type AgentBatchProcessSummary
+} from "./batchWorker";
+
+export {
   AgentWorker,
   createAgentOrchestrator,
   createAgentWorkerFromStore,

@@ -5,12 +5,16 @@ import type {
   AgentExecutionListResult
 } from "@/lib/agentOperations";
 
+import { resolveAgentMaxAttempts } from "./retryPolicy";
 import type { AgentExecution, AgentName } from "./types";
 import type {
   AgentExecutionInsert,
   AgentExecutionStore,
   AgentExecutionUpdate
 } from "./store";
+
+const AGENT_EXECUTION_SELECT =
+  "id,organization_id,agent_name,target_type,target_id,status,depends_on_execution_id,attempt_count,max_attempts,next_retry_at,last_error_code,started_at,completed_at,duration_ms,error_message,metadata,created_at,updated_at";
 
 type AgentExecutionRow = {
   id: string;
@@ -21,6 +25,9 @@ type AgentExecutionRow = {
   status: AgentExecution["status"];
   depends_on_execution_id: string | null;
   attempt_count: number;
+  max_attempts: number | null;
+  next_retry_at: string | null;
+  last_error_code: string | null;
   started_at: string | null;
   completed_at: string | null;
   duration_ms: number | null;
@@ -40,6 +47,9 @@ function mapRow(row: AgentExecutionRow): AgentExecution {
     status: row.status,
     depends_on_execution_id: row.depends_on_execution_id,
     attempt_count: row.attempt_count,
+    max_attempts: row.max_attempts ?? resolveAgentMaxAttempts(),
+    next_retry_at: row.next_retry_at,
+    last_error_code: row.last_error_code,
     started_at: row.started_at,
     completed_at: row.completed_at,
     duration_ms: row.duration_ms,
@@ -64,11 +74,12 @@ export class SupabaseAgentExecutionStore implements AgentExecutionStore {
         status: input.status,
         depends_on_execution_id: input.depends_on_execution_id ?? null,
         attempt_count: input.attempt_count ?? 0,
+        max_attempts: input.max_attempts ?? resolveAgentMaxAttempts(),
+        next_retry_at: input.next_retry_at ?? null,
+        last_error_code: input.last_error_code ?? null,
         metadata: input.metadata ?? {}
       })
-      .select(
-        "id,organization_id,agent_name,target_type,target_id,status,depends_on_execution_id,attempt_count,started_at,completed_at,duration_ms,error_message,metadata,created_at,updated_at"
-      )
+      .select(AGENT_EXECUTION_SELECT)
       .single();
 
     if (error || !data) {
@@ -88,9 +99,7 @@ export class SupabaseAgentExecutionStore implements AgentExecutionStore {
       .update(patch)
       .eq("id", id)
       .eq("organization_id", organizationId)
-      .select(
-        "id,organization_id,agent_name,target_type,target_id,status,depends_on_execution_id,attempt_count,started_at,completed_at,duration_ms,error_message,metadata,created_at,updated_at"
-      )
+      .select(AGENT_EXECUTION_SELECT)
       .maybeSingle();
 
     if (error || !data) {
@@ -106,9 +115,7 @@ export class SupabaseAgentExecutionStore implements AgentExecutionStore {
   ): Promise<AgentExecution | null> {
     const { data, error } = await this.supabase
       .from("agent_executions")
-      .select(
-        "id,organization_id,agent_name,target_type,target_id,status,depends_on_execution_id,attempt_count,started_at,completed_at,duration_ms,error_message,metadata,created_at,updated_at"
-      )
+      .select(AGENT_EXECUTION_SELECT)
       .eq("id", id)
       .eq("organization_id", organizationId)
       .maybeSingle();
@@ -121,46 +128,169 @@ export class SupabaseAgentExecutionStore implements AgentExecutionStore {
   }
 
   async findNextRunnable(organizationId: string): Promise<AgentExecution | null> {
+    return this.claimNext(organizationId);
+  }
+
+  async claimNext(
+    organizationId: string,
+    now: Date = new Date()
+  ): Promise<AgentExecution | null> {
+    const nowIso = now.toISOString();
     const { data, error } = await this.supabase
       .from("agent_executions")
-      .select(
-        "id,organization_id,agent_name,target_type,target_id,status,depends_on_execution_id,attempt_count,started_at,completed_at,duration_ms,error_message,metadata,created_at,updated_at"
-      )
+      .select(AGENT_EXECUTION_SELECT)
       .eq("organization_id", organizationId)
       .eq("status", "queued")
+      .or(`next_retry_at.is.null,next_retry_at.lte.${nowIso}`)
       .order("created_at", { ascending: true });
 
     if (error || !data) {
       return null;
     }
 
-    const queued = (data as AgentExecutionRow[]).map(mapRow);
+    for (const row of data as AgentExecutionRow[]) {
+      const candidate = mapRow(row);
 
-    for (const candidate of queued) {
-      if (!candidate.depends_on_execution_id) {
-        return candidate;
+      if (candidate.depends_on_execution_id) {
+        const dependency = await this.findById(
+          candidate.depends_on_execution_id,
+          organizationId
+        );
+
+        if (dependency?.status !== "completed") {
+          continue;
+        }
       }
 
-      const dependency = await this.findById(
-        candidate.depends_on_execution_id,
-        organizationId
-      );
+      const { data: claimed, error: claimError } = await this.supabase
+        .from("agent_executions")
+        .update({
+          status: "running",
+          started_at: nowIso,
+          attempt_count: candidate.attempt_count + 1,
+          error_message: null
+        })
+        .eq("id", candidate.id)
+        .eq("organization_id", organizationId)
+        .eq("status", "queued")
+        .select(AGENT_EXECUTION_SELECT)
+        .maybeSingle();
 
-      if (dependency?.status === "completed") {
-        return candidate;
+      if (claimError || !claimed) {
+        continue;
       }
+
+      return mapRow(claimed as AgentExecutionRow);
     }
 
     return null;
   }
 
+  async claimBatch(limit: number): Promise<AgentExecution[]> {
+    const safeLimit = Math.max(1, Math.min(25, limit));
+    const { data, error } = await this.supabase.rpc("claim_next_agent_executions", {
+      p_limit: safeLimit
+    });
+
+    if (error) {
+      console.error("claim_next_agent_executions failed:", error.message);
+      return this.claimBatchFallback(safeLimit);
+    }
+
+    return ((data ?? []) as AgentExecutionRow[]).map(mapRow);
+  }
+
+  private async claimBatchFallback(limit: number): Promise<AgentExecution[]> {
+    const claimed: AgentExecution[] = [];
+    const { data } = await this.supabase
+      .from("agent_executions")
+      .select("organization_id")
+      .eq("status", "queued")
+      .order("created_at", { ascending: true })
+      .limit(100);
+
+    const organizationIds = [
+      ...new Set(((data ?? []) as Array<{ organization_id: string }>).map(
+        (row) => row.organization_id
+      ))
+    ];
+
+    for (const organizationId of organizationIds) {
+      while (claimed.length < limit) {
+        const next = await this.claimNext(organizationId);
+
+        if (!next) {
+          break;
+        }
+
+        claimed.push(next);
+      }
+
+      if (claimed.length >= limit) {
+        break;
+      }
+    }
+
+    return claimed;
+  }
+
+  async recoverStaleRunning(staleAfterMinutes: number): Promise<AgentExecution[]> {
+    const { data, error } = await this.supabase.rpc("recover_stale_agent_executions", {
+      p_stale_after_minutes: Math.max(1, staleAfterMinutes)
+    });
+
+    if (error) {
+      console.error("recover_stale_agent_executions failed:", error.message);
+      return this.recoverStaleRunningFallback(staleAfterMinutes);
+    }
+
+    return ((data ?? []) as AgentExecutionRow[]).map(mapRow);
+  }
+
+  private async recoverStaleRunningFallback(
+    staleAfterMinutes: number
+  ): Promise<AgentExecution[]> {
+    const cutoff = new Date(
+      Date.now() - Math.max(1, staleAfterMinutes) * 60_000
+    ).toISOString();
+
+    const { data: staleRows } = await this.supabase
+      .from("agent_executions")
+      .select(AGENT_EXECUTION_SELECT)
+      .eq("status", "running")
+      .lt("started_at", cutoff);
+
+    const recovered: AgentExecution[] = [];
+
+    for (const row of (staleRows ?? []) as AgentExecutionRow[]) {
+      const current = mapRow(row);
+      const { data: updated } = await this.supabase
+        .from("agent_executions")
+        .update({
+          status: "queued",
+          next_retry_at: new Date().toISOString(),
+          started_at: null,
+          error_message:
+            current.error_message ?? "Recovered stale running execution.",
+          last_error_code: current.last_error_code ?? "stale_running"
+        })
+        .eq("id", current.id)
+        .eq("status", "running")
+        .select(AGENT_EXECUTION_SELECT)
+        .maybeSingle();
+
+      if (updated) {
+        recovered.push(mapRow(updated as AgentExecutionRow));
+      }
+    }
+
+    return recovered;
+  }
+
   async list(filter: AgentExecutionListFilter): Promise<AgentExecutionListResult> {
     let query = this.supabase
       .from("agent_executions")
-      .select(
-        "id,organization_id,agent_name,target_type,target_id,status,depends_on_execution_id,attempt_count,started_at,completed_at,duration_ms,error_message,metadata,created_at,updated_at",
-        { count: "exact" }
-      );
+      .select(AGENT_EXECUTION_SELECT, { count: "exact" });
 
     if (filter.organizationId) {
       query = query.eq("organization_id", filter.organizationId);

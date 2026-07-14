@@ -276,6 +276,20 @@ Append-only table; **do not delete** rows during investigation.
 | `university_research.save` | Research results saved to profile |
 | `membership.role_change` | Admin changed a member role |
 | `membership.remove` | Admin removed a member |
+| `agent.queue` / `agent.start` / `agent.complete` / `agent.fail` | Agent execution lifecycle |
+| `agent.retry` / `agent.cancel` | Operator retry/cancel from Agent Ops |
+| `agent.retry_scheduled` | Transient failure scheduled for backoff retry |
+| `agent.retry_exhausted` | Transient retries exhausted; left failed |
+| `agent.stale_recovered` | Stale `running` execution re-queued by cron worker |
+
+### 14.2.1 Agent cron worker incidents
+
+If `/api/agents/process` fails repeatedly:
+
+1. Verify `AGENT_CRON_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` on Vercel (Staging/Production).
+2. Check Vercel Cron logs for 401 (secret mismatch) or 503 (service role missing).
+3. Query `agent_executions` for stuck `running` rows older than 15 minutes — cron recovers these and audits `agent.stale_recovered`.
+4. Do **not** rotate the service role key without updating Vercel env in the same change window.
 
 ### 14.3 Investigation queries (Supabase SQL Editor)
 

@@ -145,8 +145,10 @@ Apply on the **target Supabase project** before relying on that environment. Fil
 | 9 | `20260703152700_add_audit_events.sql` | Audit events |
 | 10 | `20260703160000_add_readonly_safe_views.sql` | Read-only safe views |
 | 11 | `20260704203000_add_organization_members_admin_policies.sql` | Admin membership RLS |
+| … | *(additional migrations in folder order)* | Apply all files in `supabase/migrations/` by timestamp |
+| — | `20260714150000_agent_execution_retry_scheduling.sql` | Agent retry fields + claim/stale RPCs |
 
-**New migration discipline:** When adding migrations after initial staging setup, apply to staging first, run smoke tests, then production.
+**New migration discipline:** When adding migrations after initial staging setup, apply to staging first, run smoke tests, then production. Apply every file under `supabase/migrations/` in timestamp order on the target project.
 
 ---
 
@@ -203,7 +205,23 @@ Set in Vercel when Sentry is enabled. Monitoring is **inactive** when DSN is uns
 
 See [§18 Error monitoring (Sentry)](#18-error-monitoring-sentry--task-232) for full setup.
 
-### 6.5 Future variables
+### 6.5 Agent worker scheduling (Phase 4.7)
+
+| Variable | Scope | Required | Purpose |
+| --- | --- | --- | --- |
+| `AGENT_CRON_SECRET` | Staging, Production | Yes for cron | Shared secret for `/api/agents/process` (Authorization: Bearer …) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Staging, Production | Yes for cron | Used **only** by the agent cron worker to claim jobs across orgs (bypasses RLS) |
+| `AGENT_WORKER_BATCH_SIZE` | Staging, Production | No (default `5`) | Max executions claimed per cron tick (capped at 25) |
+| `AGENT_MAX_ATTEMPTS` | Staging, Production | No (default `3`) | Default max attempts for new agent executions |
+
+**Vercel Cron:** `vercel.json` schedules `GET/POST /api/agents/process` every 5 minutes. Vercel Pro+ required for Cron. Set `AGENT_CRON_SECRET` in the project env, then either:
+
+1. Configure Vercel Cron to send `Authorization: Bearer <AGENT_CRON_SECRET>`, **or**
+2. Add a Vercel Cron rewrite / middleware that attaches the header (if your plan injects `CRON_SECRET`, map it to `AGENT_CRON_SECRET`).
+
+Never expose `SUPABASE_SERVICE_ROLE_KEY` or `AGENT_CRON_SECRET` via `NEXT_PUBLIC_*`.
+
+### 6.6 Future variables
 
 | Variable | Task | Purpose |
 | --- | --- | --- |
