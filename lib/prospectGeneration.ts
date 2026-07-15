@@ -78,6 +78,8 @@ export type ProspectCandidate = {
   confidence_score: number | null;
   source_name: string | null;
   source_url: string | null;
+  discovery_method: string | null;
+  retrieved_at: string | null;
   promoted_school_id: string | null;
   enrichment_summary: string | null;
   outreach_angle: string | null;

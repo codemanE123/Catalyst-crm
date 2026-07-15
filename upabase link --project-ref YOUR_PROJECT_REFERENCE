@@ -1,0 +1,24 @@
+[35mdocs/agent-pilot-controls.md[m[36m:[m1. **Pilot enablement** — DB `[1;31magent_pilot_settings[m.enabled` (default `false`). Env fallback: `AGENT_PILOT_ENABLED`.
+[35mlib/actions/agentPilot.ts[m[36m:[m    targetTable: "[1;31magent_pilot_settings[m",
+[35mlib/actions/agentPilot.ts[m[36m:[m    targetTable: "[1;31magent_pilot_settings[m",
+[35mlib/agents/pilot/assertAccess.ts[m[36m:[m      targetTable: "[1;31magent_pilot_settings[m",
+[35mlib/agents/pilot/supabase.ts[m[36m:[m        .from("[1;31magent_pilot_settings[m")
+[35mlib/agents/pilot/supabase.ts[m[36m:[m    .from("[1;31magent_pilot_settings[m")
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[mcreate table if not exists public.[1;31magent_pilot_settings[m (
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[m  constraint [1;31magent_pilot_settings[m_singleton_check check (id = 'default'),
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[m  constraint [1;31magent_pilot_settings[m_max_orgs_check
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[m  constraint [1;31magent_pilot_settings[m_max_users_check
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[m  constraint [1;31magent_pilot_settings[m_max_jobs_check
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[m  constraint [1;31magent_pilot_settings[m_max_spend_check
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[m  constraint [1;31magent_pilot_settings[m_max_batch_check
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[minsert into public.[1;31magent_pilot_settings[m (id)
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[mdrop trigger if exists set_[1;31magent_pilot_settings[m_updated_at on public.[1;31magent_pilot_settings[m;
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[mcreate trigger set_[1;31magent_pilot_settings[m_updated_at
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[m  before update on public.[1;31magent_pilot_settings[m
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[malter table public.[1;31magent_pilot_settings[m enable row level security;
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[mdrop policy if exists [1;31magent_pilot_settings[m_select on public.[1;31magent_pilot_settings[m;
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[mcreate policy [1;31magent_pilot_settings[m_select
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[m  on public.[1;31magent_pilot_settings[m
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[mdrop policy if exists [1;31magent_pilot_settings[m_update on public.[1;31magent_pilot_settings[m;
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[mcreate policy [1;31magent_pilot_settings[m_update
+[35msupabase/migrations/20260714230000_agent_pilot_controls.sql[m[36m:[m  on public.[1;31magent_pilot_settings[m

@@ -26,15 +26,32 @@ function formatTimestamp(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
+function sourceBadge(summary: Record<string, unknown> | null) {
+  const source = typeof summary?.source === "string" ? summary.source : null;
+  if (!source) {
+    return null;
+  }
+  const labels: Record<string, string> = {
+    college_scorecard: "College Scorecard",
+    public_web: "Public Web",
+    college_scorecard_and_public_web: "Scorecard + Public Web",
+    stub_generator: "Stub Development Only",
+    unconfigured: "Provider not configured"
+  };
+  return labels[source] ?? source;
+}
+
 export default function ProspectJobHistoryRow({
   job,
   canProcess,
   actionsEnabled,
+  discoveryConfigured,
   processAction
 }: {
   job: ProspectGenerationJob;
   canProcess: boolean;
   actionsEnabled: boolean;
+  discoveryConfigured: boolean;
   processAction: (formData: FormData) => Promise<ProcessProspectGenerationJobResult>;
 }) {
   const router = useRouter();
@@ -57,14 +74,16 @@ export default function ProspectJobHistoryRow({
         return;
       }
 
-      setMessage(
-        result.candidateCount === 1
-          ? "Generated 1 candidate."
-          : `Generated ${result.candidateCount} candidates.`
-      );
+      setMessage(result.message);
       router.refresh();
     });
   }
+
+  const badge = sourceBadge(job.summary);
+  const configStatus =
+    typeof job.summary?.configuration_status === "string"
+      ? job.summary.configuration_status
+      : null;
 
   return (
     <tr>
@@ -78,6 +97,19 @@ export default function ProspectJobHistoryRow({
         >
           {PROSPECT_JOB_STATUS_LABELS[job.status]}
         </span>
+        {badge ? (
+          <p className="mt-1 max-w-xs text-xs text-slate-600">{badge}</p>
+        ) : null}
+        {configStatus === "no_matches" ? (
+          <p className="mt-1 max-w-xs text-xs text-amber-700">No matches</p>
+        ) : null}
+        {configStatus === "provider_not_configured" ||
+        configStatus === "missing_api_key" ||
+        configStatus === "disabled" ? (
+          <p className="mt-1 max-w-xs text-xs text-amber-700">
+            Provider not configured
+          </p>
+        ) : null}
         {job.status === "failed" && job.error_message ? (
           <p className="mt-1 max-w-xs text-xs text-red-700">{job.error_message}</p>
         ) : null}
@@ -105,16 +137,23 @@ export default function ProspectJobHistoryRow({
           <div className="space-y-1">
             <button
               className="rounded-full bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-              disabled={!actionsEnabled || isPending}
+              disabled={!actionsEnabled || !discoveryConfigured || isPending}
               onClick={handleGenerateCandidates}
               type="button"
             >
-              {isPending ? "Generating..." : "Generate candidates"}
+              {isPending ? "Queuing..." : "Generate candidates"}
             </button>
             {!actionsEnabled ? (
-              <p className="text-xs text-amber-700">Connect Supabase to run stub generation.</p>
+              <p className="text-xs text-amber-700">Connect Supabase to run discovery.</p>
+            ) : null}
+            {actionsEnabled && !discoveryConfigured ? (
+              <p className="text-xs text-amber-700">
+                Configure College Scorecard and/or public web discovery env vars.
+              </p>
             ) : null}
           </div>
+        ) : job.status === "running" ? (
+          <span className="text-xs text-sky-700">Processing…</span>
         ) : (
           <span className="text-slate-400">—</span>
         )}

@@ -1,12 +1,15 @@
 import ProspectJobHistory from "@/app/components/ProspectJobHistory";
 import { PageHeader, SecondaryButtonLink } from "@/app/components/ui";
-import { processProspectGenerationJob } from "@/lib/actions/prospectGeneration";
+import {
+  processProspectGenerationJob
+} from "@/lib/actions/prospectGeneration";
 import {
   canEnqueueProspectGeneration,
   canViewProspectGeneration,
   getMembershipsForUser
 } from "@/lib/authz";
 import { fetchProspectGenerationJobs } from "@/lib/prospectGenerationData";
+import { getProspectDiscoveryProviderStatus } from "@/lib/prospectSources/discoveryReadiness";
 import { getRecordOwnershipFields } from "@/lib/supabase";
 import { getServerSupabaseClient, requireUser } from "@/lib/supabaseServer";
 import { redirect } from "next/navigation";
@@ -32,6 +35,7 @@ export default async function ProspectJobsPage() {
   const ownership = await getRecordOwnershipFields();
   const organizationId = ownership?.organization_id ?? "sample-org";
   const { jobs, source } = await fetchProspectGenerationJobs(organizationId);
+  const discovery = getProspectDiscoveryProviderStatus();
 
   return (
     <div>
@@ -46,6 +50,7 @@ export default async function ProspectJobsPage() {
       />
       <ProspectJobHistory
         canProcess={canEnqueueProspectGeneration(memberships)}
+        discoveryConfigured={discovery.anyReady}
         jobs={jobs}
         processAction={processProspectGenerationJob}
         source={source}

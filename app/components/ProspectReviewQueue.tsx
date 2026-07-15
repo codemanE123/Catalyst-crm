@@ -126,8 +126,10 @@ export default function ProspectReviewQueue({
 
         {candidates.length === 0 ? (
           <p className="mt-6 text-sm text-slate-600">
-            This completed job has no candidates yet. A background worker will populate this queue
-            when agent processing is enabled.
+            This completed job has no candidates. Common causes: provider not configured,
+            no Scorecard/public-web matches, or all discovered schools were duplicates.
+            Check the job summary badges on the jobs page, then queue a new job with broader
+            criteria if needed.
           </p>
         ) : (
           <div className="mt-6 overflow-x-auto">

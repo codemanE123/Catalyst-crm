@@ -224,7 +224,28 @@ See [§18 Error monitoring (Sentry)](#18-error-monitoring-sentry--task-232) for 
 
 When disabled or unconfigured in staging/production, jobs complete with **zero candidates** and a safe configuration summary — never silent mock data. Local `NODE_ENV=development` may use the deterministic stub. Candidates remain `pending_review` until human approval creates CRM schools.
 
+### 6.4c Public-web prospect discovery (Phase 5.2.1)
+
+See `docs/public-web-prospect-discovery.md`. Generate candidates **queues** `ProspectGenerationAgent`; the cron worker runs Scorecard then optional Google CSE + bounded `.edu`/`.gov` fetches. Never scrapes search-engine HTML. Stub fallback remains development-only.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PUBLIC_WEB_DISCOVERY_ENABLED` | `false` | Enable public-web fill-in after Scorecard |
+| `WEB_SEARCH_PROVIDER` | `google_cse` | Search provider id |
+| `WEB_SEARCH_API_KEY` | unset | Google API key (server-only) |
+| `WEB_SEARCH_ENGINE_ID` | unset | Programmable Search Engine id |
+| `PUBLIC_WEB_ALLOWED_DOMAIN_SUFFIXES` | `.edu,.gov` | Institutional domain allowlist |
+| `PUBLIC_WEB_MAX_SCHOOLS_PER_JOB` | `10` | Max web-discovered schools |
+| `PUBLIC_WEB_MAX_PAGES_PER_SCHOOL` | `3` | Max pages fetched per school |
+| `PUBLIC_WEB_FETCH_TIMEOUT_MS` | `4000` | Fetch timeout |
+| `PUBLIC_WEB_MAX_RESPONSE_BYTES` | `500000` | Response size cap |
+| `PUBLIC_WEB_USER_AGENT` | CatalystCRMProspectBot/1.0… | UA for fetch + robots |
+| `PUBLIC_WEB_REQUIRE_ROBOTS_ALLOWED` | `true` | Skip domain if robots unavailable |
+
+Apply migration `20260715120000_public_web_prospect_discovery.sql` (job UPDATE RLS + `discovery_method` / `retrieved_at` columns).
+
 ### 6.4b OpenAI LLM enrichment and outreach drafts (Phase 5.3)
+
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

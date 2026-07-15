@@ -6,7 +6,9 @@ const mockGetRecordOwnershipFields = vi.fn();
 const mockGetServerSupabaseClient = vi.fn();
 const mockRecordAuditEvent = vi.fn();
 const mockRevalidatePath = vi.fn();
-const mockGenerateProspectCandidatesForJob = vi.fn();
+const mockQueueAgent = vi.fn();
+const mockCreateGatedOrchestrator = vi.fn();
+const mockCreateHandlerDeps = vi.fn();
 
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args)
@@ -33,9 +35,9 @@ vi.mock("@/lib/supabase", () => ({
 
 vi.mock("@/lib/auditLog", () => ({
   AUDIT_ACTIONS: {
-    prospectJobRun: "prospect.job_run",
-    prospectJobComplete: "prospect.job_complete",
-    prospectJobFail: "prospect.job_fail"
+    prospectJobCreate: "prospect.job_create",
+    prospectWebDiscoveryQueued: "prospect.web_discovery_queued",
+    prospectProviderNotConfigured: "prospect.provider_not_configured"
   },
   recordAuditEvent: (...args: unknown[]) => mockRecordAuditEvent(...args)
 }));
@@ -48,9 +50,18 @@ vi.mock("@/lib/agents/pilot", async (importOriginal) => {
   };
 });
 
-vi.mock("@/lib/prospectSources", () => ({
-  generateProspectCandidatesForJob: (...args: unknown[]) =>
-    mockGenerateProspectCandidatesForJob(...args)
+vi.mock("@/lib/actions/agentHandlerDependencies", () => ({
+  createAgentHandlerDependencies: (...args: unknown[]) =>
+    mockCreateHandlerDeps(...args)
+}));
+
+vi.mock("@/lib/agents/worker", () => ({
+  createGatedAgentOrchestratorFromSupabase: (...args: unknown[]) =>
+    mockCreateGatedOrchestrator(...args)
+}));
+
+vi.mock("@/lib/agents/usageStore", () => ({
+  SupabaseAgentUsageStore: vi.fn()
 }));
 
 const queuedJob = {
@@ -80,78 +91,6 @@ function buildProcessForm(jobId = "job-1") {
   return formData;
 }
 
-function buildSupabaseMock(options?: { insertFails?: boolean }) {
-  let jobStatus = "queued";
-  const insertedCandidates: Array<Record<string, unknown>> = [];
-
-  return {
-    from: vi.fn((table: string) => {
-      if (table === "prospect_generation_jobs") {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                maybeSingle: vi.fn(async () => ({
-                  data: { ...queuedJob, status: jobStatus },
-                  error: null
-                }))
-              }))
-            }))
-          })),
-          update: vi.fn((payload: Record<string, unknown>) => ({
-            eq: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                eq: vi.fn(() => ({
-                  select: vi.fn(() => ({
-                    maybeSingle: vi.fn(async () => {
-                      if (payload.status === "running") {
-                        jobStatus = "running";
-                        return { data: { id: "job-1" }, error: null };
-                      }
-
-                      return { data: null, error: null };
-                    }),
-                    single: vi.fn(async () => {
-                      jobStatus = String(payload.status);
-                      return {
-                        data: {
-                          ...queuedJob,
-                          status: payload.status,
-                          summary: payload.summary ?? null,
-                          completed_at: payload.completed_at ?? null,
-                          started_at: payload.started_at ?? queuedJob.started_at
-                        },
-                        error: null
-                      };
-                    })
-                  }))
-                }))
-              }))
-            }))
-          }))
-        };
-      }
-
-      if (table === "prospect_candidates") {
-        return {
-          insert: vi.fn(async (rows: Array<Record<string, unknown>>) => {
-            if (options?.insertFails) {
-              return { error: { message: "insert failed" } };
-            }
-
-            insertedCandidates.push(...rows);
-            return { error: null };
-          })
-        };
-      }
-
-      throw new Error(`Unexpected table: ${table}`);
-    }),
-    insertedCandidates,
-    getJobStatus: () => jobStatus
-  };
-}
-
 describe("processProspectGenerationJob", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -163,97 +102,84 @@ describe("processProspectGenerationJob", () => {
       updated_by: "user-1",
       assigned_to: "user-1"
     });
-    mockGenerateProspectCandidatesForJob.mockResolvedValue({
-      drafts: [
-        {
-          name: "Howard University",
-          website: "https://www.howard.edu",
-          district: "Washington, DC",
-          location: "Washington, DC",
-          rationale: "Category: HBCU. Source: U.S. Department of Education College Scorecard.",
-          confidence_score: 0.9,
-          source_name: "U.S. Department of Education College Scorecard",
-          source_url: "https://collegescorecard.ed.gov/data/api/"
-        }
-      ],
-      summary: {
-        candidate_count: 1,
-        source: "college_scorecard",
-        source_name: "U.S. Department of Education College Scorecard"
-      }
+    mockCreateHandlerDeps.mockResolvedValue({});
+    mockQueueAgent.mockResolvedValue({
+      ok: true,
+      execution: { id: "exec-1" }
+    });
+    mockCreateGatedOrchestrator.mockReturnValue({
+      queueAgent: (...args: unknown[]) => mockQueueAgent(...args)
     });
   });
 
-  it("runs a queued job and inserts generated candidates", async () => {
-    const supabase = buildSupabaseMock();
-    mockGetServerSupabaseClient.mockResolvedValue(supabase);
-
-    const { processProspectGenerationJob } = await import("@/lib/actions/prospectGeneration");
-    const result = await processProspectGenerationJob(buildProcessForm());
-
-    expect(result.ok).toBe(true);
-
-    if (result.ok) {
-      expect(result.job.status).toBe("completed");
-      expect(result.candidateCount).toBe(1);
-    }
-
-    expect(mockGenerateProspectCandidatesForJob).toHaveBeenCalledWith(
-      queuedJob.input,
-      "job-1"
-    );
-    expect(supabase.insertedCandidates[0]).toMatchObject({
-      source_name: "U.S. Department of Education College Scorecard",
-      source_url: "https://collegescorecard.ed.gov/data/api/",
-      confidence_score: 0.9
-    });
-    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(2);
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/prospects/generate");
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/prospects/jobs/job-1/review");
-  });
-
-  it("marks the job failed when candidate inserts fail", async () => {
-    const supabase = buildSupabaseMock({ insertFails: true });
-    mockGetServerSupabaseClient.mockResolvedValue(supabase);
-
-    const { processProspectGenerationJob } = await import("@/lib/actions/prospectGeneration");
-    const result = await processProspectGenerationJob(buildProcessForm());
-
-    expect(result).toEqual({
-      ok: false,
-      error: "Could not save generated prospect candidates."
-    });
-    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(2);
-  });
-
-  it("rejects non-queued jobs", async () => {
-    const supabase = buildSupabaseMock();
-    supabase.from = vi.fn((table: string) => {
-      if (table === "prospect_generation_jobs") {
-        return {
-          select: vi.fn(() => ({
+  it("queues an agent execution and returns quickly without crawling", async () => {
+    mockGetServerSupabaseClient.mockResolvedValue({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
             eq: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                maybeSingle: vi.fn(async () => ({
-                  data: { ...queuedJob, status: "completed" },
-                  error: null
-                }))
+              maybeSingle: vi.fn(async () => ({
+                data: queuedJob,
+                error: null
               }))
             }))
           }))
-        };
-      }
-
-      throw new Error(`Unexpected table: ${table}`);
+        }))
+      }))
     });
-    mockGetServerSupabaseClient.mockResolvedValue(supabase);
 
-    const { processProspectGenerationJob } = await import("@/lib/actions/prospectGeneration");
+    const { processProspectGenerationJob } = await import(
+      "@/lib/actions/prospectGeneration"
+    );
+    const result = await processProspectGenerationJob(buildProcessForm());
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.queued).toBe(true);
+      expect(result.message).toBe("Generation queued.");
+      expect(result.job.status).toBe("queued");
+    }
+
+    expect(mockQueueAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentName: "ProspectGenerationAgent",
+        targetType: "prospect_generation_job",
+        targetId: "job-1"
+      })
+    );
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        action: "prospect.web_discovery_queued"
+      })
+    );
+  });
+
+  it("rejects non-queued jobs", async () => {
+    mockGetServerSupabaseClient.mockResolvedValue({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({
+                data: { ...queuedJob, status: "completed" },
+                error: null
+              }))
+            }))
+          }))
+        }))
+      }))
+    });
+
+    const { processProspectGenerationJob } = await import(
+      "@/lib/actions/prospectGeneration"
+    );
     const result = await processProspectGenerationJob(buildProcessForm());
 
     expect(result).toEqual({
       ok: false,
       error: "Only queued jobs can generate candidates."
     });
+    expect(mockQueueAgent).not.toHaveBeenCalled();
   });
 });

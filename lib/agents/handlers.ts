@@ -14,6 +14,7 @@ export type AgentHandlerDependencies = {
     jobId: string;
     organizationId: string;
     actorUserId: string;
+    env?: NodeJS.ProcessEnv;
   }) => Promise<AgentExecutorResult>;
   enrichProspectCandidate?: (input: {
     candidateId: string;
@@ -97,7 +98,8 @@ function defaultProspectGenerationHandler(
     return deps.processProspectGenerationJob({
       jobId: execution.target_id,
       organizationId: execution.organization_id,
-      actorUserId: context.actorUserId
+      actorUserId: context.actorUserId,
+      env: context.env
     });
   }
 

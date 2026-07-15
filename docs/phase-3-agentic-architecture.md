@@ -735,6 +735,8 @@ Phase 3 ships in four increments. Each phase has a gate before the next begins.
 | Migrations | All five tables + RLS + indexes |
 | Agent worker v1 | DB queue claim, lease reclaim cron, orchestrator skeleton |
 | `discover_prospects` job | Heuristic-only Prospect Discovery (NCES API) |
+
+**Phase 5.2.1 update:** Prospect discovery jobs are queued from the UI; `ProspectGenerationAgent` is processed by the existing agent worker. Source order is College Scorecard → optional Google Programmable Search + bounded official `.edu`/`.gov` page fetches. See `docs/public-web-prospect-discovery.md`.
 | Research Agent | Port `lib/universityResearch.ts` heuristics to async worker |
 | QA Agent | Rules-based confidence (no LLM) |
 | UI | Job status badge + empty review queue shell |

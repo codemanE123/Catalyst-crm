@@ -3,18 +3,18 @@
 import { revalidatePath } from "next/cache";
 import type { User } from "@supabase/supabase-js";
 
+import { createAgentHandlerDependencies } from "@/lib/actions/agentHandlerDependencies";
 import { AUDIT_ACTIONS, recordAuditEvent } from "@/lib/auditLog";
 import { MUTATION_ROLES, requireRole } from "@/lib/authz";
 import { assertRealProviderPilotAccess } from "@/lib/agents/pilot";
-import { recordLlmUsageEvent } from "@/lib/agents/usage";
 import { SupabaseAgentUsageStore } from "@/lib/agents/usageStore";
+import { createGatedAgentOrchestratorFromSupabase } from "@/lib/agents/worker";
 import {
   parseProspectGenerationInput,
   type ProspectGenerationInput,
   type ProspectGenerationJob
 } from "@/lib/prospectGeneration";
-import { generateProspectCandidatesForJob } from "@/lib/prospectSources";
-import { COLLEGE_SCORECARD_PROVIDER } from "@/lib/prospectSources/collegeScorecard";
+import { getProspectDiscoveryProviderStatus } from "@/lib/prospectSources/discoveryReadiness";
 import { getRecordOwnershipFields, type RecordOwnershipFields } from "@/lib/supabase";
 import {
   getServerSupabaseClient,
@@ -42,8 +42,9 @@ export type CreateProspectGenerationJobResult =
 export type ProcessProspectGenerationJobResult =
   | {
       ok: true;
+      queued: true;
       job: ProspectGenerationJob;
-      candidateCount: number;
+      message: string;
     }
   | { ok: false; error: string };
 
@@ -71,49 +72,6 @@ async function loadQueuedJob(
   }
 
   return data as ProspectGenerationJob;
-}
-
-async function markJobFailed(
-  supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>,
-  jobId: string,
-  organizationId: string,
-  errorMessage: string
-) {
-  const completedAt = new Date().toISOString();
-
-  await supabase
-    .from("prospect_generation_jobs")
-    .update({
-      status: "failed",
-      error_code: "PROSPECT_GENERATION_FAILED",
-      error_message: errorMessage,
-      completed_at: completedAt
-    })
-    .eq("id", jobId)
-    .eq("organization_id", organizationId);
-}
-
-async function markJobRunning(
-  supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>,
-  jobId: string,
-  organizationId: string
-): Promise<boolean> {
-  const startedAt = new Date().toISOString();
-  const { data, error } = await supabase
-    .from("prospect_generation_jobs")
-    .update({
-      status: "running",
-      started_at: startedAt,
-      error_code: null,
-      error_message: null
-    })
-    .eq("id", jobId)
-    .eq("organization_id", organizationId)
-    .eq("status", "queued")
-    .select("id")
-    .maybeSingle();
-
-  return !error && Boolean(data);
 }
 
 async function requireProspectJobContext(): Promise<ProspectJobContext> {
@@ -229,6 +187,10 @@ export async function createProspectGenerationJob(
   };
 }
 
+/**
+ * Queue prospect discovery for the background worker.
+ * Does not crawl or call Scorecard/search APIs in-request.
+ */
 export async function processProspectGenerationJob(
   formData: FormData
 ): Promise<ProcessProspectGenerationJobResult> {
@@ -261,6 +223,26 @@ export async function processProspectGenerationJob(
     };
   }
 
+  const providers = getProspectDiscoveryProviderStatus();
+  if (!providers.anyReady && !isDevelopmentEnvironment()) {
+    await recordAuditEvent(supabase, {
+      organizationId: ownership.organization_id,
+      actorUserId: user.id,
+      action: AUDIT_ACTIONS.prospectProviderNotConfigured,
+      targetTable: "prospect_generation_jobs",
+      recordId: jobId,
+      metadata: {
+        scorecard_status: providers.scorecardStatus,
+        public_web_status: providers.publicWebStatus
+      }
+    });
+    return {
+      ok: false,
+      error:
+        "Prospect discovery providers are not configured. Set COLLEGE_SCORECARD_API_KEY and/or PUBLIC_WEB_DISCOVERY_ENABLED with WEB_SEARCH_API_KEY and WEB_SEARCH_ENGINE_ID."
+    };
+  }
+
   const pilot = await assertRealProviderPilotAccess({
     supabase,
     organizationId: ownership.organization_id,
@@ -273,167 +255,46 @@ export async function processProspectGenerationJob(
     return { ok: false, error: pilot.error };
   }
 
-  const started = await markJobRunning(supabase, jobId, ownership.organization_id);
+  const handlerDependencies = await createAgentHandlerDependencies(supabase);
+  const usageStore = new SupabaseAgentUsageStore(supabase);
+  const orchestrator = createGatedAgentOrchestratorFromSupabase(supabase, {
+    handlerDependencies,
+    usageStore
+  });
 
-  if (!started) {
+  const queued = await orchestrator.queueAgent({
+    organizationId: ownership.organization_id,
+    actorUserId: user.id,
+    agentName: "ProspectGenerationAgent",
+    targetType: "prospect_generation_job",
+    targetId: job.id
+  });
+
+  if (!queued.ok) {
     return {
       ok: false,
-      error: "This job is already being processed."
+      error: queued.error ?? "Could not queue prospect generation."
     };
   }
 
-  const generation = await generateProspectCandidatesForJob(job.input, jobId);
-
-  const usageStore = new SupabaseAgentUsageStore(supabase);
-  const usageStatus =
-    generation.summary.source === "college_scorecard"
-      ? "success"
-      : generation.summary.configuration_status === "disabled" ||
-          generation.summary.configuration_status === "missing_api_key"
-        ? "denied"
-        : generation.summary.source === "stub_generator"
-          ? "success"
-          : "failed";
-
-  try {
-    await recordLlmUsageEvent(usageStore, {
-      organizationId: ownership.organization_id,
-      agentName: "ProspectGenerationAgent",
-      targetType: "prospect_generation_job",
-      targetId: jobId,
-      provider: COLLEGE_SCORECARD_PROVIDER,
-      status: usageStatus,
-      denialReasonCode: generation.summary.provider_error_code ?? null,
-      inputTokens: generation.summary.provider_request_count ?? 0,
-      outputTokens: generation.summary.candidate_count
-    });
-  } catch {
-    // Usage recording must not fail the discovery job.
-  }
-
   await recordAuditEvent(supabase, {
     organizationId: ownership.organization_id,
     actorUserId: user.id,
-    action: AUDIT_ACTIONS.prospectJobRun,
+    action: AUDIT_ACTIONS.prospectWebDiscoveryQueued,
     targetTable: "prospect_generation_jobs",
     recordId: jobId,
     metadata: {
-      source: generation.summary.source,
-      source_name: generation.summary.source_name ?? null,
-      fallback_reason: generation.summary.fallback_reason ?? null,
-      configuration_status: generation.summary.configuration_status ?? null,
-      provider_error_code: generation.summary.provider_error_code ?? null,
-      provider_request_count: generation.summary.provider_request_count ?? 0,
-      candidate_count: generation.summary.candidate_count
-    }
-  });
-
-  const drafts = generation.drafts;
-
-  if (drafts.length > 0) {
-    const { error: insertError } = await supabase.from("prospect_candidates").insert(
-      drafts.map((draft) => ({
-        organization_id: ownership.organization_id,
-        job_id: jobId,
-        status: "pending_review",
-        name: draft.name,
-        website: draft.website,
-        district: draft.district,
-        location: draft.location,
-        rationale: draft.rationale,
-        confidence_score: draft.confidence_score,
-        source_name: draft.source_name,
-        source_url: draft.source_url
-      }))
-    );
-
-    if (insertError) {
-      const errorMessage = "Could not save generated prospect candidates.";
-      await markJobFailed(
-        supabase,
-        jobId,
-        ownership.organization_id,
-        errorMessage
-      );
-
-      await recordAuditEvent(supabase, {
-        organizationId: ownership.organization_id,
-        actorUserId: user.id,
-        action: AUDIT_ACTIONS.prospectJobFail,
-        targetTable: "prospect_generation_jobs",
-        recordId: jobId,
-        metadata: {
-          source: generation.summary.source,
-          error_code: "PROSPECT_GENERATION_FAILED"
-        }
-      });
-
-      revalidatePath("/prospects/generate");
-
-      return { ok: false, error: errorMessage };
-    }
-  }
-
-  const completedAt = new Date().toISOString();
-  const summary = generation.summary;
-
-  const { data: completedJob, error: completeError } = await supabase
-    .from("prospect_generation_jobs")
-    .update({
-      status: "completed",
-      summary,
-      completed_at: completedAt,
-      error_code: null,
-      error_message: null
-    })
-    .eq("id", jobId)
-    .eq("organization_id", ownership.organization_id)
-    .eq("status", "running")
-    .select(
-      "id,organization_id,created_by,job_type,status,input,summary,error_code,error_message,started_at,completed_at,created_at,updated_at"
-    )
-    .single();
-
-  if (completeError || !completedJob) {
-    const errorMessage = "Could not complete the prospect generation job.";
-    await markJobFailed(supabase, jobId, ownership.organization_id, errorMessage);
-
-    await recordAuditEvent(supabase, {
-      organizationId: ownership.organization_id,
-      actorUserId: user.id,
-      action: AUDIT_ACTIONS.prospectJobFail,
-      targetTable: "prospect_generation_jobs",
-      recordId: jobId,
-      metadata: {
-        source: generation.summary.source,
-        error_code: "PROSPECT_GENERATION_FAILED"
-      }
-    });
-
-    revalidatePath("/prospects/generate");
-
-    return { ok: false, error: errorMessage };
-  }
-
-  await recordAuditEvent(supabase, {
-    organizationId: ownership.organization_id,
-    actorUserId: user.id,
-    action: AUDIT_ACTIONS.prospectJobComplete,
-    targetTable: "prospect_generation_jobs",
-    recordId: jobId,
-    metadata: {
-      source: generation.summary.source,
-      candidate_count: drafts.length,
-      fallback_reason: generation.summary.fallback_reason ?? null
+      agent_execution_id: queued.execution?.id ?? null
     }
   });
 
   revalidatePath("/prospects/generate");
-  revalidatePath(`/prospects/jobs/${jobId}/review`);
+  revalidatePath("/prospects/jobs");
 
   return {
     ok: true,
-    job: completedJob as ProspectGenerationJob,
-    candidateCount: drafts.length
+    queued: true,
+    job,
+    message: "Generation queued."
   };
 }

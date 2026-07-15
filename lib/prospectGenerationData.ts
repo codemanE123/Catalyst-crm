@@ -36,6 +36,8 @@ type ProspectCandidateRow = {
   confidence_score: number | null;
   source_name: string | null;
   source_url: string | null;
+  discovery_method: string | null;
+  retrieved_at: string | null;
   promoted_school_id: string | null;
   enrichment_summary: string | null;
   outreach_angle: string | null;
@@ -103,6 +105,8 @@ const sampleProspectCandidates: ProspectCandidate[] = [
     confidence_score: 0.91,
     source_name: "U.S. Department of Education College Scorecard",
     source_url: "https://collegescorecard.ed.gov/data/api/",
+    discovery_method: "college_scorecard",
+    retrieved_at: "2026-07-06T14:05:00.000Z",
     promoted_school_id: null,
     enrichment_summary:
       "Howard University is a historically Black university in Washington, DC with public cybersecurity-related program signals.",
@@ -127,6 +131,8 @@ const sampleProspectCandidates: ProspectCandidate[] = [
     confidence_score: 0.88,
     source_name: "Catalyst stub generator (curated public institutions)",
     source_url: "https://collegescorecard.ed.gov/data/api/",
+    discovery_method: "stub_generator",
+    retrieved_at: "2026-07-06T14:05:00.000Z",
     promoted_school_id: null,
     enrichment_summary: null,
     outreach_angle: null,
@@ -170,6 +176,8 @@ function mapCandidateRow(row: ProspectCandidateRow): ProspectCandidate {
     confidence_score: row.confidence_score,
     source_name: row.source_name,
     source_url: row.source_url,
+    discovery_method: row.discovery_method ?? null,
+    retrieved_at: row.retrieved_at ?? null,
     promoted_school_id: row.promoted_school_id,
     enrichment_summary: row.enrichment_summary,
     outreach_angle: row.outreach_angle,
@@ -274,7 +282,7 @@ export async function fetchProspectCandidatesForJob(
   const { data, error } = await supabase
     .from("prospect_candidates")
     .select(
-      "id,organization_id,job_id,status,name,website,district,location,rationale,confidence_score,source_name,source_url,promoted_school_id,enrichment_summary,outreach_angle,recommended_next_step,enrichment_status,enriched_at,created_at,updated_at"
+      "id,organization_id,job_id,status,name,website,district,location,rationale,confidence_score,source_name,source_url,discovery_method,retrieved_at,promoted_school_id,enrichment_summary,outreach_angle,recommended_next_step,enrichment_status,enriched_at,created_at,updated_at"
     )
     .eq("organization_id", organizationId)
     .eq("job_id", jobId)

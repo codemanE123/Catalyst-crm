@@ -391,7 +391,9 @@ export function mapCollegeScorecardRecordToCandidate(
     fit_score: deriveFitScore(record, input),
     source_name: COLLEGE_SCORECARD_SOURCE_NAME,
     source_urls: [COLLEGE_SCORECARD_DOCUMENTATION_URL, requestUrl],
-    enrollment_size: enrollment
+    enrollment_size: enrollment,
+    discovery_method: "college_scorecard",
+    retrieved_at: new Date().toISOString()
   };
 }
 

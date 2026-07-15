@@ -208,6 +208,11 @@ export default function ProspectCandidateReviewRow({
       <td className="px-3 py-3 text-slate-700">
         <div className="max-w-xs space-y-1">
           <p className="font-medium text-slate-900">{candidate.source_name ?? "—"}</p>
+          {candidate.discovery_method ? (
+            <p className="text-xs text-slate-500">
+              Method: {candidate.discovery_method.replaceAll("_", " ")}
+            </p>
+          ) : null}
           {candidate.source_url ? (
             <a
               className="text-xs text-sky-700 hover:text-sky-900"

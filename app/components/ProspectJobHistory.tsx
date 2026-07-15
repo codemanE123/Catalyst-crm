@@ -6,11 +6,13 @@ export default function ProspectJobHistory({
   jobs,
   source,
   canProcess,
+  discoveryConfigured,
   processAction
 }: {
   jobs: ProspectGenerationJob[];
   source: "supabase" | "sample";
   canProcess: boolean;
+  discoveryConfigured: boolean;
   processAction: (formData: FormData) => Promise<ProcessProspectGenerationJobResult>;
 }) {
   return (
@@ -19,8 +21,9 @@ export default function ProspectJobHistory({
         <div>
           <h2 className="text-lg font-semibold text-slate-950">Job history</h2>
           <p className="text-sm text-slate-600">
-            Track queued, running, completed, and failed prospect generation jobs. Queued jobs can
-            use the stub generator to create mock candidates for testing.
+            Track queued, running, completed, and failed prospect generation jobs. Generate
+            candidates queues work for the background agent worker (College Scorecard first,
+            then optional public-web discovery).
           </p>
         </div>
         {source === "sample" ? (
@@ -50,6 +53,7 @@ export default function ProspectJobHistory({
                   key={job.id}
                   actionsEnabled={source === "supabase"}
                   canProcess={canProcess}
+                  discoveryConfigured={discoveryConfigured}
                   job={job}
                   processAction={processAction}
                 />

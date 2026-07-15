@@ -154,7 +154,7 @@ describe("generateProspectCandidatesForJob", () => {
       { env: process.env, fetchText }
     );
 
-    expect(result.summary.source).toBe("unconfigured");
+    expect(result.summary.source).toBe("college_scorecard");
     expect(result.summary.configuration_status).toBe("no_matches");
     expect(result.drafts).toHaveLength(0);
   });
