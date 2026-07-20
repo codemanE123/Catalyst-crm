@@ -63,7 +63,12 @@ export type MeetingImportRecord = {
   created_at: string;
   updated_at: string;
   school_name?: string | null;
+  parsed_json?: MeetingParseSnapshot | null;
+  parsed_at?: string | null;
+  parse_method?: "heuristic" | "llm" | null;
 };
+
+export type MeetingParseSnapshot = Record<string, unknown>;
 
 export const DIGEST_MAX_CHARS = 5000;
 export const TRANSCRIPT_EXCERPT_MAX_CHARS = 10000;

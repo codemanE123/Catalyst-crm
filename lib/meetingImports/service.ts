@@ -52,7 +52,16 @@ function mapRow(row: Record<string, unknown>): MeetingImportRecord {
     reviewed_at: (row.reviewed_at as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
-    school_name: relatedSchoolName(row.schools)
+    school_name: relatedSchoolName(row.schools),
+    parsed_json:
+      row.parsed_json && typeof row.parsed_json === "object"
+        ? (row.parsed_json as MeetingImportRecord["parsed_json"])
+        : null,
+    parsed_at: (row.parsed_at as string | null) ?? null,
+    parse_method:
+      row.parse_method === "heuristic" || row.parse_method === "llm"
+        ? row.parse_method
+        : null
   };
 }
 

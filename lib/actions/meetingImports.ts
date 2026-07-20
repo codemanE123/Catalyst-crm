@@ -8,6 +8,15 @@ import { MUTATION_ROLES, requireRole } from "@/lib/authz";
 import { buildManualMeetingImportDraft } from "@/lib/meetingImports/buildManualDraft";
 import { resolveMeetingImportConfig } from "@/lib/meetingImports/config";
 import {
+  canUseLlmMeetingParse,
+  parseMeetingDigestWithLlm
+} from "@/lib/meetingImports/llmParse";
+import {
+  parseMeetingDigestHeuristic,
+  validateMeetingParseOutput,
+  type MeetingParseOutput
+} from "@/lib/meetingImports/parseDigest";
+import {
   getMeetingImportById,
   upsertMeetingImportFromDraft
 } from "@/lib/meetingImports/service";
@@ -20,7 +29,13 @@ import {
 } from "@/lib/supabaseServer";
 
 export type MeetingImportActionResult =
-  | { ok: true; interviewId?: string; importId?: string; message: string }
+  | {
+      ok: true;
+      interviewId?: string;
+      importId?: string;
+      message: string;
+      parseMethod?: "heuristic" | "llm";
+    }
   | { ok: false; error: string };
 
 async function requireWriterContext(organizationId: string) {
@@ -137,6 +152,116 @@ export async function createManualMeetingImport(input: {
     message: schoolId
       ? "Digest staged for review. Accept it to add discovery interview notes."
       : "Digest staged for review. Link a school, then Accept to add CRM notes."
+  };
+}
+
+export async function parseMeetingImport(
+  importId: string
+): Promise<MeetingImportActionResult> {
+  const ownership = await getRecordOwnershipFields();
+  if (!ownership) {
+    return { ok: false, error: "Sign in to parse meeting imports." };
+  }
+
+  const context = await requireWriterContext(ownership.organization_id);
+  if (!context.ok) {
+    return { ok: false, error: context.error };
+  }
+
+  const record = await getMeetingImportById({
+    supabase: context.supabase,
+    organizationId: ownership.organization_id,
+    importId
+  });
+
+  if (!record || record.review_status !== "pending_review") {
+    return { ok: false, error: "Pending meeting import not found." };
+  }
+
+  const sourceText =
+    `${record.digest_text ?? ""}\n\n${record.transcript_excerpt ?? ""}`.trim();
+  if (!sourceText) {
+    return { ok: false, error: "This import has no digest text to parse." };
+  }
+
+  let parsed: MeetingParseOutput;
+  let parseMethod: "heuristic" | "llm" = "heuristic";
+
+  if (canUseLlmMeetingParse()) {
+    const llm = await parseMeetingDigestWithLlm({
+      digestText: sourceText,
+      meetingTitle: record.meeting_title
+    });
+    if (llm.ok) {
+      parsed = llm.data;
+      parseMethod = "llm";
+    } else {
+      parsed = parseMeetingDigestHeuristic({
+        digestText: record.digest_text,
+        transcriptExcerpt: record.transcript_excerpt,
+        meetingTitle: record.meeting_title,
+        meetingStartedAt: record.meeting_started_at
+      });
+    }
+  } else {
+    parsed = parseMeetingDigestHeuristic({
+      digestText: record.digest_text,
+      transcriptExcerpt: record.transcript_excerpt,
+      meetingTitle: record.meeting_title,
+      meetingStartedAt: record.meeting_started_at
+    });
+  }
+
+  const pii =
+    parsed.possible_student_pii ||
+    record.error_code === "possible_student_pii";
+
+  const { error } = await context.supabase
+    .from("meeting_imports")
+    .update({
+      parsed_json: parsed,
+      parsed_at: new Date().toISOString(),
+      parsed_by: context.user.id,
+      parse_method: parseMethod,
+      meeting_title: parsed.meeting_title || record.meeting_title,
+      error_code: pii ? "possible_student_pii" : record.error_code,
+      error_message: pii
+        ? "Possible student/education-record language detected. Review carefully before accept."
+        : record.error_message
+    })
+    .eq("id", importId)
+    .eq("organization_id", ownership.organization_id);
+
+  if (error) {
+    return { ok: false, error: "Could not save parsed meeting fields." };
+  }
+
+  await recordAuditEvent(context.supabase, {
+    organizationId: ownership.organization_id,
+    actorUserId: context.user.id,
+    action: AUDIT_ACTIONS.meetingImportParsed,
+    targetTable: "meeting_imports",
+    recordId: importId,
+    metadata: {
+      parse_method: parseMethod,
+      contact_count: parsed.contacts.length,
+      action_item_count: parsed.action_items.length
+    }
+  });
+
+  revalidatePath("/meeting-imports");
+  if (record.school_id) {
+    revalidatePath(`/schools/${record.school_id}`);
+  }
+
+  return {
+    ok: true,
+    importId,
+    parseMethod,
+    message:
+      parseMethod === "llm"
+        ? "Digest parsed with AI. Review the fields, then Accept."
+        : "Digest parsed with local rules. Review the fields, then Accept."
   };
 }
 
@@ -293,16 +418,35 @@ export async function acceptMeetingImport(
     // Still require explicit accept action; flag only controls future auto paths.
   }
 
-  const interviewDate = record.meeting_started_at
-    ? record.meeting_started_at.slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
+  const validatedParse = record.parsed_json
+    ? validateMeetingParseOutput(record.parsed_json)
+    : null;
+  const parsed =
+    validatedParse && validatedParse.success ? validatedParse.data : null;
+
+  const interviewDate =
+    (parsed?.meeting_date && /^\d{4}-\d{2}-\d{2}/.test(parsed.meeting_date)
+      ? parsed.meeting_date.slice(0, 10)
+      : null) ||
+    (record.meeting_started_at
+      ? record.meeting_started_at.slice(0, 10)
+      : new Date().toISOString().slice(0, 10));
 
   const providerLabel =
     record.provider === "manual" ? "Pasted meeting" : "Fireflies";
+  const discovery = parsed?.discovery ?? {};
   const digest =
+    parsed?.summary?.trim() ||
     record.digest_text?.trim() ||
     record.meeting_title?.trim() ||
     `${providerLabel} digest`;
+
+  const sentiment = discovery.sentiment ?? "Warm";
+  const pilotInterest = discovery.pilot_interest ?? "Medium";
+  const nextStep =
+    discovery.next_step?.trim() ||
+    parsed?.action_items?.[0]?.title ||
+    "Review imported digest and set next step.";
 
   const { data: interview, error: interviewError } = await context.supabase
     .from("interviews")
@@ -310,12 +454,19 @@ export async function acceptMeetingImport(
       school_id: record.school_id,
       interviewer: `${providerLabel} import`,
       interview_date: interviewDate,
-      sentiment: "Warm",
+      sentiment,
       notes: digest.slice(0, 5000),
-      follow_up: "Review imported digest and set next step.",
+      follow_up: nextStep.slice(0, 500),
       raw_notes: record.transcript_excerpt,
-      next_step: "Review imported digest and set next step.",
-      pilot_interest: "Medium",
+      pain_points: discovery.pain_points ?? null,
+      current_tools: discovery.current_tools ?? null,
+      buyer: discovery.buyer ?? null,
+      budget: discovery.budget ?? null,
+      budget_owner: discovery.budget_owner ?? null,
+      objections: discovery.objections ?? null,
+      referrals: discovery.referrals ?? null,
+      next_step: nextStep.slice(0, 500),
+      pilot_interest: pilotInterest,
       organization_id: ownership.organization_id,
       created_by: ownership.created_by,
       updated_by: ownership.updated_by
@@ -331,15 +482,57 @@ export async function acceptMeetingImport(
   await context.supabase.from("outreach").insert({
     school_id: record.school_id,
     channel: "Meeting",
-    subject: record.meeting_title ?? `${providerLabel} meeting`,
-    outcome: "Completed",
+    subject:
+      parsed?.outreach?.subject ||
+      parsed?.meeting_title ||
+      record.meeting_title ||
+      `${providerLabel} meeting`,
+    outcome: parsed?.outreach?.outcome || "Completed",
     outreach_date: interviewDate,
     owner: `${providerLabel} import`,
-    next_step: "Review imported meeting notes.",
+    next_step: nextStep.slice(0, 500),
     organization_id: ownership.organization_id,
     created_by: ownership.created_by,
     updated_by: ownership.updated_by
   });
+
+  for (const item of (parsed?.action_items ?? []).slice(0, 5)) {
+    await context.supabase.from("follow_ups").insert({
+      school_id: record.school_id,
+      title: item.title.slice(0, 200),
+      due_date:
+        item.due_date && /^\d{4}-\d{2}-\d{2}/.test(item.due_date)
+          ? item.due_date.slice(0, 10)
+          : null,
+      notes: item.owner ? `Owner hint: ${item.owner}` : null,
+      owner: item.owner || `${providerLabel} import`,
+      status: "Open",
+      organization_id: ownership.organization_id,
+      created_by: ownership.created_by,
+      updated_by: ownership.updated_by
+    });
+  }
+
+  for (const contact of (parsed?.contacts ?? []).slice(0, 5)) {
+    if (!contact.name?.trim() || !contact.email?.trim()) {
+      continue;
+    }
+    await context.supabase.from("contacts").insert({
+      school_id: record.school_id,
+      partner_id: null,
+      name: contact.name.slice(0, 120),
+      role: (contact.role || "Meeting contact").slice(0, 120),
+      email: contact.email.slice(0, 254),
+      phone: contact.phone ?? null,
+      linkedin_url: contact.linkedin ?? null,
+      notes: "Created from meeting import parse.",
+      relationship: "New",
+      last_touch: interviewDate,
+      organization_id: ownership.organization_id,
+      created_by: ownership.created_by,
+      updated_by: ownership.updated_by
+    });
+  }
 
   const { error: updateError } = await context.supabase
     .from("meeting_imports")

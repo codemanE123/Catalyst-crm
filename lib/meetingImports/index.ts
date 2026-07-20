@@ -1,5 +1,11 @@
 export { buildManualMeetingImportDraft } from "./buildManualDraft";
 export {
+  parseMeetingDigestHeuristic,
+  validateMeetingParseOutput,
+  type MeetingParseOutput
+} from "./parseDigest";
+export { canUseLlmMeetingParse, parseMeetingDigestWithLlm } from "./llmParse";
+export {
   isFirefliesImportReady,
   MEETING_IMPORT_ENV,
   resolveMeetingImportConfig,

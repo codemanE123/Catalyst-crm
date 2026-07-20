@@ -18,7 +18,8 @@
 3. Payload normalizes into `meeting_imports` (`pending_review`), with deterministic school match (participant email domain ↔ school website, else title contains school name).
 4. Reviewers use **Meeting imports** (`/meeting-imports`) or the school profile banner.
    - **Paste digest:** authenticated users can paste notes into the form on `/meeting-imports` (provider `manual`). No Fireflies env required.
-5. **Accept** creates an `interviews` row (and best-effort Meeting `outreach`). **Reject** closes the import. Unmatched imports must be **linked** to a school first.
+   - **Parse digest:** extracts summary, discovery fields, contacts, action items (LLM when `LLM_ENRICHMENT_ENABLED` + `OPENAI_API_KEY`, else heuristics). Stored in `parsed_json` for human review.
+5. **Accept** creates an `interviews` row (using parsed fields when present), optional Meeting `outreach`, follow-ups from action items, and contacts with emails. **Reject** closes the import. Unmatched imports must be **linked** to a school first.
 
 ## Environment
 

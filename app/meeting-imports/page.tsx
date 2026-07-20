@@ -60,13 +60,13 @@ export default async function MeetingImportsPage() {
     <div>
       <PageHeader
         title="Meeting imports"
-        subtitle="Paste a digest or receive Fireflies webhooks, then Accept to create discovery interview notes."
+        subtitle="Paste a digest, parse structured fields, then Accept to create discovery notes."
       />
 
       <Panel className="mb-6">
         <PanelTitle
           title="Paste meeting digest"
-          description="Stage notes for review. Nothing hits CRM truth until you Accept."
+          description="Stage notes for review. Use Parse digest to extract CRM fields, then Accept."
         />
         <ManualMeetingImportForm canAct={canAct} schools={schools} />
       </Panel>

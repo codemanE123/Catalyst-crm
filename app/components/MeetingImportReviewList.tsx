@@ -7,9 +7,11 @@ import { useState, useTransition } from "react";
 import {
   acceptMeetingImport,
   linkMeetingImportToSchool,
+  parseMeetingImport,
   rejectMeetingImport
 } from "@/lib/actions/meetingImports";
 import type { MeetingImportRecord } from "@/lib/meetingImports/types";
+import type { MeetingParseOutput } from "@/lib/meetingImports/parseDigest";
 
 type SchoolOption = { id: string; name: string };
 
@@ -81,6 +83,7 @@ export default function MeetingImportReviewList({
           .filter(Boolean)
           .slice(0, 6)
           .join(", ");
+        const parsed = item.parsed_json as MeetingParseOutput | null | undefined;
 
         return (
           <article
@@ -102,6 +105,7 @@ export default function MeetingImportReviewList({
                   {item.meeting_started_at
                     ? ` · ${new Date(item.meeting_started_at).toLocaleString()}`
                     : ""}
+                  {item.parse_method ? ` · Parsed (${item.parse_method})` : ""}
                 </p>
               </div>
               {item.source_url ? (
@@ -131,6 +135,51 @@ export default function MeetingImportReviewList({
                 {item.digest_text.slice(0, 1200)}
                 {item.digest_text.length > 1200 ? "…" : ""}
               </p>
+            ) : null}
+
+            {parsed ? (
+              <div className="mt-3 space-y-2 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-sm text-slate-300">
+                <p className="text-xs font-semibold uppercase tracking-wide text-sky-200">
+                  Parsed fields
+                </p>
+                {parsed.summary ? (
+                  <p>
+                    <span className="text-slate-500">Summary:</span>{" "}
+                    {parsed.summary.slice(0, 400)}
+                  </p>
+                ) : null}
+                {parsed.discovery?.sentiment || parsed.discovery?.pilot_interest ? (
+                  <p>
+                    <span className="text-slate-500">Fit:</span>{" "}
+                    {parsed.discovery?.sentiment ?? "—"} · Pilot{" "}
+                    {parsed.discovery?.pilot_interest ?? "—"}
+                  </p>
+                ) : null}
+                {parsed.discovery?.next_step ? (
+                  <p>
+                    <span className="text-slate-500">Next step:</span>{" "}
+                    {parsed.discovery.next_step}
+                  </p>
+                ) : null}
+                {parsed.action_items?.length ? (
+                  <p>
+                    <span className="text-slate-500">Action items:</span>{" "}
+                    {parsed.action_items
+                      .slice(0, 3)
+                      .map((row) => row.title)
+                      .join(" · ")}
+                  </p>
+                ) : null}
+                {parsed.contacts?.length ? (
+                  <p>
+                    <span className="text-slate-500">Contacts:</span>{" "}
+                    {parsed.contacts
+                      .slice(0, 3)
+                      .map((row) => row.name)
+                      .join(", ")}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
 
             {participants ? (
@@ -196,6 +245,15 @@ export default function MeetingImportReviewList({
                     Link school
                   </button>
                 ) : null}
+
+                <button
+                  className="rounded-lg border border-sky-400/40 bg-sky-500/10 px-3 py-2 text-sm font-medium text-sky-100 hover:bg-sky-500/20 disabled:opacity-50"
+                  disabled={pending}
+                  onClick={() => runAction(() => parseMeetingImport(item.id))}
+                  type="button"
+                >
+                  {item.parsed_json ? "Re-parse digest" : "Parse digest"}
+                </button>
 
                 <button
                   className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"

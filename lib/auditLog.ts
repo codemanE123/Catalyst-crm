@@ -6,6 +6,7 @@ export const AUDIT_ACTIONS = {
   meetingImportAccepted: "meeting_import.accepted",
   meetingImportRejected: "meeting_import.rejected",
   meetingImportLinked: "meeting_import.linked",
+  meetingImportParsed: "meeting_import.parsed",
   outreachCreate: "outreach.create",
   followUpCreate: "follow_up.create",
   followUpComplete: "follow_up.complete",
