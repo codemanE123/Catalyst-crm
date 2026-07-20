@@ -14,6 +14,8 @@ export default function GlobalError({
     Sentry.captureException(error);
   }, [error]);
 
+  const detail = error.message || error.digest || null;
+
   return (
     <html lang="en">
       <body className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
@@ -25,6 +27,11 @@ export default function GlobalError({
             The error was reported to monitoring. Try again or contact support if
             the problem continues.
           </p>
+          {detail ? (
+            <p className="mt-3 break-words rounded-xl bg-slate-100 px-3 py-2 text-left font-mono text-xs text-slate-700">
+              {detail}
+            </p>
+          ) : null}
           <button
             className="mt-6 rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white"
             onClick={() => reset()}

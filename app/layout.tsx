@@ -49,13 +49,17 @@ export default async function RootLayout({
       };
 
   const groups = buildAppNavGroups(visibility);
-  const pendingApprovalsCount =
-    user && supabase && visibility.showApprovals
-      ? await countAwaitingHumanReview(
-          supabase,
-          getAccessibleApprovalOrganizationIds(memberships)
-        )
-      : 0;
+  let pendingApprovalsCount = 0;
+  if (user && supabase && visibility.showApprovals) {
+    try {
+      pendingApprovalsCount = await countAwaitingHumanReview(
+        supabase,
+        getAccessibleApprovalOrganizationIds(memberships)
+      );
+    } catch {
+      pendingApprovalsCount = 0;
+    }
+  }
 
   if (!user) {
     return (

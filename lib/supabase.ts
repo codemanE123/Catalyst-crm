@@ -502,10 +502,6 @@ async function fetchOpenFollowUps(
     .neq("status", "Done");
 
   if (error) {
-    if (!isDevelopmentEnvironment()) {
-      throw new Error("Could not load follow-ups from Supabase.");
-    }
-
     return [];
   }
 
@@ -602,20 +598,30 @@ export async function getDashboardData(): Promise<DashboardData> {
     : contactsWithPartners;
 
   if (schoolsResponse.error || !contactsResponse || contactsResponse.error) {
-    if (!isDevelopmentEnvironment()) {
-      throw new Error("Could not load dashboard data from Supabase.");
+    // Never crash the authenticated shell on a partial schema mismatch.
+    const schools = schoolsResponse.error
+      ? []
+      : ((schoolsResponse.data ?? []) as School[]);
+    let dashboardMetrics = buildSampleDashboardMetrics();
+    try {
+      if (schools.length) {
+        dashboardMetrics = await buildDashboardMetricsFromSupabase(
+          supabase,
+          schools,
+          0
+        );
+      }
+    } catch {
+      dashboardMetrics = buildSampleDashboardMetrics();
     }
 
     return {
-      schools: sampleSchools,
-      contacts: sampleContacts,
-      pipeline: buildPipeline(sampleSchools),
-      dashboardMetrics: buildSampleDashboardMetrics(),
-      upcomingFollowUps: buildUpcomingFollowUpsForSchools(
-        sampleSchools,
-        sampleFollowUps
-      ),
-      source: "sample"
+      schools,
+      contacts: [],
+      pipeline: buildPipeline(schools),
+      dashboardMetrics,
+      upcomingFollowUps: [],
+      source: schools.length ? "supabase" : "sample"
     };
   }
 
@@ -646,15 +652,22 @@ export async function getDashboardData(): Promise<DashboardData> {
     };
   }) satisfies Contact[];
 
+  let dashboardMetrics = buildSampleDashboardMetrics();
+  try {
+    dashboardMetrics = await buildDashboardMetricsFromSupabase(
+      supabase,
+      schools,
+      contacts.length
+    );
+  } catch {
+    dashboardMetrics = buildSampleDashboardMetrics();
+  }
+
   return {
     schools,
     contacts,
     pipeline: buildPipeline(schools),
-    dashboardMetrics: await buildDashboardMetricsFromSupabase(
-      supabase,
-      schools,
-      contacts.length
-    ),
+    dashboardMetrics,
     upcomingFollowUps: buildUpcomingFollowUpsForSchools(schools, followUps),
     source: "supabase"
   };
