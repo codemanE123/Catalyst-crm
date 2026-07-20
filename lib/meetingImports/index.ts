@@ -1,3 +1,4 @@
+export { buildManualMeetingImportDraft } from "./buildManualDraft";
 export {
   isFirefliesImportReady,
   MEETING_IMPORT_ENV,

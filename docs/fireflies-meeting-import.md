@@ -17,6 +17,7 @@
 2. Optional GraphQL fetch enriches title/summary/sentences when `FIREFLIES_API_KEY` + `meetingId` are present.
 3. Payload normalizes into `meeting_imports` (`pending_review`), with deterministic school match (participant email domain ↔ school website, else title contains school name).
 4. Reviewers use **Meeting imports** (`/meeting-imports`) or the school profile banner.
+   - **Paste digest:** authenticated users can paste notes into the form on `/meeting-imports` (provider `manual`). No Fireflies env required.
 5. **Accept** creates an `interviews` row (and best-effort Meeting `outreach`). **Reject** closes the import. Unmatched imports must be **linked** to a school first.
 
 ## Environment

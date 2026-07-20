@@ -90,10 +90,11 @@ export default function MeetingImportReviewList({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="text-base font-semibold text-white">
-                  {item.meeting_title || "Untitled Fireflies meeting"}
+                  {item.meeting_title || "Untitled meeting"}
                 </h3>
                 <p className="mt-1 text-xs text-slate-400">
-                  Match: {item.match_status}
+                  {item.provider === "manual" ? "Pasted" : "Fireflies"} · Match:{" "}
+                  {item.match_status}
                   {item.match_confidence != null
                     ? ` (${Math.round(item.match_confidence * 100)}%)`
                     : ""}

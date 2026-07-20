@@ -2,7 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { matchSchoolForMeetingImport } from "./matchSchool";
 import { flagsPossibleStudentPii } from "./normalizeFireflies";
-import type { MeetingImportDraft, MeetingImportRecord } from "./types";
+import type {
+  MeetingImportDraft,
+  MeetingImportProvider,
+  MeetingImportRecord
+} from "./types";
 
 function relatedSchoolName(value: unknown): string | null {
   if (!value) {
@@ -23,7 +27,7 @@ function mapRow(row: Record<string, unknown>): MeetingImportRecord {
   return {
     id: String(row.id),
     organization_id: String(row.organization_id),
-    provider: "fireflies",
+    provider: (row.provider as MeetingImportProvider) || "fireflies",
     provider_meeting_id: String(row.provider_meeting_id),
     school_id: (row.school_id as string | null) ?? null,
     contact_id: (row.contact_id as string | null) ?? null,
@@ -55,16 +59,24 @@ function mapRow(row: Record<string, unknown>): MeetingImportRecord {
 export async function upsertMeetingImportFromDraft(params: {
   supabase: SupabaseClient;
   draft: MeetingImportDraft;
+  schoolIdOverride?: string | null;
 }): Promise<
   | { ok: true; record: MeetingImportRecord; created: boolean }
   | { ok: false; error: string }
 > {
-  const match = await matchSchoolForMeetingImport({
-    supabase: params.supabase,
-    organizationId: params.draft.organization_id,
-    participants: params.draft.participants,
-    meetingTitle: params.draft.meeting_title
-  });
+  const match = params.schoolIdOverride
+    ? {
+        school_id: params.schoolIdOverride,
+        school_name: null,
+        match_status: "linked" as const,
+        match_confidence: 1
+      }
+    : await matchSchoolForMeetingImport({
+        supabase: params.supabase,
+        organizationId: params.draft.organization_id,
+        participants: params.draft.participants,
+        meetingTitle: params.draft.meeting_title
+      });
 
   const piiFlag = flagsPossibleStudentPii(
     `${params.draft.digest_text ?? ""}\n${params.draft.transcript_excerpt ?? ""}`

@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 
+import ManualMeetingImportForm from "@/app/components/ManualMeetingImportForm";
 import MeetingImportReviewList from "@/app/components/MeetingImportReviewList";
-import { PageHeader, Panel } from "@/app/components/ui";
+import { PageHeader, Panel, PanelTitle } from "@/app/components/ui";
 import { MUTATION_ROLES, requireRole } from "@/lib/authz";
 import { isFirefliesImportReady } from "@/lib/meetingImports/config";
 import { listPendingMeetingImports } from "@/lib/meetingImports/service";
@@ -59,26 +60,34 @@ export default async function MeetingImportsPage() {
     <div>
       <PageHeader
         title="Meeting imports"
-        subtitle="Fireflies digests land here for human review before they become discovery interview notes."
+        subtitle="Paste a digest or receive Fireflies webhooks, then Accept to create discovery interview notes."
       />
+
+      <Panel className="mb-6">
+        <PanelTitle
+          title="Paste meeting digest"
+          description="Stage notes for review. Nothing hits CRM truth until you Accept."
+        />
+        <ManualMeetingImportForm canAct={canAct} schools={schools} />
+      </Panel>
 
       {!importReady ? (
         <Panel className="mb-6 border-amber-500/30 bg-amber-500/10">
           <p className="text-sm text-amber-100">
-            Fireflies import is not configured on this environment. Set{" "}
+            Fireflies auto-import is optional. Paste digests above anytime. To
+            enable webhooks, set{" "}
             <code className="text-amber-50">MEETING_IMPORT_ENABLED=true</code>{" "}
             and{" "}
-            <code className="text-amber-50">FIREFLIES_WEBHOOK_SECRET</code>, then
-            point Fireflies at{" "}
-            <code className="text-amber-50">
-              /api/integrations/fireflies/webhook
-            </code>
-            .
+            <code className="text-amber-50">FIREFLIES_WEBHOOK_SECRET</code>.
           </p>
         </Panel>
       ) : null}
 
       <Panel>
+        <PanelTitle
+          title="Pending review"
+          description="Link a school if needed, then Accept to populate discovery notes."
+        />
         <MeetingImportReviewList
           canAct={canAct}
           imports={imports}

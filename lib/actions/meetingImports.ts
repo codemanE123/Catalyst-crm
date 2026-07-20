@@ -1,11 +1,16 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 
 import { AUDIT_ACTIONS, recordAuditEvent } from "@/lib/auditLog";
 import { MUTATION_ROLES, requireRole } from "@/lib/authz";
+import { buildManualMeetingImportDraft } from "@/lib/meetingImports/buildManualDraft";
 import { resolveMeetingImportConfig } from "@/lib/meetingImports/config";
-import { getMeetingImportById } from "@/lib/meetingImports/service";
+import {
+  getMeetingImportById,
+  upsertMeetingImportFromDraft
+} from "@/lib/meetingImports/service";
 import { getRecordOwnershipFields } from "@/lib/supabase";
 import {
   getServerSupabaseClient,
@@ -15,7 +20,7 @@ import {
 } from "@/lib/supabaseServer";
 
 export type MeetingImportActionResult =
-  | { ok: true; interviewId?: string; message: string }
+  | { ok: true; interviewId?: string; importId?: string; message: string }
   | { ok: false; error: string };
 
 async function requireWriterContext(organizationId: string) {
@@ -51,6 +56,88 @@ async function requireWriterContext(organizationId: string) {
   }
 
   return { ok: true as const, supabase, user, ownership };
+}
+
+export async function createManualMeetingImport(input: {
+  digestText: string;
+  meetingTitle?: string;
+  meetingDate?: string;
+  schoolId?: string;
+}): Promise<MeetingImportActionResult> {
+  const ownership = await getRecordOwnershipFields();
+  if (!ownership) {
+    return { ok: false, error: "Sign in to paste meeting digests." };
+  }
+
+  const context = await requireWriterContext(ownership.organization_id);
+  if (!context.ok) {
+    return { ok: false, error: context.error };
+  }
+
+  const schoolId = input.schoolId?.trim() || null;
+  if (schoolId) {
+    const { data: school } = await context.supabase
+      .from("schools")
+      .select("id")
+      .eq("id", schoolId)
+      .eq("organization_id", ownership.organization_id)
+      .maybeSingle();
+
+    if (!school) {
+      return { ok: false, error: "Select a valid school in your organization." };
+    }
+  }
+
+  const draft = buildManualMeetingImportDraft({
+    organizationId: ownership.organization_id,
+    digestText: input.digestText,
+    meetingTitle: input.meetingTitle,
+    meetingDate: input.meetingDate
+  });
+
+  if ("error" in draft) {
+    return { ok: false, error: draft.error };
+  }
+
+  // Ensure uniqueness even if UUID generation is mocked in tests.
+  draft.provider_meeting_id =
+    draft.provider_meeting_id || `manual-${randomUUID()}`;
+
+  const saved = await upsertMeetingImportFromDraft({
+    supabase: context.supabase,
+    draft,
+    schoolIdOverride: schoolId
+  });
+
+  if (!saved.ok) {
+    return { ok: false, error: saved.error };
+  }
+
+  await recordAuditEvent(context.supabase, {
+    organizationId: ownership.organization_id,
+    actorUserId: context.user.id,
+    action: AUDIT_ACTIONS.meetingImportReceived,
+    targetTable: "meeting_imports",
+    recordId: saved.record.id,
+    metadata: {
+      provider: "manual",
+      school_id: schoolId,
+      match_status: saved.record.match_status
+    }
+  });
+
+  revalidatePath("/meeting-imports");
+  if (schoolId) {
+    revalidatePath(`/schools/${schoolId}`);
+  }
+
+  return {
+    ok: true,
+    importId: saved.record.id,
+    message: schoolId
+      ? "Digest staged for review. Accept it to add discovery interview notes."
+      : "Digest staged for review. Link a school, then Accept to add CRM notes."
+  };
 }
 
 export async function linkMeetingImportToSchool(
@@ -210,22 +297,24 @@ export async function acceptMeetingImport(
     ? record.meeting_started_at.slice(0, 10)
     : new Date().toISOString().slice(0, 10);
 
+  const providerLabel =
+    record.provider === "manual" ? "Pasted meeting" : "Fireflies";
   const digest =
     record.digest_text?.trim() ||
     record.meeting_title?.trim() ||
-    "Fireflies meeting digest";
+    `${providerLabel} digest`;
 
   const { data: interview, error: interviewError } = await context.supabase
     .from("interviews")
     .insert({
       school_id: record.school_id,
-      interviewer: "Fireflies import",
+      interviewer: `${providerLabel} import`,
       interview_date: interviewDate,
       sentiment: "Warm",
       notes: digest.slice(0, 5000),
-      follow_up: "Review Fireflies digest and set next step.",
+      follow_up: "Review imported digest and set next step.",
       raw_notes: record.transcript_excerpt,
-      next_step: "Review Fireflies digest and set next step.",
+      next_step: "Review imported digest and set next step.",
       pilot_interest: "Medium",
       organization_id: ownership.organization_id,
       created_by: ownership.created_by,
@@ -242,10 +331,10 @@ export async function acceptMeetingImport(
   await context.supabase.from("outreach").insert({
     school_id: record.school_id,
     channel: "Meeting",
-    subject: record.meeting_title ?? "Fireflies meeting",
+    subject: record.meeting_title ?? `${providerLabel} meeting`,
     outcome: "Completed",
     outreach_date: interviewDate,
-    owner: "Fireflies import",
+    owner: `${providerLabel} import`,
     next_step: "Review imported meeting notes.",
     organization_id: ownership.organization_id,
     created_by: ownership.created_by,
@@ -280,7 +369,7 @@ export async function acceptMeetingImport(
     metadata: {
       interview_id: interview.id,
       school_id: record.school_id,
-      provider: "fireflies"
+      provider: record.provider
     }
   });
 
@@ -293,7 +382,7 @@ export async function acceptMeetingImport(
     metadata: {
       school_id: record.school_id,
       interview_date: interviewDate,
-      source: "fireflies_import"
+      source: `${record.provider}_import`
     }
   });
 

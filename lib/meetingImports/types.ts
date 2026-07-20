@@ -1,4 +1,4 @@
-export const MEETING_IMPORT_PROVIDERS = ["fireflies"] as const;
+export const MEETING_IMPORT_PROVIDERS = ["fireflies", "manual"] as const;
 export type MeetingImportProvider = (typeof MEETING_IMPORT_PROVIDERS)[number];
 
 export const MEETING_IMPORT_MATCH_STATUSES = [
