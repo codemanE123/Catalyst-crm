@@ -77,14 +77,14 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
     <div>
       <PageHeader
         title="Contacts"
-        subtitle="School and corporate / industry partner relationships in one directory."
+        subtitle="School and corporate / industry partner relationships in one directory. Open a contact to browse Previous / Next."
       />
 
       {canAct ? (
         <Panel className="mb-6">
           <PanelTitle
             title="Add partners and people"
-            description="Create a partner organization, then add contacts. Partner contacts can also link to schools."
+            description="Create a partner organization, then add contacts. Partner contacts can also link to a school."
           />
           <ContactsCreatePanel
             canAct={canAct}
@@ -175,6 +175,15 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
       </Panel>
 
       <Panel padding={false}>
+        <div className="flex items-center justify-between border-b border-white/5 px-5 py-3">
+          <p className="text-sm text-slate-400">
+            Showing{" "}
+            <span className="font-semibold text-slate-200">{filtered.length}</span>
+            {filtered.length === contacts.length
+              ? " contacts"
+              : ` of ${contacts.length} contacts`}
+          </p>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-left text-sm">
             <thead className="bg-white/5 text-xs uppercase tracking-wide text-slate-400">
@@ -189,14 +198,20 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
             </thead>
             <tbody className="divide-y divide-white/5">
               {filtered.map((contact) => (
-                <tr key={contact.id}>
+                <tr key={contact.id} className="hover:bg-white/[0.03]">
                   <td className="px-5 py-4 font-semibold text-white">
-                    {contact.name}
+                    <Link
+                      href={`/contacts/${contact.id}`}
+                      prefetch={false}
+                      className="text-blue-300 hover:text-blue-200"
+                    >
+                      {contact.name}
+                    </Link>
                     {contact.linkedinUrl ? (
                       <>
                         {" "}
                         <a
-                          className="text-xs font-medium text-blue-300 hover:text-blue-200"
+                          className="text-xs font-medium text-slate-400 hover:text-slate-200"
                           href={contact.linkedinUrl}
                           rel="noreferrer"
                           target="_blank"

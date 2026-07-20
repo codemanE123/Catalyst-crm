@@ -51,6 +51,7 @@ function pageTitleFromPath(pathname: string): string {
   if (pathname.startsWith("/schools/new")) return "Add school";
   if (pathname.startsWith("/schools/")) return "School profile";
   if (pathname.startsWith("/schools")) return "Schools";
+  if (pathname.startsWith("/contacts/")) return "Contact";
   if (pathname.startsWith("/contacts")) return "Contacts";
   if (pathname.startsWith("/follow-ups")) return "Follow-ups";
   if (pathname.startsWith("/meeting-imports")) return "Meeting imports";

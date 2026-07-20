@@ -258,27 +258,22 @@ export default function ContactsCreatePanel({
           </select>
         </label>
         {affiliation === "partner" ? (
-          <fieldset className="md:col-span-2">
-            <legend className="text-xs text-slate-400">
-              Linked schools (optional)
-            </legend>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="md:col-span-2 text-xs text-slate-400">
+            Linked school (optional)
+            <select
+              className="mt-1 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+              disabled={pending}
+              defaultValue=""
+              name="linked_school_ids"
+            >
+              <option value="">None</option>
               {schools.map((school) => (
-                <label
-                  key={school.id}
-                  className="flex items-center gap-2 text-sm text-slate-300"
-                >
-                  <input
-                    disabled={pending}
-                    name="linked_school_ids"
-                    type="checkbox"
-                    value={school.id}
-                  />
+                <option key={school.id} value={school.id}>
                   {school.name}
-                </label>
+                </option>
               ))}
-            </div>
-          </fieldset>
+            </select>
+          </label>
         ) : null}
         <label className="md:col-span-2 text-xs text-slate-400">
           Notes

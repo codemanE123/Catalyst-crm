@@ -791,6 +791,156 @@ async function shouldUseReadonlyProfileSources(
   return shouldRedactRestrictedFields(membership, allMemberships);
 }
 
+export type ContactBrowseData = {
+  contact: SchoolContact & {
+    linkedSchools: { id: string; name: string }[];
+  };
+  previousId: string | null;
+  nextId: string | null;
+  position: number;
+  total: number;
+};
+
+export async function getContactBrowseData(
+  contactId: string
+): Promise<ContactBrowseData | null> {
+  const { contacts } = await getDashboardData();
+  const ordered = [...contacts].sort((left, right) =>
+    left.name.localeCompare(right.name, undefined, { sensitivity: "base" })
+  );
+  const index = ordered.findIndex((contact) => contact.id === contactId);
+
+  if (index < 0) {
+    return null;
+  }
+
+  const summary = ordered[index];
+  const previousId = index > 0 ? ordered[index - 1].id : null;
+  const nextId = index < ordered.length - 1 ? ordered[index + 1].id : null;
+
+  const supabase = await getServerSupabaseClient();
+
+  if (!supabase) {
+    const sample = sampleSchoolContacts.find((contact) => contact.id === contactId);
+    return {
+      contact: {
+        ...(sample ?? {
+          ...summary,
+          phone: null,
+          notes: null
+        }),
+        linkedSchools: []
+      },
+      previousId,
+      nextId,
+      position: index + 1,
+      total: ordered.length
+    };
+  }
+
+  const contactResponse = await supabase
+    .from("contacts")
+    .select(
+      "id,name,role,email,phone,notes,relationship,last_touch,linkedin_url,school_id,partner_id,schools(name),partners(name)"
+    )
+    .eq("id", contactId)
+    .maybeSingle();
+
+  if (contactResponse.error || !contactResponse.data) {
+    return {
+      contact: {
+        ...summary,
+        phone: null,
+        notes: null,
+        linkedSchools: []
+      },
+      previousId,
+      nextId,
+      position: index + 1,
+      total: ordered.length
+    };
+  }
+
+  const row = contactResponse.data as {
+    id: string;
+    name: string;
+    role: string;
+    email: string;
+    phone: string | null;
+    notes: string | null;
+    relationship: SchoolContact["relationship"];
+    last_touch: string;
+    linkedin_url?: string | null;
+    school_id?: string | null;
+    partner_id?: string | null;
+    schools:
+      | { name: string }
+      | { name: string }[]
+      | null;
+    partners:
+      | { name: string }
+      | { name: string }[]
+      | null;
+  };
+
+  const linkedResponse = await supabase
+    .from("contact_linked_schools")
+    .select("school_id, schools(id, name)")
+    .eq("contact_id", contactId);
+
+  const linkedSchools = (linkedResponse.data ?? [])
+    .map((item) => {
+      const linked = item as {
+        school_id: string;
+        schools:
+          | { id: string; name: string }
+          | { id: string; name: string }[]
+          | null;
+      };
+      const school = Array.isArray(linked.schools)
+        ? linked.schools[0]
+        : linked.schools;
+      if (!school) {
+        return null;
+      }
+      return { id: school.id, name: school.name };
+    })
+    .filter((item): item is { id: string; name: string } => Boolean(item))
+    .sort((left, right) =>
+      left.name.localeCompare(right.name, undefined, { sensitivity: "base" })
+    );
+
+  const partnerId = row.partner_id ?? null;
+  const schoolId = row.school_id ?? null;
+  const partnerName = getRelatedName(row.partners);
+  const schoolName = getRelatedName(row.schools);
+
+  return {
+    contact: {
+      id: row.id,
+      name: row.name,
+      role: row.role,
+      email: row.email,
+      phone: row.phone,
+      notes: row.notes,
+      last_touch: row.last_touch,
+      relationship: row.relationship,
+      school: partnerId
+        ? partnerName ?? "Partner organization"
+        : schoolName ?? "Unassigned school",
+      schoolId,
+      partnerId,
+      affiliation: partnerId ? "partner" : "school",
+      linkedinUrl: row.linkedin_url ?? null,
+      linkedSchools
+    },
+    previousId,
+    nextId,
+    position: index + 1,
+    total: ordered.length
+  };
+}
+
 export async function getSchoolProfileData(
   schoolId: string
 ): Promise<SchoolProfileData | null> {
