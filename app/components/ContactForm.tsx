@@ -120,6 +120,7 @@ export default function ContactForm({
                 email: selectedContact.email,
                 phone: selectedContact.phone ?? "",
                 notes: selectedContact.notes ?? "",
+                linkedin_url: selectedContact.linkedinUrl ?? "",
                 relationship: selectedContact.relationship
               }}
             />
@@ -150,6 +151,7 @@ function ContactFields({
     email: string;
     phone: string;
     notes: string;
+    linkedin_url?: string;
     relationship: SchoolContact["relationship"];
   };
 }) {
@@ -213,6 +215,17 @@ function ContactFields({
             </option>
           ))}
         </select>
+      </label>
+      <label className="block">
+        <span className="text-sm font-medium text-slate-700">LinkedIn URL</span>
+        <input
+          name="linkedin_url"
+          type="url"
+          maxLength={500}
+          defaultValue={defaults?.linkedin_url}
+          className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-cyan-500 transition focus:ring-2"
+          placeholder="https://www.linkedin.com/in/…"
+        />
       </label>
       <label className="block">
         <span className="text-sm font-medium text-slate-700">Notes</span>

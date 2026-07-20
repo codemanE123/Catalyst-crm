@@ -88,9 +88,12 @@ export type Contact = {
   role: string;
   school: string;
   schoolId: string | null;
+  partnerId: string | null;
+  affiliation: "school" | "partner";
   email: string;
   last_touch: string;
   relationship: "New" | "Warm" | "Champion" | "Needs follow-up";
+  linkedinUrl?: string | null;
 };
 
 export type SchoolContact = Contact & {
@@ -164,9 +167,22 @@ export type SchoolProfileData = {
   restrictedFieldsRedacted?: boolean;
 };
 
-type ContactRow = Omit<Contact, "school" | "schoolId"> & {
+type ContactRow = Omit<
+  Contact,
+  "school" | "schoolId" | "partnerId" | "affiliation" | "linkedinUrl"
+> & {
   school_id?: string | null;
+  partner_id?: string | null;
+  linkedin_url?: string | null;
   schools:
+    | {
+        name: string;
+      }
+    | {
+        name: string;
+      }[]
+    | null;
+  partners:
     | {
         name: string;
       }
@@ -176,12 +192,20 @@ type ContactRow = Omit<Contact, "school" | "schoolId"> & {
     | null;
 };
 
-function getRelatedSchoolName(schools: ContactRow["schools"]) {
-  if (Array.isArray(schools)) {
-    return schools[0]?.name ?? "Unassigned school";
+function getRelatedName(
+  value:
+    | { name: string }
+    | { name: string }[]
+    | null
+    | undefined
+): string | null {
+  if (!value) {
+    return null;
   }
-
-  return schools?.name ?? "Unassigned school";
+  if (Array.isArray(value)) {
+    return value[0]?.name ?? null;
+  }
+  return value.name ?? null;
 }
 
 const sampleSchools: School[] = [
@@ -239,6 +263,8 @@ const sampleContacts: Contact[] = [
     role: "Principal",
     school: "Roosevelt High School",
     schoolId: "school-1",
+    partnerId: null,
+    affiliation: "school",
     email: "elaine.foster@example.edu",
     last_touch: "2026-07-01",
     relationship: "Champion"
@@ -249,6 +275,8 @@ const sampleContacts: Contact[] = [
     role: "College Counselor",
     school: "North Star Academy",
     schoolId: "school-2",
+    partnerId: null,
+    affiliation: "school",
     email: "marcus.lee@example.edu",
     last_touch: "2026-06-28",
     relationship: "Warm"
@@ -259,6 +287,8 @@ const sampleContacts: Contact[] = [
     role: "Assistant Principal",
     school: "Lakeview Middle School",
     schoolId: "school-3",
+    partnerId: null,
+    affiliation: "school",
     email: "ana.morales@example.edu",
     last_touch: "2026-06-20",
     relationship: "Needs follow-up"
@@ -277,6 +307,8 @@ const sampleSchoolContacts: SchoolContact[] = [
     role: "Dean of Students",
     school: "Roosevelt High School",
     schoolId: "school-1",
+    partnerId: null,
+    affiliation: "school",
     email: "renee.jackson@example.edu",
     last_touch: "2026-06-26",
     relationship: "Warm",
@@ -550,7 +582,9 @@ export async function getDashboardData(): Promise<DashboardData> {
       .order("name"),
     supabase
       .from("contacts")
-      .select("id,name,role,email,last_touch,relationship,school_id,schools(name)")
+      .select(
+        "id,name,role,email,last_touch,relationship,school_id,partner_id,linkedin_url,schools(name),partners(name)"
+      )
       .order("last_touch", { ascending: false })
   ]);
 
@@ -577,16 +611,25 @@ export async function getDashboardData(): Promise<DashboardData> {
   const schools = (schoolsResponse.data ?? []) as School[];
   const contacts = (contactsResponse.data ?? []).map((contact) => {
     const row = contact as ContactRow;
+    const schoolId = row.school_id ?? null;
+    const partnerId = row.partner_id ?? null;
+    const partnerName = getRelatedName(row.partners);
+    const schoolName = getRelatedName(row.schools);
 
     return {
       id: row.id,
       name: row.name,
       role: row.role,
-      school: getRelatedSchoolName(row.schools),
-      schoolId: row.school_id ?? null,
+      school: partnerId
+        ? partnerName ?? "Partner organization"
+        : schoolName ?? "Unassigned school",
+      schoolId,
+      partnerId,
+      affiliation: partnerId ? ("partner" as const) : ("school" as const),
       email: row.email,
       last_touch: row.last_touch,
-      relationship: row.relationship
+      relationship: row.relationship,
+      linkedinUrl: row.linkedin_url ?? null
     };
   }) satisfies Contact[];
 
@@ -757,7 +800,9 @@ export async function getSchoolProfileData(
 
   const contactsPromise = supabase
     .from("contacts")
-    .select("id,name,role,email,phone,relationship,last_touch,notes")
+    .select(
+      "id,name,role,email,phone,relationship,last_touch,notes,linkedin_url,school_id,partner_id"
+    )
     .eq("school_id", schoolId)
     .order("last_touch", { ascending: false });
 
@@ -827,11 +872,34 @@ export async function getSchoolProfileData(
   const school = schoolResponse.data as School;
   const contacts = (contactsResponse.error ? [] : (contactsResponse.data ?? []))
     .map((contact) => {
-      const row = contact as Omit<SchoolContact, "school">;
+      const row = contact as {
+        id: string;
+        name: string;
+        role: string;
+        email: string;
+        phone: string | null;
+        relationship: SchoolContact["relationship"];
+        last_touch: string;
+        notes: string | null;
+        linkedin_url?: string | null;
+        school_id?: string | null;
+        partner_id?: string | null;
+      };
 
       return {
-        ...row,
-        school: school.name
+        id: row.id,
+        name: row.name,
+        role: row.role,
+        email: row.email,
+        phone: row.phone,
+        notes: row.notes,
+        last_touch: row.last_touch,
+        relationship: row.relationship,
+        school: school.name,
+        schoolId: row.school_id ?? schoolId,
+        partnerId: row.partner_id ?? null,
+        affiliation: "school" as const,
+        linkedinUrl: row.linkedin_url ?? null
       };
     });
 

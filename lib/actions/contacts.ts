@@ -25,20 +25,20 @@ import {
   type ContactActionResult
 } from "@/lib/validation";
 
-type SchoolMutationContext =
+type MutationContext =
   | {
       ok: true;
       supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>;
       user: User;
       ownership: RecordOwnershipFields;
-      schoolOrganizationId: string;
+      organizationId: string;
     }
   | { ok: false; error: string };
 
-async function requireContactMutationContext(
-  schoolId: string,
+async function requireOrgWriteContext(
+  organizationId: string,
   permissionMessage: string
-): Promise<SchoolMutationContext> {
+): Promise<MutationContext> {
   const supabase = await getServerSupabaseClient();
 
   if (!supabase) {
@@ -56,20 +56,7 @@ async function requireContactMutationContext(
     return { ok: false, error: "Sign in to manage contacts." };
   }
 
-  const schoolOrganizationId = await getSchoolOrganizationId(supabase, schoolId);
-
-  if (!schoolOrganizationId) {
-    return {
-      ok: false,
-      error: "Select a valid school in your organization."
-    };
-  }
-
-  const membership = await requireRole(
-    user,
-    MUTATION_ROLES,
-    schoolOrganizationId
-  );
+  const membership = await requireRole(user, MUTATION_ROLES, organizationId);
 
   if (!membership) {
     return { ok: false, error: permissionMessage };
@@ -77,7 +64,7 @@ async function requireContactMutationContext(
 
   const ownership = await getRecordOwnershipFields();
 
-  if (!ownership || ownership.organization_id !== schoolOrganizationId) {
+  if (!ownership || ownership.organization_id !== organizationId) {
     return { ok: false, error: permissionMessage };
   }
 
@@ -86,8 +73,34 @@ async function requireContactMutationContext(
     supabase,
     user,
     ownership,
-    schoolOrganizationId
+    organizationId
   };
+}
+
+async function resolveLinkedSchools(
+  supabase: MutationContext extends { ok: true } ? MutationContext["supabase"] : never,
+  organizationId: string,
+  linkedSchoolIds: string[] | undefined
+) {
+  const ids = [...new Set((linkedSchoolIds ?? []).filter(Boolean))];
+  if (!ids.length) {
+    return { ok: true as const, ids: [] as string[] };
+  }
+
+  const { data, error } = await supabase
+    .from("schools")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .in("id", ids);
+
+  if (error || !data || data.length !== ids.length) {
+    return {
+      ok: false as const,
+      error: "One or more linked schools are invalid for your organization."
+    };
+  }
+
+  return { ok: true as const, ids };
 }
 
 export async function createContact(
@@ -100,13 +113,54 @@ export async function createContact(
   }
 
   const input = validation.data;
-  const context = await requireContactMutationContext(
-    input.school_id,
+  const schoolId = input.school_id?.trim() || null;
+  const partnerId = input.partner_id?.trim() || null;
+
+  const supabaseProbe = await getServerSupabaseClient();
+  if (!supabaseProbe) {
+    return {
+      ok: false,
+      error: isDevelopmentEnvironment()
+        ? "Supabase is not configured."
+        : SUPABASE_CONFIGURATION_ERROR
+    };
+  }
+
+  let organizationId: string | null = null;
+  if (schoolId) {
+    organizationId = await getSchoolOrganizationId(supabaseProbe, schoolId);
+  } else if (partnerId) {
+    const { data: partner } = await supabaseProbe
+      .from("partners")
+      .select("organization_id")
+      .eq("id", partnerId)
+      .maybeSingle();
+    organizationId = partner?.organization_id ?? null;
+  }
+
+  if (!organizationId) {
+    return {
+      ok: false,
+      error: "Select a valid school or partner in your organization."
+    };
+  }
+
+  const context = await requireOrgWriteContext(
+    organizationId,
     "You do not have permission to create contacts."
   );
 
   if (!context.ok) {
     return { ok: false, error: context.error };
+  }
+
+  const linked = await resolveLinkedSchools(
+    context.supabase,
+    organizationId,
+    input.linked_school_ids
+  );
+  if (!linked.ok) {
+    return { ok: false, error: linked.error };
   }
 
   const { supabase, user, ownership } = context;
@@ -115,12 +169,14 @@ export async function createContact(
   const { data: insertedContact, error } = await supabase
     .from("contacts")
     .insert({
-      school_id: input.school_id,
+      school_id: schoolId,
+      partner_id: partnerId,
       name: input.name,
       role: input.role,
       email: input.email,
       phone: input.phone ?? null,
       notes: input.notes ?? null,
+      linkedin_url: input.linkedin_url ?? null,
       relationship: input.relationship,
       last_touch: lastTouch,
       organization_id: ownership.organization_id,
@@ -134,6 +190,24 @@ export async function createContact(
     return { ok: false, error: "Could not create the contact." };
   }
 
+  if (linked.ids.length) {
+    const { error: linkError } = await supabase
+      .from("contact_linked_schools")
+      .insert(
+        linked.ids.map((id) => ({
+          contact_id: insertedContact.id,
+          school_id: id,
+          organization_id: ownership.organization_id
+        }))
+      );
+    if (linkError) {
+      return {
+        ok: false,
+        error: "Contact created, but linked schools could not be saved."
+      };
+    }
+  }
+
   await recordAuditEvent(supabase, {
     organizationId: ownership.organization_id,
     actorUserId: user.id,
@@ -141,14 +215,18 @@ export async function createContact(
     targetTable: "contacts",
     recordId: insertedContact.id,
     metadata: {
-      school_id: input.school_id,
+      school_id: schoolId,
+      partner_id: partnerId,
       name: input.name,
       email: input.email,
       relationship: input.relationship
     }
   });
 
-  revalidatePath(`/schools/${input.school_id}`);
+  if (schoolId) {
+    revalidatePath(`/schools/${schoolId}`);
+  }
+  revalidatePath("/contacts");
   revalidatePath("/");
 
   return { ok: true };
@@ -164,8 +242,16 @@ export async function updateContact(
   }
 
   const input = validation.data;
-  const context = await requireContactMutationContext(
-    input.school_id,
+  const schoolId = input.school_id?.trim() || null;
+  const partnerId = input.partner_id?.trim() || null;
+
+  const ownership = await getRecordOwnershipFields();
+  if (!ownership) {
+    return { ok: false, error: "Sign in to update contacts." };
+  }
+
+  const context = await requireOrgWriteContext(
+    ownership.organization_id,
     "You do not have permission to update contacts."
   );
 
@@ -173,18 +259,34 @@ export async function updateContact(
     return { ok: false, error: context.error };
   }
 
-  const { supabase, user, ownership } = context;
+  const { supabase, user } = context;
 
-  const { data: existingContact, error: lookupError } = await supabase
+  let query = supabase
     .from("contacts")
-    .select("id")
+    .select("id,school_id,partner_id")
     .eq("id", input.contact_id)
-    .eq("school_id", input.school_id)
-    .eq("organization_id", ownership.organization_id)
-    .maybeSingle();
+    .eq("organization_id", ownership.organization_id);
+
+  if (schoolId) {
+    query = query.eq("school_id", schoolId);
+  }
+  if (partnerId) {
+    query = query.eq("partner_id", partnerId);
+  }
+
+  const { data: existingContact, error: lookupError } = await query.maybeSingle();
 
   if (lookupError || !existingContact) {
-    return { ok: false, error: "Contact not found for this school." };
+    return { ok: false, error: "Contact not found." };
+  }
+
+  const linked = await resolveLinkedSchools(
+    supabase,
+    ownership.organization_id,
+    input.linked_school_ids
+  );
+  if (!linked.ok) {
+    return { ok: false, error: linked.error };
   }
 
   const { data: updatedContact, error } = await supabase
@@ -195,16 +297,35 @@ export async function updateContact(
       email: input.email,
       phone: input.phone ?? null,
       notes: input.notes ?? null,
+      linkedin_url: input.linkedin_url ?? null,
       relationship: input.relationship,
       updated_by: ownership.updated_by
     })
     .eq("id", input.contact_id)
-    .eq("school_id", input.school_id)
+    .eq("organization_id", ownership.organization_id)
     .select("id")
     .single();
 
   if (error || !updatedContact) {
     return { ok: false, error: "Could not update the contact." };
+  }
+
+  if (input.linked_school_ids) {
+    await supabase
+      .from("contact_linked_schools")
+      .delete()
+      .eq("contact_id", input.contact_id)
+      .eq("organization_id", ownership.organization_id);
+
+    if (linked.ids.length) {
+      await supabase.from("contact_linked_schools").insert(
+        linked.ids.map((id) => ({
+          contact_id: input.contact_id,
+          school_id: id,
+          organization_id: ownership.organization_id
+        }))
+      );
+    }
   }
 
   await recordAuditEvent(supabase, {
@@ -214,14 +335,18 @@ export async function updateContact(
     targetTable: "contacts",
     recordId: updatedContact.id,
     metadata: {
-      school_id: input.school_id,
+      school_id: existingContact.school_id,
+      partner_id: existingContact.partner_id,
       name: input.name,
       email: input.email,
       relationship: input.relationship
     }
   });
 
-  revalidatePath(`/schools/${input.school_id}`);
+  if (existingContact.school_id) {
+    revalidatePath(`/schools/${existingContact.school_id}`);
+  }
+  revalidatePath("/contacts");
   revalidatePath("/");
 
   return { ok: true };

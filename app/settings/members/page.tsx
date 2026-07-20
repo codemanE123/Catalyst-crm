@@ -1,4 +1,5 @@
 import MembersSettingsPanel from "./MembersSettingsPanel";
+import { listMembershipInvites } from "@/lib/actions/invites";
 import {
   getManageableOrganizations,
   getOrganizationMembers
@@ -65,7 +66,14 @@ export default async function MembersSettingsPage({
       (organization) => organization.id === params.organization_id
     )?.id ?? defaultOrganizationId;
 
-  const members = await getOrganizationMembers(selectedOrganizationId);
+  const [members, invites] = await Promise.all([
+    getOrganizationMembers(selectedOrganizationId),
+    listMembershipInvites(selectedOrganizationId)
+  ]);
+
+  const activeInvites = invites.filter(
+    (invite) => !invite.revoked_at && invite.use_count < invite.max_uses
+  );
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-950 lg:px-10">
@@ -85,8 +93,8 @@ export default async function MembersSettingsPage({
             Organization members
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-            List members, change roles, and remove access for your organization.
-            Only admin and super_admin users can manage memberships.
+            Invite teammates with a shareable link, change roles, and remove
+            access. Only admin and super_admin users can manage memberships.
           </p>
         </section>
 
@@ -94,6 +102,7 @@ export default async function MembersSettingsPage({
           organizations={organizations}
           initialOrganizationId={selectedOrganizationId}
           initialMembers={members}
+          initialInvites={activeInvites}
           actorIsSuperAdmin={isSuperAdmin(memberships)}
         />
       </div>

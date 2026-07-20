@@ -489,26 +489,65 @@ const contactFieldsSchema = z.object({
   })
 });
 
-const createContactSchema = contactFieldsSchema.extend({
-  school_id: z.string().uuid({ message: "Select a valid school." })
-});
+const createContactSchema = contactFieldsSchema
+  .extend({
+    school_id: z.string().uuid().optional().or(z.literal("")),
+    partner_id: z.string().uuid().optional().or(z.literal("")),
+    linkedin_url: optionalText(500),
+    linked_school_ids: z.array(z.string().uuid()).max(25).optional()
+  })
+  .superRefine((value, ctx) => {
+    const schoolId = value.school_id?.trim() || "";
+    const partnerId = value.partner_id?.trim() || "";
+    if (Boolean(schoolId) === Boolean(partnerId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select either a school or a partner organization."
+      });
+    }
+  });
 
 const updateContactSchema = contactFieldsSchema.extend({
-  school_id: z.string().uuid({ message: "Select a valid school." }),
-  contact_id: z.string().uuid({ message: "Select a valid contact." })
+  school_id: z.string().uuid().optional().or(z.literal("")),
+  partner_id: z.string().uuid().optional().or(z.literal("")),
+  contact_id: z.string().uuid({ message: "Select a valid contact." }),
+  linkedin_url: optionalText(500),
+  linked_school_ids: z.array(z.string().uuid()).max(25).optional()
+});
+
+const createPartnerSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Partner name is required.")
+    .max(200, "Partner name must be 200 characters or fewer."),
+  partner_type: z.enum(["Corporate", "Industry partner", "Other"], {
+    message: "Select a partner type."
+  }),
+  website: optionalText(500),
+  industry: optionalText(120),
+  notes: optionalText(4000)
 });
 
 export type CreateContactInput = z.infer<typeof createContactSchema>;
 export type UpdateContactInput = z.infer<typeof updateContactSchema>;
+export type CreatePartnerInput = z.infer<typeof createPartnerSchema>;
 
 function parseContactForm(formData: FormData) {
+  const linked = formData
+    .getAll("linked_school_ids")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
   return {
     name: formValue(formData, "name"),
     role: formValue(formData, "role"),
     email: formValue(formData, "email"),
     phone: formValue(formData, "phone"),
     notes: formValue(formData, "notes"),
-    relationship: formValue(formData, "relationship")
+    relationship: formValue(formData, "relationship"),
+    linkedin_url: formValue(formData, "linkedin_url"),
+    linked_school_ids: linked
   };
 }
 
@@ -517,6 +556,7 @@ export function validateCreateContact(
 ): ValidationResult<CreateContactInput> {
   const parsed = createContactSchema.safeParse({
     school_id: formValue(formData, "school_id"),
+    partner_id: formValue(formData, "partner_id"),
     ...parseContactForm(formData)
   });
 
@@ -532,6 +572,7 @@ export function validateUpdateContact(
 ): ValidationResult<UpdateContactInput> {
   const parsed = updateContactSchema.safeParse({
     school_id: formValue(formData, "school_id"),
+    partner_id: formValue(formData, "partner_id"),
     contact_id: formValue(formData, "contact_id"),
     ...parseContactForm(formData)
   });
@@ -542,3 +583,27 @@ export function validateUpdateContact(
 
   return { success: true, data: parsed.data };
 }
+
+export function validateCreatePartner(
+  formData: FormData
+): ValidationResult<CreatePartnerInput> {
+  const parsed = createPartnerSchema.safeParse({
+    name: formValue(formData, "name"),
+    partner_type: formValue(formData, "partner_type"),
+    website: formValue(formData, "website"),
+    industry: formValue(formData, "industry"),
+    notes: formValue(formData, "notes")
+  });
+
+  if (!parsed.success) {
+    return { success: false, error: formatZodError(parsed.error) };
+  }
+
+  return { success: true, data: parsed.data };
+}
+
+export type PartnerActionResult = {
+  ok: boolean;
+  error?: string;
+  partnerId?: string;
+};
