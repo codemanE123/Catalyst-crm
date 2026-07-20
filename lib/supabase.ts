@@ -167,47 +167,6 @@ export type SchoolProfileData = {
   restrictedFieldsRedacted?: boolean;
 };
 
-type ContactRow = Omit<
-  Contact,
-  "school" | "schoolId" | "partnerId" | "affiliation" | "linkedinUrl"
-> & {
-  school_id?: string | null;
-  partner_id?: string | null;
-  linkedin_url?: string | null;
-  schools:
-    | {
-        name: string;
-      }
-    | {
-        name: string;
-      }[]
-    | null;
-  partners:
-    | {
-        name: string;
-      }
-    | {
-        name: string;
-      }[]
-    | null;
-};
-
-function getRelatedName(
-  value:
-    | { name: string }
-    | { name: string }[]
-    | null
-    | undefined
-): string | null {
-  if (!value) {
-    return null;
-  }
-  if (Array.isArray(value)) {
-    return value[0]?.name ?? null;
-  }
-  return value.name ?? null;
-}
-
 const sampleSchools: School[] = [
   {
     id: "school-1",
@@ -554,6 +513,65 @@ function getSampleSchoolProfileData(schoolId: string): SchoolProfileData | null 
   };
 }
 
+function mapContactRows(
+  rows: Array<Record<string, unknown>>,
+  schoolNameById: Map<string, string>,
+  partnerNameById: Map<string, string>
+): Contact[] {
+  return rows.map((contact) => {
+    const schoolId =
+      typeof contact.school_id === "string" ? contact.school_id : null;
+    const partnerId =
+      typeof contact.partner_id === "string" ? contact.partner_id : null;
+    const partnerName = partnerId ? partnerNameById.get(partnerId) : undefined;
+    const schoolName = schoolId ? schoolNameById.get(schoolId) : undefined;
+
+    return {
+      id: String(contact.id),
+      name: String(contact.name),
+      role: String(contact.role),
+      school: partnerId
+        ? partnerName ?? "Partner organization"
+        : schoolName ?? "Unassigned school",
+      schoolId,
+      partnerId,
+      affiliation: partnerId ? ("partner" as const) : ("school" as const),
+      email: String(contact.email),
+      last_touch: String(contact.last_touch),
+      relationship: contact.relationship as Contact["relationship"],
+      linkedinUrl:
+        typeof contact.linkedin_url === "string" ? contact.linkedin_url : null
+    };
+  });
+}
+
+async function fetchPartnerNamesById(
+  supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>,
+  partnerIds: string[]
+): Promise<Map<string, string>> {
+  const uniqueIds = [...new Set(partnerIds.filter(Boolean))];
+  const partnerNameById = new Map<string, string>();
+
+  if (!uniqueIds.length) {
+    return partnerNameById;
+  }
+
+  const { data, error } = await supabase
+    .from("partners")
+    .select("id,name")
+    .in("id", uniqueIds);
+
+  if (error || !data) {
+    return partnerNameById;
+  }
+
+  for (const row of data as Array<{ id: string; name: string }>) {
+    partnerNameById.set(row.id, row.name);
+  }
+
+  return partnerNameById;
+}
+
 export async function getDashboardData(): Promise<DashboardData> {
   const supabase = await getServerSupabaseClient();
 
@@ -576,10 +594,12 @@ export async function getDashboardData(): Promise<DashboardData> {
     .select("id,name,district,location,status,owner,next_step,website")
     .order("name");
 
+  // Avoid embedding schools(name): contact_linked_schools creates a second
+  // contacts↔schools path and PostgREST rejects the ambiguous relationship.
   const contactsWithPartners = await supabase
     .from("contacts")
     .select(
-      "id,name,role,email,last_touch,relationship,school_id,partner_id,linkedin_url,schools(name),partners(name)"
+      "id,name,role,email,last_touch,relationship,school_id,partner_id,linkedin_url"
     )
     .order("last_touch", { ascending: false });
 
@@ -587,9 +607,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   const contactsFallback = contactsWithPartners.error
     ? await supabase
         .from("contacts")
-        .select(
-          "id,name,role,email,last_touch,relationship,school_id,schools(name)"
-        )
+        .select("id,name,role,email,last_touch,relationship,school_id")
         .order("last_touch", { ascending: false })
     : null;
 
@@ -628,29 +646,17 @@ export async function getDashboardData(): Promise<DashboardData> {
   const followUps = await fetchOpenFollowUps(supabase);
 
   const schools = (schoolsResponse.data ?? []) as School[];
-  const contacts = (contactsResponse.data ?? []).map((contact) => {
-    const row = contact as ContactRow;
-    const schoolId = row.school_id ?? null;
-    const partnerId = row.partner_id ?? null;
-    const partnerName = getRelatedName(row.partners);
-    const schoolName = getRelatedName(row.schools);
-
-    return {
-      id: row.id,
-      name: row.name,
-      role: row.role,
-      school: partnerId
-        ? partnerName ?? "Partner organization"
-        : schoolName ?? "Unassigned school",
-      schoolId,
-      partnerId,
-      affiliation: partnerId ? ("partner" as const) : ("school" as const),
-      email: row.email,
-      last_touch: row.last_touch,
-      relationship: row.relationship,
-      linkedinUrl: row.linkedin_url ?? null
-    };
-  }) satisfies Contact[];
+  const schoolNameById = new Map(schools.map((school) => [school.id, school.name]));
+  const rawContacts = (contactsResponse.data ?? []) as Array<Record<string, unknown>>;
+  const partnerNameById = await fetchPartnerNamesById(
+    supabase,
+    rawContacts
+      .map((row) =>
+        typeof row.partner_id === "string" ? row.partner_id : ""
+      )
+      .filter(Boolean)
+  );
+  const contacts = mapContactRows(rawContacts, schoolNameById, partnerNameById);
 
   let dashboardMetrics = buildSampleDashboardMetrics();
   try {
@@ -841,7 +847,7 @@ export async function getContactBrowseData(
   const contactResponse = await supabase
     .from("contacts")
     .select(
-      "id,name,role,email,phone,notes,relationship,last_touch,linkedin_url,school_id,partner_id,schools(name),partners(name)"
+      "id,name,role,email,phone,notes,relationship,last_touch,linkedin_url,school_id,partner_id"
     )
     .eq("id", contactId)
     .maybeSingle();
@@ -873,14 +879,6 @@ export async function getContactBrowseData(
     linkedin_url?: string | null;
     school_id?: string | null;
     partner_id?: string | null;
-    schools:
-      | { name: string }
-      | { name: string }[]
-      | null;
-    partners:
-      | { name: string }
-      | { name: string }[]
-      | null;
   };
 
   const linkedResponse = await supabase
@@ -912,8 +910,21 @@ export async function getContactBrowseData(
 
   const partnerId = row.partner_id ?? null;
   const schoolId = row.school_id ?? null;
-  const partnerName = getRelatedName(row.partners);
-  const schoolName = getRelatedName(row.schools);
+  let orgName = summary.school;
+
+  if (partnerId) {
+    const partnerNames = await fetchPartnerNamesById(supabase, [partnerId]);
+    orgName = partnerNames.get(partnerId) ?? "Partner organization";
+  } else if (schoolId) {
+    const schoolResponse = await supabase
+      .from("schools")
+      .select("name")
+      .eq("id", schoolId)
+      .maybeSingle();
+    orgName =
+      (schoolResponse.data as { name?: string } | null)?.name ??
+      "Unassigned school";
+  }
 
   return {
     contact: {
@@ -925,9 +936,7 @@ export async function getContactBrowseData(
       notes: row.notes,
       last_touch: row.last_touch,
       relationship: row.relationship,
-      school: partnerId
-        ? partnerName ?? "Partner organization"
-        : schoolName ?? "Unassigned school",
+      school: orgName,
       schoolId,
       partnerId,
       affiliation: partnerId ? "partner" : "school",
