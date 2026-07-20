@@ -25,6 +25,8 @@ function isProtectedPath(pathname: string) {
     pathname.startsWith("/contacts/") ||
     pathname === "/follow-ups" ||
     pathname.startsWith("/follow-ups/") ||
+    pathname === "/meeting-imports" ||
+    pathname.startsWith("/meeting-imports/") ||
     pathname === "/approvals" ||
     pathname.startsWith("/approvals/") ||
     pathname.startsWith("/prospects/") ||

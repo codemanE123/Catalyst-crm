@@ -30,6 +30,7 @@ import Link from "next/link";
 import OutreachLogForm from "@/app/components/OutreachLogForm";
 import FollowUpPanel from "@/app/components/FollowUpPanel";
 import ContactForm from "@/app/components/ContactForm";
+import SchoolMeetingImportsBanner from "@/app/components/SchoolMeetingImportsBanner";
 import SchoolMeetingPrepSection from "@/app/components/SchoolMeetingPrepSection";
 import SchoolRecommendedContactRolesSection from "@/app/components/SchoolRecommendedContactRolesSection";
 import { runContactDiscoveryForSchool } from "@/lib/actions/contactDiscovery";
@@ -39,6 +40,7 @@ import { fetchLatestMeetingPrepBrief } from "@/lib/meetingPrep/execute";
 import SchoolProposalDraftSection from "@/app/components/SchoolProposalDraftSection";
 import { runProposalGenerationForSchool } from "@/lib/actions/proposalGeneration";
 import { fetchLatestProposalDraft } from "@/lib/proposalGeneration/execute";
+import { listPendingMeetingImports } from "@/lib/meetingImports/service";
 import DiscoveryInterviewForm from "@/app/components/DiscoveryInterviewForm";
 import OutreachEmailGenerator from "@/app/components/OutreachEmailGenerator";
 import SchoolForm from "@/app/components/SchoolForm";
@@ -114,6 +116,32 @@ export default async function SchoolProfile({
         )
       : null;
 
+  const pendingMeetingImports =
+    supabase && schoolOrganizationId && source === "supabase"
+      ? await listPendingMeetingImports({
+          supabase,
+          organizationId: schoolOrganizationId,
+          schoolId: id,
+          limit: 10
+        })
+      : [];
+
+  const orgSchoolsForLink =
+    supabase && schoolOrganizationId && pendingMeetingImports.length > 0
+      ? (
+          (
+            await supabase
+              .from("schools")
+              .select("id,name")
+              .eq("organization_id", schoolOrganizationId)
+              .order("name")
+          ).data ?? []
+        ).map((row) => ({
+          id: String((row as { id: string }).id),
+          name: String((row as { name: string }).name)
+        }))
+      : [{ id: school.id, name: school.name }];
+
   const availableTabs = TABS.filter((tab) => {
     if (tab.id === "edit" || tab.id === "discovery") {
       return canMutateSchool;
@@ -186,6 +214,12 @@ export default async function SchoolProfile({
           {RESTRICTED_FIELD_PLACEHOLDER}&quot;.
         </section>
       ) : null}
+
+      <SchoolMeetingImportsBanner
+        canAct={canMutateSchool}
+        imports={pendingMeetingImports}
+        schools={orgSchoolsForLink}
+      />
 
       <nav className="mt-6 flex gap-1 overflow-x-auto border-b border-white/10 pb-px">
         {availableTabs.map((item) => {

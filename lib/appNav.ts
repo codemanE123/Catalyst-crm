@@ -15,6 +15,7 @@ export type AppNavIcon =
   | "schools"
   | "contacts"
   | "followups"
+  | "meetings"
   | "prospects"
   | "jobs"
   | "approvals"
@@ -42,7 +43,8 @@ export function buildAppNavGroups(visibility: AppNavVisibility): AppNavGroup[] {
         { href: "/", label: "Dashboard", icon: "dashboard" },
         { href: "/schools", label: "Schools", icon: "schools" },
         { href: "/contacts", label: "Contacts", icon: "contacts" },
-        { href: "/follow-ups", label: "Follow-ups", icon: "followups" }
+        { href: "/follow-ups", label: "Follow-ups", icon: "followups" },
+        { href: "/meeting-imports", label: "Meeting imports", icon: "meetings" }
       ]
     }
   ];
@@ -107,6 +109,13 @@ export function isNavItemActive(pathname: string, href: string): boolean {
 
   if (href === "/schools") {
     return pathname === "/schools" || pathname.startsWith("/schools/");
+  }
+
+  if (href === "/meeting-imports") {
+    return (
+      pathname === "/meeting-imports" ||
+      pathname.startsWith("/meeting-imports/")
+    );
   }
 
   if (href === "/prospects/generate") {

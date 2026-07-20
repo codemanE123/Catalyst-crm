@@ -56,18 +56,23 @@ const sampleProspectJobs: ProspectGenerationJob[] = [
     job_type: "discover_prospects",
     status: "completed",
     input: {
-      geography: "Southeast US",
-      schoolTypes: ["hbcu", "cae"],
-      keywords: "cybersecurity, workforce development",
-      maxResults: 25
+      geography: "Texas",
+      schoolTypes: ["state_university"],
+      keywords: "",
+      maxResults: 5
     },
-    summary: { candidate_count: 2 },
+    summary: {
+      candidate_count: 5,
+      source: "college_scorecard",
+      configuration_status: "ready",
+      discovery_methods: ["college_scorecard"]
+    },
     error_code: null,
     error_message: null,
-    started_at: "2026-07-06T14:00:00.000Z",
-    completed_at: "2026-07-06T14:05:00.000Z",
-    created_at: "2026-07-06T14:00:00.000Z",
-    updated_at: "2026-07-06T14:05:00.000Z"
+    started_at: "2026-07-15T16:00:00.000Z",
+    completed_at: "2026-07-15T16:01:00.000Z",
+    created_at: "2026-07-15T16:00:00.000Z",
+    updated_at: "2026-07-15T16:01:00.000Z"
   },
   {
     id: "sample-job-queued",
@@ -77,17 +82,17 @@ const sampleProspectJobs: ProspectGenerationJob[] = [
     status: "queued",
     input: {
       geography: "Texas",
-      schoolTypes: ["state_university", "community_college"],
-      keywords: "cybersecurity",
-      maxResults: 50
+      schoolTypes: ["state_university"],
+      keywords: "",
+      maxResults: 5
     },
     summary: null,
     error_code: null,
     error_message: null,
     started_at: null,
     completed_at: null,
-    created_at: "2026-07-07T10:00:00.000Z",
-    updated_at: "2026-07-07T10:00:00.000Z"
+    created_at: "2026-07-15T16:05:00.000Z",
+    updated_at: "2026-07-15T16:05:00.000Z"
   }
 ];
 
@@ -97,50 +102,75 @@ const sampleProspectCandidates: ProspectCandidate[] = [
     organization_id: "sample-org",
     job_id: "sample-job-completed",
     status: "pending_review",
-    name: "Howard University",
-    website: "https://www.howard.edu",
-    district: "Washington, DC",
-    location: "Washington, DC",
-    rationale: "HBCU with NSA CAE-designated cybersecurity programs. Source: U.S. Department of Education College Scorecard.",
-    confidence_score: 0.91,
+    name: "The University of Texas at Austin",
+    website: "https://www.utexas.edu",
+    district: "Austin, TX",
+    location: "Austin, TX",
+    rationale:
+      "Public bachelor's-granting university in Texas. Category: Public; Bachelor's-granting. Source: U.S. Department of Education College Scorecard. Discovery method: college_scorecard.",
+    confidence_score: 0.9,
     source_name: "U.S. Department of Education College Scorecard",
     source_url: "https://collegescorecard.ed.gov/data/api/",
     discovery_method: "college_scorecard",
-    retrieved_at: "2026-07-06T14:05:00.000Z",
-    promoted_school_id: null,
-    enrichment_summary:
-      "Howard University is a historically Black university in Washington, DC with public cybersecurity-related program signals.",
-    outreach_angle:
-      "Lead with workforce development and cybersecurity program alignment for institutional partnerships.",
-    recommended_next_step: "Initial outreach - cyber workforce program",
-    enrichment_status: "enriched",
-    enriched_at: "2026-07-06T15:00:00.000Z",
-    created_at: "2026-07-06T14:05:00.000Z",
-    updated_at: "2026-07-06T15:00:00.000Z"
-  },
-  {
-    id: "sample-candidate-2",
-    organization_id: "sample-org",
-    job_id: "sample-job-completed",
-    status: "pending_review",
-    name: "North Carolina A&T State University",
-    website: "https://www.ncat.edu",
-    district: "Greensboro, NC",
-    location: "Greensboro, NC",
-    rationale: "HBCU and state university with cybersecurity workforce programs. Source: Catalyst stub generator.",
-    confidence_score: 0.88,
-    source_name: "Catalyst stub generator (curated public institutions)",
-    source_url: "https://collegescorecard.ed.gov/data/api/",
-    discovery_method: "stub_generator",
-    retrieved_at: "2026-07-06T14:05:00.000Z",
+    retrieved_at: "2026-07-15T16:01:00.000Z",
     promoted_school_id: null,
     enrichment_summary: null,
     outreach_angle: null,
     recommended_next_step: null,
     enrichment_status: "not_enriched",
     enriched_at: null,
-    created_at: "2026-07-06T14:05:00.000Z",
-    updated_at: "2026-07-06T14:05:00.000Z"
+    created_at: "2026-07-15T16:01:00.000Z",
+    updated_at: "2026-07-15T16:01:00.000Z"
+  },
+  {
+    id: "sample-candidate-2",
+    organization_id: "sample-org",
+    job_id: "sample-job-completed",
+    status: "pending_review",
+    name: "Texas A&M University-College Station",
+    website: "https://www.tamu.edu",
+    district: "College Station, TX",
+    location: "College Station, TX",
+    rationale:
+      "Public bachelor's-granting university in Texas. Source: U.S. Department of Education College Scorecard. Discovery method: college_scorecard.",
+    confidence_score: 0.89,
+    source_name: "U.S. Department of Education College Scorecard",
+    source_url: "https://collegescorecard.ed.gov/data/api/",
+    discovery_method: "college_scorecard",
+    retrieved_at: "2026-07-15T16:01:00.000Z",
+    promoted_school_id: null,
+    enrichment_summary: null,
+    outreach_angle: null,
+    recommended_next_step: null,
+    enrichment_status: "not_enriched",
+    enriched_at: null,
+    created_at: "2026-07-15T16:01:00.000Z",
+    updated_at: "2026-07-15T16:01:00.000Z"
+  },
+  {
+    id: "sample-candidate-3",
+    organization_id: "sample-org",
+    job_id: "sample-job-completed",
+    status: "pending_review",
+    name: "University of Houston",
+    website: "https://www.uh.edu",
+    district: "Houston, TX",
+    location: "Houston, TX",
+    rationale:
+      "Public bachelor's-granting university in Texas. Source: U.S. Department of Education College Scorecard. Discovery method: college_scorecard.",
+    confidence_score: 0.87,
+    source_name: "U.S. Department of Education College Scorecard",
+    source_url: "https://collegescorecard.ed.gov/data/api/",
+    discovery_method: "college_scorecard",
+    retrieved_at: "2026-07-15T16:01:00.000Z",
+    promoted_school_id: null,
+    enrichment_summary: null,
+    outreach_angle: null,
+    recommended_next_step: null,
+    enrichment_status: "not_enriched",
+    enriched_at: null,
+    created_at: "2026-07-15T16:01:00.000Z",
+    updated_at: "2026-07-15T16:01:00.000Z"
   }
 ];
 

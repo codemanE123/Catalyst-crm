@@ -15,6 +15,7 @@ const iconPaths: Record<AppNavIcon, string> = {
   schools: "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6",
   contacts: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
   followups: "M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11",
+  meetings: "M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z",
   prospects: "M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16M11 8v6M8 11h6",
   jobs: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
   approvals: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
@@ -52,6 +53,7 @@ function pageTitleFromPath(pathname: string): string {
   if (pathname.startsWith("/schools")) return "Schools";
   if (pathname.startsWith("/contacts")) return "Contacts";
   if (pathname.startsWith("/follow-ups")) return "Follow-ups";
+  if (pathname.startsWith("/meeting-imports")) return "Meeting imports";
   if (pathname.startsWith("/prospects/jobs")) return "Prospect jobs";
   if (pathname.startsWith("/prospects/generate")) return "Generate prospects";
   if (pathname.startsWith("/approvals")) return "Approvals";

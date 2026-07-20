@@ -244,6 +244,20 @@ See `docs/public-web-prospect-discovery.md`. Generate candidates **queues** `Pro
 
 Apply migration `20260715120000_public_web_prospect_discovery.sql` (job UPDATE RLS + `discovery_method` / `retrieved_at` columns).
 
+### 6.4d Fireflies meeting import (Phase 5.x.1)
+
+See `docs/fireflies-meeting-import.md`. Fireflies webhooks stage digests in `meeting_imports` (`pending_review`). Humans Accept into discovery `interviews` from `/meeting-imports` or the school profile banner. Zoom is out of scope for v1.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MEETING_IMPORT_ENABLED` | `false` | Master switch |
+| `MEETING_IMPORT_REQUIRE_REVIEW` | `true` | Reserved; Accept still required |
+| `FIREFLIES_WEBHOOK_SECRET` | unset | Shared webhook secret |
+| `FIREFLIES_API_KEY` | unset | Optional GraphQL enrichment |
+| `FIREFLIES_DEFAULT_ORGANIZATION_ID` | unset | Org when webhook omits organization id |
+
+Apply migration `20260720120000_meeting_imports_fireflies.sql`. Webhook inserts use `SUPABASE_SERVICE_ROLE_KEY`.
+
 ### 6.4b OpenAI LLM enrichment and outreach drafts (Phase 5.3)
 
 
