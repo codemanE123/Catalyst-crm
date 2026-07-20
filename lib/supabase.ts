@@ -580,7 +580,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     .select("id,name,district,location,status,owner,next_step,website")
     .order("name");
 
-  let contactsResponse = await supabase
+  const contactsWithPartners = await supabase
     .from("contacts")
     .select(
       "id,name,role,email,last_touch,relationship,school_id,partner_id,linkedin_url,schools(name),partners(name)"
@@ -588,16 +588,20 @@ export async function getDashboardData(): Promise<DashboardData> {
     .order("last_touch", { ascending: false });
 
   // Partners migration may not be applied yet on some environments.
-  if (contactsResponse.error) {
-    contactsResponse = await supabase
-      .from("contacts")
-      .select(
-        "id,name,role,email,last_touch,relationship,school_id,schools(name)"
-      )
-      .order("last_touch", { ascending: false });
-  }
+  const contactsFallback = contactsWithPartners.error
+    ? await supabase
+        .from("contacts")
+        .select(
+          "id,name,role,email,last_touch,relationship,school_id,schools(name)"
+        )
+        .order("last_touch", { ascending: false })
+    : null;
 
-  if (schoolsResponse.error || contactsResponse.error) {
+  const contactsResponse = contactsWithPartners.error
+    ? contactsFallback
+    : contactsWithPartners;
+
+  if (schoolsResponse.error || !contactsResponse || contactsResponse.error) {
     if (!isDevelopmentEnvironment()) {
       throw new Error("Could not load dashboard data from Supabase.");
     }
@@ -807,7 +811,7 @@ export async function getSchoolProfileData(
 
   const useReadonlySources = await shouldUseReadonlyProfileSources(supabase, schoolId);
 
-  let contactsResponse = await supabase
+  const contactsWithPartners = await supabase
     .from("contacts")
     .select(
       "id,name,role,email,phone,relationship,last_touch,notes,linkedin_url,school_id,partner_id"
@@ -815,13 +819,17 @@ export async function getSchoolProfileData(
     .eq("school_id", schoolId)
     .order("last_touch", { ascending: false });
 
-  if (contactsResponse.error) {
-    contactsResponse = await supabase
-      .from("contacts")
-      .select("id,name,role,email,phone,relationship,last_touch,notes")
-      .eq("school_id", schoolId)
-      .order("last_touch", { ascending: false });
-  }
+  const contactsFallback = contactsWithPartners.error
+    ? await supabase
+        .from("contacts")
+        .select("id,name,role,email,phone,relationship,last_touch,notes")
+        .eq("school_id", schoolId)
+        .order("last_touch", { ascending: false })
+    : null;
+
+  const contactsResponse = contactsWithPartners.error
+    ? contactsFallback
+    : contactsWithPartners;
 
   const outreachPromise = supabase
     .from("outreach")
@@ -886,38 +894,41 @@ export async function getSchoolProfileData(
   }
 
   const school = schoolResponse.data as School;
-  const contacts = (contactsResponse.error ? [] : (contactsResponse.data ?? []))
-    .map((contact) => {
-      const row = contact as {
-        id: string;
-        name: string;
-        role: string;
-        email: string;
-        phone: string | null;
-        relationship: SchoolContact["relationship"];
-        last_touch: string;
-        notes: string | null;
-        linkedin_url?: string | null;
-        school_id?: string | null;
-        partner_id?: string | null;
-      };
+  const contacts = (
+    !contactsResponse || contactsResponse.error
+      ? []
+      : (contactsResponse.data ?? [])
+  ).map((contact) => {
+    const row = contact as {
+      id: string;
+      name: string;
+      role: string;
+      email: string;
+      phone: string | null;
+      relationship: SchoolContact["relationship"];
+      last_touch: string;
+      notes: string | null;
+      linkedin_url?: string | null;
+      school_id?: string | null;
+      partner_id?: string | null;
+    };
 
-      return {
-        id: row.id,
-        name: row.name,
-        role: row.role,
-        email: row.email,
-        phone: row.phone,
-        notes: row.notes,
-        last_touch: row.last_touch,
-        relationship: row.relationship,
-        school: school.name,
-        schoolId: row.school_id ?? schoolId,
-        partnerId: row.partner_id ?? null,
-        affiliation: "school" as const,
-        linkedinUrl: row.linkedin_url ?? null
-      };
-    });
+    return {
+      id: row.id,
+      name: row.name,
+      role: row.role,
+      email: row.email,
+      phone: row.phone,
+      notes: row.notes,
+      last_touch: row.last_touch,
+      relationship: row.relationship,
+      school: school.name,
+      schoolId: row.school_id ?? schoolId,
+      partnerId: row.partner_id ?? null,
+      affiliation: "school" as const,
+      linkedinUrl: row.linkedin_url ?? null
+    };
+  });
 
   const interviews = (resolvedInterviewsResponse.error
     ? []
