@@ -25,10 +25,14 @@ import {
   type ContactActionResult
 } from "@/lib/validation";
 
+type ServerSupabase = NonNullable<
+  Awaited<ReturnType<typeof getServerSupabaseClient>>
+>;
+
 type MutationContext =
   | {
       ok: true;
-      supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>;
+      supabase: ServerSupabase;
       user: User;
       ownership: RecordOwnershipFields;
       organizationId: string;
@@ -78,7 +82,7 @@ async function requireOrgWriteContext(
 }
 
 async function resolveLinkedSchools(
-  supabase: MutationContext extends { ok: true } ? MutationContext["supabase"] : never,
+  supabase: ServerSupabase,
   organizationId: string,
   linkedSchoolIds: string[] | undefined
 ) {
