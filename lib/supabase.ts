@@ -575,18 +575,27 @@ export async function getDashboardData(): Promise<DashboardData> {
     };
   }
 
-  const [schoolsResponse, contactsResponse] = await Promise.all([
-    supabase
-      .from("schools")
-      .select("id,name,district,location,status,owner,next_step,website")
-      .order("name"),
-    supabase
+  const schoolsResponse = await supabase
+    .from("schools")
+    .select("id,name,district,location,status,owner,next_step,website")
+    .order("name");
+
+  let contactsResponse = await supabase
+    .from("contacts")
+    .select(
+      "id,name,role,email,last_touch,relationship,school_id,partner_id,linkedin_url,schools(name),partners(name)"
+    )
+    .order("last_touch", { ascending: false });
+
+  // Partners migration may not be applied yet on some environments.
+  if (contactsResponse.error) {
+    contactsResponse = await supabase
       .from("contacts")
       .select(
-        "id,name,role,email,last_touch,relationship,school_id,partner_id,linkedin_url,schools(name),partners(name)"
+        "id,name,role,email,last_touch,relationship,school_id,schools(name)"
       )
-      .order("last_touch", { ascending: false })
-  ]);
+      .order("last_touch", { ascending: false });
+  }
 
   if (schoolsResponse.error || contactsResponse.error) {
     if (!isDevelopmentEnvironment()) {
@@ -798,13 +807,21 @@ export async function getSchoolProfileData(
 
   const useReadonlySources = await shouldUseReadonlyProfileSources(supabase, schoolId);
 
-  const contactsPromise = supabase
+  let contactsResponse = await supabase
     .from("contacts")
     .select(
       "id,name,role,email,phone,relationship,last_touch,notes,linkedin_url,school_id,partner_id"
     )
     .eq("school_id", schoolId)
     .order("last_touch", { ascending: false });
+
+  if (contactsResponse.error) {
+    contactsResponse = await supabase
+      .from("contacts")
+      .select("id,name,role,email,phone,relationship,last_touch,notes")
+      .eq("school_id", schoolId)
+      .order("last_touch", { ascending: false });
+  }
 
   const outreachPromise = supabase
     .from("outreach")
@@ -840,9 +857,8 @@ export async function getSchoolProfileData(
         .order("due_date", { ascending: true })
         .limit(1);
 
-  const [contactsResponse, outreachResponse, interviewsResponse, followUpsResponse] =
+  const [outreachResponse, interviewsResponse, followUpsResponse] =
     await Promise.all([
-      contactsPromise,
       outreachPromise,
       interviewsPromise,
       followUpsPromise
