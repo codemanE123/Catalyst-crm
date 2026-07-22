@@ -102,6 +102,21 @@ describe("buildSchoolImportPreview", () => {
       "HBCU target | Next follow-up: 2026-07-15"
     );
   });
+  it("accepts Institution header from SC-style CSVs", () => {
+    const csv =
+      "Institution,Type,State,City,Website,Priority Contact\n" +
+      "Alabama A&M University,Public University,AL,Normal,https://www.aamu.edu,Dean of Engineering\n";
+
+    const parsed = parseSchoolImportCsv(csv);
+    expect(parsed.rows[0].organization_name).toBe("Alabama A&M University");
+
+    const preview = buildSchoolImportPreview(csv, new Set(), true);
+    expect(preview.summary.valid).toBe(1);
+    expect(preview.rows[0].school?.name).toBe("Alabama A&M University");
+    expect(preview.rows[0].schoolType).toBe("Public University");
+    expect(preview.rows[0].priorityContact).toBe("Dean of Engineering");
+  });
+
   it("accepts School / Type / Priority Contact headers from directory CSVs", () => {
     const csv =
       "School,Type,State,City,Website,Priority Contact\n" +
