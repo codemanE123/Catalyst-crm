@@ -6,7 +6,7 @@ import {
   statusPillStyles
 } from "@/app/components/ui";
 import { canManageSchools, getMembershipsForUser } from "@/lib/authz";
-import { getDashboardData } from "@/lib/supabase";
+import { getDashboardData, type School } from "@/lib/supabase";
 import {
   getServerSupabaseClient,
   requireUser
@@ -24,6 +24,42 @@ type SchoolsPageProps = {
     sort?: string;
   }>;
 };
+
+function deriveCityState(school: School): { city: string; state: string } {
+  const storedCity = school.city?.trim() ?? "";
+  const storedState = school.state?.trim() ?? "";
+  if (storedCity || storedState) {
+    return { city: storedCity, state: storedState };
+  }
+
+  const location = (school.location ?? "").trim();
+  if (!location) {
+    return { city: "", state: "" };
+  }
+
+  const parts = location.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    return {
+      city: parts.slice(0, -1).join(", "),
+      state: parts[parts.length - 1] ?? ""
+    };
+  }
+
+  return { city: location, state: "" };
+}
+
+function websiteHost(website: string | null | undefined): string {
+  if (!website?.trim()) {
+    return "";
+  }
+
+  try {
+    const normalized = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+    return new URL(normalized).hostname.replace(/^www\./i, "");
+  } catch {
+    return website.replace(/^https?:\/\//i, "").replace(/^www\./i, "");
+  }
+}
 
 export default async function SchoolsPage({ searchParams }: SchoolsPageProps) {
   const params = await searchParams;
@@ -44,11 +80,20 @@ export default async function SchoolsPage({ searchParams }: SchoolsPageProps) {
   let filtered = schools.filter((school) => {
     if (status !== "all" && school.status !== status) return false;
     if (owner !== "all" && school.owner !== owner) return false;
-    if (state && !(school.location ?? "").toLowerCase().includes(state)) {
+    const { city, state: schoolState } = deriveCityState(school);
+    if (
+      state &&
+      !(
+        school.location ?? ""
+      ).toLowerCase().includes(state) &&
+      !schoolState.toLowerCase().includes(state) &&
+      !city.toLowerCase().includes(state)
+    ) {
       return false;
     }
     if (!query) return true;
-    const haystack = `${school.name} ${school.location} ${school.district} ${school.owner} ${school.next_step}`.toLowerCase();
+    const haystack =
+      `${school.name} ${school.location} ${school.district} ${school.owner} ${school.next_step} ${school.school_type ?? ""} ${school.priority_contact ?? ""} ${school.website ?? ""} ${city} ${schoolState}`.toLowerCase();
     return haystack.includes(query);
   });
 
@@ -82,7 +127,7 @@ export default async function SchoolsPage({ searchParams }: SchoolsPageProps) {
             <input
               name="q"
               defaultValue={params.q ?? ""}
-              placeholder="Name, district, owner, location"
+              placeholder="Name, type, city, contact, website…"
               className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2.5 text-sm text-white outline-none ring-blue-500 focus:ring-2"
             />
           </label>
@@ -156,10 +201,15 @@ export default async function SchoolsPage({ searchParams }: SchoolsPageProps) {
 
       <Panel padding={false}>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
+          <table className="w-full min-w-[1200px] text-left text-sm">
             <thead className="bg-white/5 text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 <th className="px-5 py-3 font-semibold">School</th>
+                <th className="px-5 py-3 font-semibold">Type</th>
+                <th className="px-5 py-3 font-semibold">State</th>
+                <th className="px-5 py-3 font-semibold">City</th>
+                <th className="px-5 py-3 font-semibold">Website</th>
+                <th className="px-5 py-3 font-semibold">Priority contact</th>
                 <th className="px-5 py-3 font-semibold">Location</th>
                 <th className="px-5 py-3 font-semibold">Status</th>
                 <th className="px-5 py-3 font-semibold">Owner</th>
@@ -171,6 +221,8 @@ export default async function SchoolsPage({ searchParams }: SchoolsPageProps) {
             <tbody className="divide-y divide-white/5">
               {filtered.map((school) => {
                 const followUp = followUpBySchool.get(school.id);
+                const { city, state: schoolState } = deriveCityState(school);
+                const host = websiteHost(school.website);
                 return (
                   <tr key={school.id}>
                     <td className="px-5 py-4">
@@ -182,6 +234,34 @@ export default async function SchoolsPage({ searchParams }: SchoolsPageProps) {
                         {school.name}
                       </Link>
                       <p className="mt-1 text-xs text-slate-400">{school.district}</p>
+                    </td>
+                    <td className="px-5 py-4 text-slate-300">
+                      {school.school_type?.trim() || "—"}
+                    </td>
+                    <td className="px-5 py-4 text-slate-300">
+                      {schoolState || "—"}
+                    </td>
+                    <td className="px-5 py-4 text-slate-300">{city || "—"}</td>
+                    <td className="px-5 py-4 text-slate-300">
+                      {school.website?.trim() ? (
+                        <a
+                          href={
+                            /^https?:\/\//i.test(school.website)
+                              ? school.website
+                              : `https://${school.website}`
+                          }
+                          rel="noreferrer"
+                          target="_blank"
+                          className="text-blue-300 hover:text-blue-200"
+                        >
+                          {host || school.website}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-slate-300">
+                      {school.priority_contact?.trim() || "—"}
                     </td>
                     <td className="px-5 py-4 text-slate-300">{school.location}</td>
                     <td className="px-5 py-4">

@@ -9,6 +9,8 @@ export const SCHOOL_IMPORT_CSV_HEADERS = [
   "website",
   "city",
   "state",
+  "type",
+  "priority_contact",
   "status",
   "owner",
   "assigned_to",
@@ -29,6 +31,9 @@ export type ParsedSchoolImportRow = {
   district: string;
   location: string;
   state: string | null;
+  city: string | null;
+  schoolType: string | null;
+  priorityContact: string | null;
 };
 
 export type SchoolImportPreviewSummary = {
@@ -47,9 +52,15 @@ const HEADER_ALIASES: Record<string, string> = {
   organization_name: "organization_name",
   name: "organization_name",
   school_name: "organization_name",
+  school: "organization_name",
   website: "website",
   city: "city",
   state: "state",
+  type: "type",
+  school_type: "type",
+  priority_contact: "priority_contact",
+  "priority contact": "priority_contact",
+  prioritycontact: "priority_contact",
   status: "status",
   owner: "owner",
   assigned_to: "assigned_to",
@@ -169,24 +180,38 @@ function mapCsvRowToValidationInput(
   district: string;
   location: string;
   state: string | null;
+  city: string | null;
+  schoolType: string | null;
+  priorityContact: string | null;
 } {
-  const district = row.state?.trim() || "Unknown";
-  const location = buildSchoolLocation(row.city ?? "", row.state ?? "");
+  const city = row.city?.trim() || null;
   const state = row.state?.trim() || null;
+  const schoolType = row.type?.trim() || null;
+  const priorityContact = row.priority_contact?.trim() || null;
+  const district = state || "Unknown";
+  const location = buildSchoolLocation(city ?? "", state ?? "");
   const assignedTo = row.assigned_to?.trim() ?? "";
 
   const validation = validateCreateSchoolInput({
     name: row.organization_name ?? row.name ?? "",
     website: row.website ?? "",
     status: row.status?.trim() || "Prospect",
-    owner: row.owner ?? "",
-    next_step: row.next_step ?? "",
+    owner: row.owner?.trim() || "Unassigned",
+    next_step: row.next_step?.trim() || "Initial outreach",
     notes: mergeImportNotes(row.notes ?? "", row.next_follow_up ?? ""),
     assigned_to: UUID_PATTERN.test(assignedTo) ? assignedTo : undefined,
     assign_to_me: assignToMe && !UUID_PATTERN.test(assignedTo)
   });
 
-  return { validation, district, location, state };
+  return {
+    validation,
+    district,
+    location,
+    state,
+    city,
+    schoolType,
+    priorityContact
+  };
 }
 
 export function buildSchoolImportPreview(
@@ -200,10 +225,15 @@ export function buildSchoolImportPreview(
 
   rows.forEach((row, index) => {
     const rowNumber = index + 2;
-    const { validation, district, location, state } = mapCsvRowToValidationInput(
-      row,
-      assignToMe
-    );
+    const {
+      validation,
+      district,
+      location,
+      state,
+      city,
+      schoolType,
+      priorityContact
+    } = mapCsvRowToValidationInput(row, assignToMe);
 
     if (!validation.success) {
       parsedRows.push({
@@ -213,7 +243,10 @@ export function buildSchoolImportPreview(
         errors: [validation.error],
         district,
         location,
-        state
+        state,
+        city,
+        schoolType,
+        priorityContact
       });
       return;
     }
@@ -230,7 +263,10 @@ export function buildSchoolImportPreview(
         school: validation.data,
         district,
         location,
-        state
+        state,
+        city,
+        schoolType,
+        priorityContact
       });
       return;
     }
@@ -245,7 +281,10 @@ export function buildSchoolImportPreview(
         school: validation.data,
         district,
         location,
-        state
+        state,
+        city,
+        schoolType,
+        priorityContact
       });
       return;
     }
@@ -259,7 +298,10 @@ export function buildSchoolImportPreview(
       school: validation.data,
       district,
       location,
-      state
+      state,
+      city,
+      schoolType,
+      priorityContact
     });
   });
 

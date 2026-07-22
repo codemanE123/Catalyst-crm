@@ -226,25 +226,47 @@ async function insertImportedSchool(
     };
   }
 
-  const { data: insertedSchool, error } = await supabase
+  const baseRow = {
+    name: school.name,
+    website: school.website ?? null,
+    status: school.status,
+    owner: school.owner,
+    next_step: school.next_step,
+    notes: school.notes ?? null,
+    district: row.district,
+    location: row.location,
+    state: row.state,
+    organization_id: ownership.organization_id,
+    created_by: ownership.created_by,
+    updated_by: ownership.updated_by,
+    assigned_to: assignee.assignedTo
+  };
+
+  let insertedSchool: { id: string } | null = null;
+  let error: { code?: string; message?: string } | null = null;
+
+  const withCsvFields = await supabase
     .from("schools")
     .insert({
-      name: school.name,
-      website: school.website ?? null,
-      status: school.status,
-      owner: school.owner,
-      next_step: school.next_step,
-      notes: school.notes ?? null,
-      district: row.district,
-      location: row.location,
-      state: row.state,
-      organization_id: ownership.organization_id,
-      created_by: ownership.created_by,
-      updated_by: ownership.updated_by,
-      assigned_to: assignee.assignedTo
+      ...baseRow,
+      city: row.city,
+      school_type: row.schoolType,
+      priority_contact: row.priorityContact
     })
     .select("id")
     .single();
+
+  if (withCsvFields.error) {
+    const fallback = await supabase
+      .from("schools")
+      .insert(baseRow)
+      .select("id")
+      .single();
+    insertedSchool = fallback.data;
+    error = fallback.error;
+  } else {
+    insertedSchool = withCsvFields.data;
+  }
 
   if (error) {
     if (error.code === "23505") {

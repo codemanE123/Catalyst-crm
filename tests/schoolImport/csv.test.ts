@@ -45,16 +45,28 @@ describe("buildSchoolImportPreview", () => {
     expect(preview.rows[0].district).toBe("DC");
   });
 
-  it("rejects rows missing required fields", () => {
+  it("defaults owner and next step when blank", () => {
     const csv =
       "organization_name,website,city,state,status,owner,assigned_to,next_step,next_follow_up,notes\n" +
-      "Howard University,https://www.howard.edu,Washington,DC,Prospect,,,Schedule intro call,,\n";
+      "Howard University,https://www.howard.edu,Washington,DC,Prospect,,,,,\n";
+
+    const preview = buildSchoolImportPreview(csv, new Set(), true);
+
+    expect(preview.summary.valid).toBe(1);
+    expect(preview.rows[0].school?.owner).toBe("Unassigned");
+    expect(preview.rows[0].school?.next_step).toBe("Initial outreach");
+  });
+
+  it("rejects rows missing school name", () => {
+    const csv =
+      "organization_name,website,city,state,status,owner,assigned_to,next_step,next_follow_up,notes\n" +
+      ",https://www.howard.edu,Washington,DC,Prospect,Alex Morgan,,Schedule intro call,,\n";
 
     const preview = buildSchoolImportPreview(csv, new Set(), true);
 
     expect(preview.summary.invalid).toBe(1);
     expect(preview.rows[0].status).toBe("invalid");
-    expect(preview.rows[0].errors[0]).toBe("Owner is required.");
+    expect(preview.rows[0].errors[0]).toBe("School name is required.");
   });
 
   it("skips duplicates already in the organization", () => {
@@ -89,6 +101,22 @@ describe("buildSchoolImportPreview", () => {
     expect(preview.rows[0].school?.notes).toBe(
       "HBCU target | Next follow-up: 2026-07-15"
     );
+  });
+  it("accepts School / Type / Priority Contact headers from directory CSVs", () => {
+    const csv =
+      "School,Type,State,City,Website,Priority Contact\n" +
+      "Oakwood University,HBCU,AL,Huntsville,https://www.oakwood.edu,Dr. Jane Smith\n";
+
+    const parsed = parseSchoolImportCsv(csv);
+    expect(parsed.rows[0].organization_name).toBe("Oakwood University");
+    expect(parsed.rows[0].type).toBe("HBCU");
+    expect(parsed.rows[0].priority_contact).toBe("Dr. Jane Smith");
+
+    const preview = buildSchoolImportPreview(csv, new Set(), true);
+    expect(preview.summary.valid).toBe(1);
+    expect(preview.rows[0].city).toBe("Huntsville");
+    expect(preview.rows[0].schoolType).toBe("HBCU");
+    expect(preview.rows[0].priorityContact).toBe("Dr. Jane Smith");
   });
 });
 

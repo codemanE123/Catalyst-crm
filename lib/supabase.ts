@@ -67,6 +67,9 @@ export type School = {
   next_step: string;
   notes?: string | null;
   website?: string | null;
+  city?: string | null;
+  school_type?: string | null;
+  priority_contact?: string | null;
   enrollment?: string | null;
   public_private?: "Public" | "Private" | "Unknown" | null;
   hbcu?: boolean | null;
@@ -589,10 +592,23 @@ export async function getDashboardData(): Promise<DashboardData> {
     };
   }
 
-  const schoolsResponse = await supabase
+  const schoolsWithCsvFields = await supabase
     .from("schools")
-    .select("id,name,district,location,status,owner,next_step,website")
+    .select(
+      "id,name,district,location,status,owner,next_step,website,city,state,school_type,priority_contact"
+    )
     .order("name");
+
+  const schoolsFallback = schoolsWithCsvFields.error
+    ? await supabase
+        .from("schools")
+        .select("id,name,district,location,status,owner,next_step,website")
+        .order("name")
+    : null;
+
+  const schoolsResponse = schoolsWithCsvFields.error
+    ? schoolsFallback ?? { data: null, error: schoolsWithCsvFields.error }
+    : schoolsWithCsvFields;
 
   // Avoid embedding schools(name): contact_linked_schools creates a second
   // contacts↔schools path and PostgREST rejects the ambiguous relationship.
@@ -753,7 +769,9 @@ const FOLLOW_UP_SELECT_READONLY = "id,title,due_date,status,owner";
 const SCHOOL_SELECT_BASIC =
   "id,name,district,location,status,owner,next_step,notes,website";
 
-const SCHOOL_SELECT_FULL = `${SCHOOL_SELECT_BASIC},enrollment,public_private,hbcu,community_college,state,ai_programs,cyber_programs,healthcare_programs,innovation_center,entrepreneurship_center,career_services_office,workforce_development_office,profile_sources`;
+const SCHOOL_SELECT_DIRECTORY = `${SCHOOL_SELECT_BASIC},city,state,school_type,priority_contact`;
+
+const SCHOOL_SELECT_FULL = `${SCHOOL_SELECT_DIRECTORY},enrollment,public_private,hbcu,community_college,ai_programs,cyber_programs,healthcare_programs,innovation_center,entrepreneurship_center,career_services_office,workforce_development_office,profile_sources`;
 
 async function fetchSchoolRow(
   supabase: NonNullable<Awaited<ReturnType<typeof getServerSupabaseClient>>>,
@@ -767,6 +785,16 @@ async function fetchSchoolRow(
 
   if (!fullResponse.error) {
     return fullResponse;
+  }
+
+  const directoryResponse = await supabase
+    .from("schools")
+    .select(SCHOOL_SELECT_DIRECTORY)
+    .eq("id", schoolId)
+    .maybeSingle();
+
+  if (!directoryResponse.error) {
+    return directoryResponse;
   }
 
   return supabase

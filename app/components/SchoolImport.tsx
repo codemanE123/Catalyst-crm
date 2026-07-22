@@ -152,9 +152,9 @@ export default function SchoolImport({
         </label>
 
         <p className="text-xs text-slate-500">
-          Expected columns: {SCHOOL_IMPORT_CSV_HEADERS.join(", ")}. Required
-          fields: organization_name, owner, next_step. Status defaults to
-          Prospect when blank.
+          Expected columns: {SCHOOL_IMPORT_CSV_HEADERS.join(", ")}. Aliases like
+          School, Type, and Priority Contact are accepted. Status defaults to
+          Prospect; owner/next step default when blank.
         </p>
 
         {previewError ? (
